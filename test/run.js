@@ -12,12 +12,14 @@ const v1Copy = fs.readFileSync(path.join(FIX, 'v1-copy.html'), 'utf8');
 const v2Save = fs.readFileSync(path.join(FIX, 'v2-save.json'), 'utf8');
 const v3Save = fs.readFileSync(path.join(FIX, 'v3-save.json'), 'utf8');
 const v4Save = fs.readFileSync(path.join(FIX, 'v4-save.json'), 'utf8');
+const v5Save = fs.readFileSync(path.join(FIX, 'v5-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
+  'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -226,7 +228,10 @@ test('v2 save upgrades with markets, sites and leases, and nothing else changes'
   assert.equal(S.world.sites.length, 16);
   assert.equal(Object.keys(S.world.leases).length, 32);
   assert(S.world.sites.every(x => x.expiresWeek > old.seasons[0].completed), 'deadlines start after the current week');
-  for (const k of ['saveId', 'club', 'seasons', 'rosters', 'picks', 'events', 'revision']) assert.deepEqual(S[k], old[k], k);
+  const without = (v, keys) => JSON.parse(JSON.stringify(v, (k, x) => (keys.includes(k) ? undefined : x)));
+  for (const k of ['saveId', 'club', 'picks', 'events', 'revision']) assert.deepEqual(S[k], old[k], k);
+  assert.deepEqual(without(S.seasons, ['tick']), old.seasons, 'seasons, apart from the new clock');
+  assert.deepEqual(without(S.rosters, ['potential']), old.rosters, 'rosters, apart from new potential ratings');
 });
 
 test('v2 browser save upgrades on boot and keeps a backup', () => {
@@ -497,11 +502,11 @@ const liveContest = () => { const { api } = load(); const S = api.save; S.club =
 const untilMeeting = (api, S) => { while (!S.league.meeting && api.cur(S).completed < 18) api.playWeek(S); };
 const untilVote = (api, S) => { while (S.league.meeting.status !== 'decided') api.playWeek(S); };
 
-test('v4 save upgrades to v5: owners, markets, and the Columbus contest for Cincinnati', () => {
+test('v4 save upgrades: owners, markets, and the Columbus contest for Cincinnati', () => {
   const { api } = load();
   const old = JSON.parse(v4Save);
   const S = api.upgrade(old).save;
-  assert.equal(S.schemaVersion, 5);
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.finance, old.finance);
   assert.equal(Object.keys(S.league.owners).length, 32);
   assert.equal(S.league.contest.marketId, 'columbus');
@@ -625,6 +630,211 @@ test('league page renders with owners, map and headlines, escaped', () => {
   const html = api.leagueView();
   assert(html.includes('marketMap') && html.includes('League meeting') && html.includes('Headlines') && html.includes('Promise support'));
   assert(!html.includes('<img src=x>'));
+});
+
+
+// ---- Calendar, postseason, offseason, draft --------------------------------
+const toTick = (api, S, t) => { while (api.now(S) < t) api.advance(S); };
+const regular = (api, S) => { while (api.cur(S).completed < 18) api.advance(S); };
+
+test('v5 save upgrades to v6: the clock, potential and a draft class', () => {
+  const { api } = load();
+  const old = JSON.parse(v5Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(api.cur(S).tick, old.seasons[0].completed);
+  assert(Object.values(S.rosters).flat().every(p => p.potential >= p.rating));
+  assert.equal(S.draft.status, 'scouting');
+  assert.equal(S.draft.prospects.length, 400);
+  assert.equal(S.league.markets.columbus.holder, old.league.markets.columbus.holder);
+  toTick(api, S, 23);
+  assert.equal(S.history.length, 1, 'the migrated season finishes and is reviewed');
+});
+
+test('calendar labels run from the regular season through August', () => {
+  const { api } = load();
+  assert.equal(api.weekLabel(5), 'Week 5');
+  assert.equal(api.weekLabel(19), 'the Wild Card round');
+  assert.equal(api.weekLabel(22), 'the Championship Game');
+  assert.equal(api.weekLabel(23), 'February Week 1');
+  assert.equal(api.weekLabel(28), 'March Week 2');
+  assert.equal(api.weekLabel(34), 'April Week 4');
+  assert.equal(api.weekLabel(50), 'August Week 4');
+});
+
+test('postseason: seven seeds a conference, thirteen games, no ties, a champion', () => {
+  const { api, S } = owned(101);
+  regular(api, S);
+  const seeds = api.seedsFor(S);
+  for (const c of ['Charter', 'Union']) {
+    assert.equal(seeds[c].length, 7);
+    const winners = new Set(api.standings(S).filter(rows => api.clubs.find(t => t.id === rows[0].id).conference === c).map(rows => rows[0].id));
+    assert.deepEqual(new Set(seeds[c].slice(0, 4)), winners, 'division winners take seeds 1-4');
+  }
+  assert.equal(api.advanceLabel(S), 'Play the Wild Card round →');
+  for (let i = 0; i < 4; i++) api.advance(S);
+  const P = api.cur(S).postseason;
+  assert.deepEqual(P.rounds.map(r => r.games.length), [6, 4, 2, 1]);
+  for (const g of P.rounds.flatMap(r => r.games)) assert.notEqual(g.score[0], g.score[1]);
+  assert(P.champion);
+  assert(P.rounds[3].games[0].neutral);
+  assert.equal(api.weekLabel(api.now(S)), 'the Championship Game');
+  api.advance(S);
+  assert.equal(api.weekLabel(api.now(S)), 'February Week 1');
+  assert.equal(S.history[0].champion, P.champion);
+});
+
+test('a home playoff game shows up in the books', () => {
+  for (let seed = 102; seed < 140; seed++) {
+    const { api, S } = owned(seed);
+    regular(api, S);
+    const seeds = api.seedsFor(S), i = seeds[api.clubs.find(t => t.id === 'club-06').conference].indexOf('club-06');
+    if (i < 1 || i > 3) continue; // seeds 2-4 host a Wild Card game
+    api.advance(S);
+    const entry = S.finance.ledger.at(-1);
+    assert(entry.playoff && entry.lines.tickets > 0);
+    assert(S.events.some(e => e.type === 'playoffResult'));
+    return;
+  }
+  assert.fail('no seed hosted a playoff game');
+});
+
+test('jump ahead stops at the draft; skipping past it lets the GM draft', () => {
+  const a = owned(110);
+  regular(a.api, a.S);
+  a.api.jumpTo(a.S, a.api.MILESTONES.draft);
+  assert.equal(a.api.now(a.S), 34);
+  assert.equal(a.S.draft.status, 'live');
+  const b = owned(110);
+  regular(b.api, b.S);
+  b.api.jumpTo(b.S, b.api.MILESTONES.otas);
+  assert.equal(b.S.draft.status, 'done');
+  assert(b.S.events.some(e => e.type === 'draftUnattended'));
+  assert(b.S.rosters['club-06'].some(p => p.drafted?.season === 1));
+});
+
+test('the owner can take over the board and make the pick', () => {
+  const { api, S } = owned(111);
+  regular(api, S);
+  api.jumpTo(S, 34);
+  api.simToMyPick(S);
+  const slot = S.draft.order[S.draft.pick];
+  assert.equal(slot.owner, 'club-06');
+  const choice = api.draftAvailable(S.draft)[10];
+  assert.equal(api.ownerPick(S, choice.id), 'ok');
+  const rookie = S.rosters['club-06'].find(p => p.name === choice.name && p.drafted);
+  assert(rookie && rookie.drafted.overall === slot.overall);
+  assert.equal(S.draft.picks.at(-1).by, 'owner');
+  assert.equal(api.ownerPick(S, api.draftAvailable(S.draft)[0].id), 'notYourPick');
+});
+
+test('draft order: worst record first, champion last, traded picks honored', () => {
+  const { api, S } = owned(112);
+  const pick = S.picks.find(p => p.origin === 'club-29' && p.round === 1);
+  pick.owner = 'club-06'; // Arizona's first now belongs to Cincinnati
+  regular(api, S);
+  for (let i = 0; i < 4; i++) api.advance(S);
+  const order = api.draftOrder(S);
+  assert.equal(order.length, 224);
+  assert.equal(order[31].origin, api.cur(S).postseason.champion);
+  const nonPlayoff = api.clubs.map(t => t.id).filter(id => api.playoffStatus(S, id).seed < 0);
+  assert(nonPlayoff.includes(order[0].origin));
+  assert.equal(order.find(x => x.origin === 'club-29' && x.round === 1).owner, 'club-06');
+});
+
+test('new league year: players age, leases tick down, lapsed offers return', () => {
+  const { api, S } = owned(113);
+  api.authorizeVisit(S, S.world.sites[0].id, plan());
+  regular(api, S);
+  const ages = Object.fromEntries(Object.values(S.rosters).flat().map(p => [p.id, p.age]));
+  const lease = S.world.leases['club-06'].yearsLeft;
+  toTick(api, S, 28);
+  const survivors = Object.values(S.rosters).flat().filter(p => p.id in ages);
+  assert(survivors.every(p => p.age === ages[p.id] + 1));
+  assert(survivors.length < Object.keys(ages).length, 'some players retire');
+  assert.equal(S.world.leases['club-06'].yearsLeft, Math.max(0, lease - 1));
+  assert(S.world.sites.every(x => x.status === 'open'), 'expired offers come back');
+  assert.match(api.describeEvent(S.events.find(e => e.type === 'leagueYear'), S), /new league year/);
+});
+
+test('stadium talks and studies keep running in the offseason', () => {
+  const { api, S } = owned(114);
+  regular(api, S);
+  toTick(api, S, 30);
+  const site = S.world.sites.find(x => x.status === 'open');
+  assert.equal(api.authorizeVisit(S, site.id, plan()), 'ok');
+  api.advance(S);
+  assert(S.events.some(e => e.type === 'visitReport' && e.week === 31));
+});
+
+test('final cuts leave every club at 53 with every position covered', () => {
+  const { api, S } = owned(115);
+  regular(api, S);
+  api.jumpTo(S, 50);
+  for (const t of api.clubs) {
+    assert.equal(S.rosters[t.id].length, 53, t.id);
+    for (const [pos, , starters] of [['QB', 3, 1], ['K', 1, 1], ['P', 1, 1], ['LS', 1, 1], ['OT', 4, 2], ['CB', 6, 2]])
+      assert(S.rosters[t.id].filter(p => p.pos === pos).length >= starters, t.id + ' ' + pos);
+  }
+});
+
+test('season 2 opens with a new schedule, and deadlines carry over', () => {
+  const { api, S } = owned(116);
+  regular(api, S);
+  toTick(api, S, 45);
+  const site = S.world.sites.find(x => x.status === 'open');
+  site.expiresWeek = 55;
+  api.jumpTo(S, api.SEASON_TICKS + 1);
+  assert.equal(api.cur(S).number, 2);
+  assert.equal(api.cur(S).tick, 0);
+  assert.equal(api.cur(S).completed, 0);
+  assert.equal(site.expiresWeek, 5);
+  assert.equal(site.status, 'open');
+  assert.equal(S.draft.season, 2);
+  assert.equal(api.advanceLabel(S), 'Advance week 1 →');
+  api.advance(S);
+  assert.equal(api.cur(S).completed, 1);
+  assert(S.seasons[0].postseason.champion, 'season 1 is preserved');
+});
+
+test('jumping is never locked: from Week 3 straight to the season 2 opener', () => {
+  const { api, S } = owned(117);
+  for (let i = 0; i < 3; i++) api.advance(S);
+  assert(api.jumpTargets(S).some(([t]) => t === 51));
+  api.jumpTo(S, 51);
+  assert.equal(api.cur(S).number, 2);
+  assert.equal(S.draftHistory.length, 1);
+  assert.deepEqual(api.validateSave(S), []);
+});
+
+test('two seasons are deterministic from the same seed', () => {
+  const run = () => { const { api, S } = owned(118); api.jumpTo(S, 51); api.jumpTo(S, 20); return JSON.stringify(S.seasons) + JSON.stringify(S.rosters); };
+  assert.equal(run(), run());
+});
+
+test('five seasons stay stable: ratings, ages and roster sizes', () => {
+  const { api, S } = owned(119);
+  const avg = () => { const all = Object.values(S.rosters).flat(); return all.reduce((a, p) => a + p.rating, 0) / all.length; };
+  const start = avg();
+  for (let n = 0; n < 5; n++) api.jumpTo(S, 51);
+  const all = Object.values(S.rosters).flat();
+  assert(Math.abs(avg() - start) < 2.5, `avg rating ${start.toFixed(1)} -> ${avg().toFixed(1)}`);
+  const age = all.reduce((a, p) => a + p.age, 0) / all.length;
+  assert(age > 25.5 && age < 29, `avg age ${age.toFixed(1)}`);
+  assert.deepEqual(api.validateSave(S), []);
+  console.log(`      five seasons · avg rating ${start.toFixed(1)} → ${avg().toFixed(1)} · save ${Math.round(JSON.stringify(S).length / 1024)}KB`);
+});
+
+test('draft and playoff views render', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  assert.match(api.draftView(), /Top of the board/);
+  regular(api, S);
+  api.advance(S);
+  api.jumpTo(S, 34);
+  assert.match(api.draftView(), /On the clock/);
+  api.simToMyPick(S);
+  assert.match(api.draftView(), /Your pick/);
 });
 
 // ---- Save files ------------------------------------------------------------

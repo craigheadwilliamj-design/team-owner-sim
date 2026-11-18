@@ -1,0 +1,2381 @@
+<title>CGL Season Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;display=swap">
+<style>
+/* Layout: one desk column. Header with the advance button, a tab strip, the working pane, then the save footer. */
+:root{
+  --bg:#f5f3eb;--surface:#fffefa;--fg:#192d36;--muted:#4d6266;
+  --rule:#c4ccc5;--rule-strong:#a7afa7;--rule-soft:#ebe9e0;--rule-table:#d7dace;--control-border:#a5afaa;
+  --band:#213e43;--band-fg:#ffffff;--accent:#174b46;--accent-fg:#ffffff;--accent-muted:#526662;
+  --link:#163e40;--focus:#db8742;
+  --display:Georgia,'Times New Roman',serif;--body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
+  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
+  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
+  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
+  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
+  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
+  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);margin:0;font:16px/1.45 var(--body)}
+main{max-width:1240px;margin:0 auto;padding-block:36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{border-top:6px solid var(--band);border-bottom:1px solid var(--rule-strong);padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font:700 clamp(2.3rem,6vw,4.8rem)/1 var(--display);letter-spacing:-.05em;margin:8px 0 18px;text-wrap:balance}
+header p{margin:0;color:var(--muted)}
+nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}
+select,button{font:inherit;padding:8px 12px;background:var(--surface);color:inherit;border:1px solid var(--control-border);border-radius:5px;margin:0}
+button{cursor:pointer}
+button:disabled{cursor:default;opacity:.6}
+h2{font:700 1.85rem var(--display);margin:22px 0 12px;text-wrap:balance}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
+article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+h3{background:var(--band);color:var(--band-fg);padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}
+ul{padding:0;margin:0;list-style:none}
+li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--rule-soft);flex-wrap:wrap}
+li:last-child{border:0}
+.chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}
+small{display:block;color:var(--muted)}
+strong{font-size:1.05rem}
+#advance{background:var(--accent);color:var(--accent-fg);border:0;font-weight:700;padding:14px 20px}
+#advance:disabled{background:var(--accent-muted);opacity:1}
+#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--rule)}
+#tabs button{border:0;background:transparent}
+#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+#app{padding:25px 0}
+#app>small{letter-spacing:.11em;font-weight:700}
+#app h2{margin:5px 0 14px}
+#app p{max-width:75ch}
+.controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:var(--muted)}
+.games,.tables{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}
+.tables{grid-template-columns:repeat(auto-fit,minmax(min(100%,365px),1fr))}
+.tables>section,.wide{min-width:0;overflow-x:auto}
+.tables h3{border-radius:5px 5px 0 0}
+.line{display:flex;align-items:center;justify-content:space-between;padding:9px 12px}
+.line+.line{border-top:1px solid var(--rule-soft)}
+.line strong{font:700 .95rem system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.club{border:0;background:transparent;text-align:left;font-weight:600;padding:3px;color:var(--link)}
+.club:hover{text-decoration:underline}
+.club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}
+table{width:100%;border-collapse:collapse;background:var(--surface);font-size:.9rem;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
+.units{display:flex;flex-wrap:wrap;gap:12px}
+.units>div{background:var(--surface);padding:12px 18px;border-top:3px solid var(--accent);min-width:115px}
+.units b{display:block;font:700 1.5rem var(--display)}
+.units>div{max-width:100%}
+.compare{min-width:340px}
+@media (max-width:560px){.compare{font-size:.82rem}.compare tbody th{width:5.6rem}.compare th,.compare td{padding:6px 5px}}
+.compare thead th{background:var(--band);color:var(--band-fg)}
+.compare tbody th{width:8rem;color:var(--muted);font-weight:600;vertical-align:top}
+.compare td{vertical-align:top}
+.projects{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}
+.project{padding:12px;display:flex;flex-direction:column;gap:6px}
+.project p{margin:0}
+.project .controls{margin:6px 0 0;gap:8px}
+.terms{font-weight:600;font-variant-numeric:tabular-nums}
+.ledger td:not(:first-child),.ledger th:not(:first-child){text-align:right;white-space:nowrap}
+.ledger .sum th{border-bottom:2px solid var(--rule-strong)}
+fieldset.exclude{border:1px solid var(--rule);border-radius:6px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 16px;padding:10px 12px;color:var(--muted)}
+figure.map{margin:0 0 16px}
+#marketMap{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:760/590}
+figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
+.owners td{vertical-align:top}
+.calls{white-space:nowrap}
+.calls button{padding:4px 8px;font-size:.85rem;margin:0 4px 4px 0}
+fieldset.exclude label{display:flex;gap:6px;align-items:center;color:var(--fg)}
+optgroup{font-style:normal}
+footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
+#status{flex:1 1 260px;min-width:0}
+#importPrompt{flex-basis:100%;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;color:var(--fg);font-size:1rem}
+#importPrompt[hidden],[hidden]{display:none!important}
+button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+</style>
+<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><button id="advance"></button></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+  "version": 1,
+  "name": "Continental Gridiron League",
+  "teams": [
+    {
+      "id": "club-01",
+      "marketId": "buffalo",
+      "market": "Buffalo",
+      "nickname": "Bulls",
+      "abbr": "BUF",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#193C56",
+      "secondary": "#E69E48"
+    },
+    {
+      "id": "club-02",
+      "marketId": "miami",
+      "market": "Miami",
+      "nickname": "Barracuda",
+      "abbr": "MIA",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#16534F",
+      "secondary": "#FFA4A1"
+    },
+    {
+      "id": "club-03",
+      "marketId": "new-england",
+      "market": "New England",
+      "nickname": "Rebels",
+      "abbr": "NEN",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#47374C",
+      "secondary": "#F8C65C"
+    },
+    {
+      "id": "club-04",
+      "marketId": "new-york",
+      "market": "New York",
+      "nickname": "Knights",
+      "abbr": "NYK",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#505B66",
+      "secondary": "#D8C085"
+    },
+    {
+      "id": "club-05",
+      "marketId": "baltimore",
+      "market": "Baltimore",
+      "nickname": "Blue Crabs",
+      "abbr": "BAL",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#254B70",
+      "secondary": "#E8BB65"
+    },
+    {
+      "id": "club-06",
+      "marketId": "cincinnati",
+      "market": "Cincinnati",
+      "nickname": "Rivermen",
+      "abbr": "CIN",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#B4452F",
+      "secondary": "#FFE2A3"
+    },
+    {
+      "id": "club-07",
+      "marketId": "cleveland",
+      "market": "Cleveland",
+      "nickname": "Bulldogs",
+      "abbr": "CLE",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#553B48",
+      "secondary": "#FF9265"
+    },
+    {
+      "id": "club-08",
+      "marketId": "pittsburgh",
+      "market": "Pittsburgh",
+      "nickname": "Riveters",
+      "abbr": "PIT",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#35475A",
+      "secondary": "#DC8857"
+    },
+    {
+      "id": "club-09",
+      "marketId": "houston",
+      "market": "Houston",
+      "nickname": "Apollos",
+      "abbr": "HOU",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#272F54",
+      "secondary": "#FF9560"
+    },
+    {
+      "id": "club-10",
+      "marketId": "indianapolis",
+      "market": "Indianapolis",
+      "nickname": "Mustangs",
+      "abbr": "IND",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#39404D",
+      "secondary": "#EAC54F"
+    },
+    {
+      "id": "club-11",
+      "marketId": "jacksonville",
+      "market": "Jacksonville",
+      "nickname": "Prowlers",
+      "abbr": "JAX",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#165C71",
+      "secondary": "#DBDF94"
+    },
+    {
+      "id": "club-12",
+      "marketId": "tennessee",
+      "market": "Tennessee",
+      "nickname": "Copperheads",
+      "abbr": "TEN",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#694539",
+      "secondary": "#91D6AE"
+    },
+    {
+      "id": "club-13",
+      "marketId": "denver",
+      "market": "Denver",
+      "nickname": "Blizzard",
+      "abbr": "DEN",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#355549",
+      "secondary": "#F9AF82"
+    },
+    {
+      "id": "club-14",
+      "marketId": "kansas-city",
+      "market": "Kansas City",
+      "nickname": "Twisters",
+      "abbr": "KC",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#683C49",
+      "secondary": "#E9C086"
+    },
+    {
+      "id": "club-15",
+      "marketId": "las-vegas",
+      "market": "Las Vegas",
+      "nickname": "Outlaws",
+      "abbr": "LV",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#392944",
+      "secondary": "#E19EAF"
+    },
+    {
+      "id": "club-16",
+      "marketId": "los-angeles",
+      "market": "LA",
+      "nickname": "Aftershocks",
+      "abbr": "LAA",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#593866",
+      "secondary": "#FBD589"
+    },
+    {
+      "id": "club-17",
+      "marketId": "dallas",
+      "market": "Dallas",
+      "nickname": "Stallions",
+      "abbr": "DAL",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#244B51",
+      "secondary": "#C6A573"
+    },
+    {
+      "id": "club-18",
+      "marketId": "new-york",
+      "market": "New York",
+      "nickname": "Titans",
+      "abbr": "NYT",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#273F5C",
+      "secondary": "#FB876B"
+    },
+    {
+      "id": "club-19",
+      "marketId": "philadelphia",
+      "market": "Philadelphia",
+      "nickname": "Liberty",
+      "abbr": "PHI",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#49446B",
+      "secondary": "#ECC578"
+    },
+    {
+      "id": "club-20",
+      "marketId": "washington",
+      "market": "Washington",
+      "nickname": "Warthogs",
+      "abbr": "WAS",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#293B60",
+      "secondary": "#AEC8D2"
+    },
+    {
+      "id": "club-23",
+      "marketId": "green-bay",
+      "market": "Green Bay",
+      "nickname": "Icebreakers",
+      "abbr": "GB",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#24455D",
+      "secondary": "#9BDAD9"
+    },
+    {
+      "id": "club-21",
+      "marketId": "chicago",
+      "market": "Chicago",
+      "nickname": "Cyclones",
+      "abbr": "CHI",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#215467",
+      "secondary": "#F58C60"
+    },
+    {
+      "id": "club-22",
+      "marketId": "detroit",
+      "market": "Detroit",
+      "nickname": "Timber Wolves",
+      "abbr": "DET",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#363E52",
+      "secondary": "#A8D17C"
+    },
+    {
+      "id": "club-24",
+      "marketId": "minnesota",
+      "market": "Minnesota",
+      "nickname": "Bruins",
+      "abbr": "MIN",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#3B544B",
+      "secondary": "#E9B777"
+    },
+    {
+      "id": "club-25",
+      "marketId": "atlanta",
+      "market": "Atlanta",
+      "nickname": "Phoenix",
+      "abbr": "ATL",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#702F46",
+      "secondary": "#FCB974"
+    },
+    {
+      "id": "club-26",
+      "marketId": "carolina",
+      "market": "Carolina",
+      "nickname": "Cobras",
+      "abbr": "CAR",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#2B5143",
+      "secondary": "#F1CE91"
+    },
+    {
+      "id": "club-27",
+      "marketId": "new-orleans",
+      "market": "New Orleans",
+      "nickname": "Kings",
+      "abbr": "NO",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#493D67",
+      "secondary": "#F3A781"
+    },
+    {
+      "id": "club-28",
+      "marketId": "tampa-bay",
+      "market": "Tampa Bay",
+      "nickname": "Tarpons",
+      "abbr": "TB",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#285E66",
+      "secondary": "#E5C882"
+    },
+    {
+      "id": "club-29",
+      "marketId": "arizona",
+      "market": "Arizona",
+      "nickname": "Dust Devils",
+      "abbr": "ARI",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#823F36",
+      "secondary": "#ECCA85"
+    },
+    {
+      "id": "club-30",
+      "marketId": "los-angeles",
+      "market": "LA",
+      "nickname": "Crusaders",
+      "abbr": "LAC",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#373E67",
+      "secondary": "#F1A573"
+    },
+    {
+      "id": "club-31",
+      "marketId": "san-francisco",
+      "market": "San Francisco",
+      "nickname": "Spartans",
+      "abbr": "SF",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#294D58",
+      "secondary": "#F9987F"
+    },
+    {
+      "id": "club-32",
+      "marketId": "seattle",
+      "market": "Seattle",
+      "nickname": "Sockeye",
+      "abbr": "SEA",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#294361",
+      "secondary": "#89D3B2"
+    }
+  ]
+}</script><script>
+'use strict';
+// ---------------------------------------------------------------------------
+// Constants and league data
+// ---------------------------------------------------------------------------
+const SCHEMA_VERSION=5;      // Bump when the save shape changes, and add a migration below.
+const REGULAR_WEEKS=18;
+const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
+const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
+
+const league=JSON.parse(document.querySelector('#seed').textContent);
+const clubs=league.teams;
+const byId=new Map(clubs.map(t=>[t.id,t]));
+const byAbbr=new Map(clubs.map(t=>[t.abbr,t]));
+const divisions=['East','North','South','West'];
+const groups=['Charter','Union'].flatMap(c=>divisions.map(d=>clubs.filter(t=>t.conference===c&&t.division===d)));
+const teamName=id=>{const t=byId.get(id);return t?t.market+' '+t.nickname:'Unknown club';};
+const byName=new Map(clubs.map(t=>[teamName(t.id),t.id]));
+
+// All text that reaches innerHTML goes through esc(). Colors go through color().
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const color=v=>/^#[0-9a-f]{6}$/i.test(v)?v:'#888888';
+const isInt=(v,min=-Infinity,max=Infinity)=>Number.isInteger(v)&&v>=min&&v<=max;
+const $=sel=>document.querySelector(sel);
+const sentence=m=>/[.!?]$/.test(m)?m:m+'.';
+
+// ---------------------------------------------------------------------------
+// Club directory pane
+// ---------------------------------------------------------------------------
+const filter=$('#conf');
+function renderDirectory(){
+  const directory=$('#directory');
+  directory.replaceChildren();
+  for(const conference of ['Charter','Union']){
+    if(filter.value!=='All'&&filter.value!==conference)continue;
+    const heading=document.createElement('h2');
+    heading.textContent=conference+' Conference';
+    const grid=document.createElement('div');
+    grid.className='grid';
+    directory.append(heading,grid);
+    for(const division of divisions){
+      const card=document.createElement('article');
+      const title=document.createElement('h3');
+      title.textContent=division;
+      const list=document.createElement('ul');
+      for(const team of clubs.filter(t=>t.conference===conference&&t.division===division)){
+        const row=document.createElement('li');
+        const chip=document.createElement('span');
+        chip.className='chip';
+        chip.style.backgroundColor=color(team.primary);
+        chip.style.borderColor=color(team.secondary);
+        const label=document.createElement('button');label.className='club';label.dataset.id=team.id;
+        const market=document.createElement('small');
+        market.textContent=team.market;
+        const name=document.createElement('strong');
+        name.textContent=team.nickname;
+        label.append(market,name);
+        row.append(chip,label);
+        list.append(row);
+      }
+      card.append(title,list);
+      grid.append(card);
+    }
+  }
+}
+filter.addEventListener('change',renderDirectory);
+$('#save').onclick=()=>offerFile('continental-gridiron-league.json',JSON.stringify(league,null,2));
+renderDirectory();
+
+// ---------------------------------------------------------------------------
+// Seeded randomness. The generator state lives in the save, so the same save
+// plus the same actions always produces the same results.
+// ---------------------------------------------------------------------------
+function newSeed(){
+  try{return crypto.getRandomValues(new Uint32Array(1))[0];}
+  catch{return Math.floor(Math.random()*4294967296)>>>0;}
+}
+function rngFor(holder){ // mulberry32; advances holder.state on every draw
+  return ()=>{
+    let t=holder.state=(holder.state+0x6D2B79F5)>>>0;
+    t=Math.imul(t^(t>>>15),t|1);
+    t^=t+Math.imul(t^(t>>>7),t|61);
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+const randInt=(r,n)=>Math.floor(r()*n);
+function shuffled(r,items){
+  const copy=[...items];
+  for(let i=copy.length-1;i>0;i--){const j=randInt(r,i+1);[copy[i],copy[j]]=[copy[j],copy[i]];}
+  return copy;
+}
+const randomId=r=>Array.from({length:10},()=>'abcdefghijklmnopqrstuvwxyz0123456789'[randInt(r,36)]).join('');
+
+// ---------------------------------------------------------------------------
+// Schedule, rosters and simulation
+// ---------------------------------------------------------------------------
+function makeSeason(r,number){
+  const teams=groups.flatMap(g=>shuffled(r,g));
+  const game=(home,away)=>({home:teams[home].id,away:teams[away].id,score:null});
+  const rounds=[];
+  const divisionRounds=[];
+  const pairs=mask=>teams.map((_,i)=>[i,i^mask]).filter(([i,j])=>i<j);
+  for(const mask of [1,2,3]){
+    const first=pairs(mask).map(([i,j])=>randInt(r,2)?[i,j]:[j,i]);
+    divisionRounds.push(first.map(([i,j])=>game(i,j)));
+    rounds.push(first.map(([i,j])=>game(j,i)));
+  }
+  // Two perfect matchings form cycles. Orient each cycle to give every club
+  // exactly one home game across its two rounds.
+  const conferenceBlock=shuffled(r,[4,8,12]);
+  const interBlock=shuffled(r,[16,20,24,28]);
+  const masks=shuffled(r,[0,1,2,3].flatMap(k=>[conferenceBlock[0]+k,interBlock[0]+k]).concat(conferenceBlock.slice(1).map(k=>k+randInt(r,4))));
+  for(let p=0;p<masks.length;p+=2){
+    const visited=new Set(),matches=[[],[]];
+    for(let start=0;start<32;start++){
+      if(visited.has(start))continue;
+      let i=start,side=randInt(r,2);
+      do{
+        visited.add(i);
+        const j=i^masks[p+side];
+        matches[side].push(game(i,j));
+        i=j;side=1-side;
+      }while(i!==start);
+    }
+    rounds.push(...matches);
+  }
+  rounds.push(pairs(interBlock[1]+randInt(r,4)).map(([i,j])=>randInt(r,2)?game(i,j):game(j,i)));
+  const weeks=shuffled(r,rounds);
+  const mid=[[],[],[],[]];
+  shuffled(r,groups).forEach((group,index)=>{
+    const ids=new Set(group.map(t=>t.id));
+    const bye=index%4;
+    const active=[0,1,2,3].filter(w=>w!==bye);
+    shuffled(r,divisionRounds).forEach((round,i)=>mid[active[i]].push(...round.filter(g=>ids.has(g.home))));
+  });
+  weeks.splice(6+randInt(r,3),0,...mid);
+  const ratings=Object.fromEntries(clubs.map(t=>[t.id,{offense:64+randInt(r,30),defense:64+randInt(r,30)}]));
+  return {number,weeks,completed:0,ratings};
+}
+// Position, roster places, starters per formation.
+const positions=[
+ ['QB',3,1],['RB',3,1],['WR',6,3],['TE',3,1],['OT',4,2],['OG',4,2],['C',2,1],
+ ['DE',4,2],['DT',5,2],['LB',6,3],['CB',6,2],['S',4,2],['K',1,1],['P',1,1],['LS',1,1]
+];
+const positionNames=new Set(positions.map(p=>p[0]));
+const startersAt=pos=>positions.find(g=>g[0]===pos)[2];
+const givenNames='Andre Anton Austin Beau Blake Bryce Caleb Cameron Carson Cedric Chase Cole Curtis Darius Darnell Dawson Dean Devin Devon Diego Dominic Dylan Eli Ellis Everett Ezra Felix Gabriel Garrett Grant Hayden Isaiah Jalen Jamal Jasper Javier Jaylen Jonah Jordan Julian Kai Kendrick Kieran Lamar Leon Levi Lionel Logan Lorenzo Luca Malcolm Marcus Mason Mateo Micah Miles Nathan Nico Nolan Omar Owen Quincy Rafael Reed Rhett Roman Sam Shane Silas Terrence Theo Thomas Trent Tyrell Victor Wade Wesley Xavier Zane'.split(' ');
+const surnames='Abbott Acosta Adair Ames Archer Banks Barrett Bell Bishop Boone Boyd Briggs Brooks Burke Calder Callahan Campbell Carter Castillo Chambers Clay Cobb Cole Collins Conley Cooper Cortez Crawford Cross Dalton Daniels Dawson Delaney Dixon Douglas Drake Ellis Fields Finch Fletcher Ford Foster Franklin Gaines Galvez Gardner Gibson Grant Gray Greene Griffin Hale Hall Hampton Harper Harris Hart Hayes Hill Holland Holt Howard Ingram Jackson James Jensen Jordan Keller King Knox Lane Lawson Lewis Long Lyons Malone Marsh Mason May Mercer Miles Mills Mitchell Monroe Morgan Neal Nelson Ortiz Owens Palmer Park Perry Porter Powell Quinn Ramirez Reed Reeves Reyes Rhodes Rivers Robinson Ross Rowe Sanders Shaw Silva Simon Sloan Steele Stone Sutton Tate Thomas Torres Turner Vega Wallace Walsh Ward Weaver Wells West Wilder Williams Willis Woods Wright Young'.split(' ');
+function generateRosters(r,ratings){
+  const bag=shuffled(r,givenNames.flatMap(first=>surnames.map(last=>first+' '+last)));
+  const rosters={};
+  for(const team of clubs){
+    const players=[];
+    for(const [index,[pos,count]] of positions.entries()){
+      const base=index<7?ratings[team.id].offense:ratings[team.id].defense;
+      const unitBase=67+(base-78)*.65+randInt(r,17)-8;
+      for(let n=0;n<count;n++){
+        players.push({id:team.id+'-p'+(players.length+1),name:bag.pop(),pos,
+          rating:Math.max(45,Math.min(99,Math.round(unitBase+randInt(r,26)-9))),age:21+randInt(r,13)});
+      }
+    }
+    rosters[team.id]=players;
+  }
+  return rosters;
+}
+function personnel(players){
+  const chart={},quality={};
+  for(const [pos,,starters] of positions){
+    const depth=players.filter(p=>p.pos===pos).sort((a,b)=>Number(!!a.out)-Number(!!b.out)||b.rating-a.rating||a.id.localeCompare(b.id));
+    chart[pos]=depth;
+    const healthy=depth.filter(p=>!p.out);
+    const startersAvailable=healthy.slice(0,starters);
+    const starting=(startersAvailable.reduce((sum,p)=>sum+p.rating,0)+EMERGENCY_RATING*(starters-startersAvailable.length))/starters;
+    const rotates=['RB','WR','DE','DT','LB','CB'].includes(pos);
+    quality[pos]=rotates?.85*starting+.15*(healthy[starters]?.rating??starting):starting;
+  }
+  const q=quality;
+  const line=(2*q.OT+2*q.OG+q.C)/5;
+  const passing=.46*q.QB+.24*q.WR+.08*q.TE+.22*line;
+  const rushing=.42*q.RB+.50*line+.08*q.TE;
+  const coverage=.52*q.CB+.30*q.S+.18*q.LB;
+  const pressure=.58*q.DE+.32*q.DT+.10*q.LB;
+  const runDefense=.40*q.DT+.35*q.LB+.25*q.DE;
+  return {chart,passing,rushing,coverage,pressure,runDefense,kick:q.K,punt:q.P,snap:q.LS,
+    offense:Math.round(.62*passing+.38*rushing),defense:Math.round(.62*(.58*coverage+.42*pressure)+.38*runDefense)};
+}
+function drive(attack,defense,home,r){
+  const pass=r()<.62;
+  const matchup=pass?attack.passing-(.58*defense.coverage+.42*defense.pressure):attack.rushing-defense.runDefense;
+  const advantage=matchup*.009+(home?.014:0)+(75-defense.punt)*.0006;
+  const td=Math.min(.55,Math.max(.035,.225+advantage));
+  const kickSkill=.93*attack.kick+.07*attack.snap;
+  if(r()<td)return r()<Math.min(.995,.945+(kickSkill-75)*.002)?7:6;
+  if(r()<.23&&r()<Math.max(.5,Math.min(.97,.83+(kickSkill-75)*.009)))return 3;
+  return 0;
+}
+// Eleven drives each. A tie goes to overtime: each side is guaranteed one
+// possession, then the next score wins. Still level after OT_DRIVES is a tie.
+function simulate(home,away,r){
+  let h=0,a=0;
+  for(let d=0;d<11;d++)h+=drive(home,away,true,r);
+  for(let d=0;d<11;d++)a+=drive(away,home,false,r);
+  if(h!==a)return {score:[h,a]};
+  const homeFirst=r()<.5,ot=[0,0];
+  for(let n=0;n<OT_DRIVES;n++){
+    const homeBall=(n%2===0)===homeFirst;
+    ot[homeBall?0:1]+=homeBall?drive(home,away,true,r):drive(away,home,false,r);
+    if(n>=1&&ot[0]!==ot[1])break;
+  }
+  return {score:[h+ot[0],a+ot[1]],ot:true};
+}
+
+// ---------------------------------------------------------------------------
+// The save
+//
+// {schemaVersion, saveId, rng:{seed,state}, club, seasonIndex,
+//  seasons:[{number, weeks, completed, ratings}], rosters, picks, offer,
+//  events:[{id, season, week, type, ...}], nextEventId, migrations?}
+//
+// Events are structured records. Sentences are written from them at render
+// time, so wording can change without touching saves.
+// ---------------------------------------------------------------------------
+const cur=(S=save)=>S.seasons[S.seasonIndex];
+const defaultPicks=()=>clubs.flatMap(t=>Array.from({length:7},(_,i)=>({origin:t.id,round:i+1,owner:t.id})));
+function newSave(seed=newSeed()){
+  const rng={seed,state:seed},r=rngFor(rng);
+  const season=makeSeason(r,1);
+  return {schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,seasonIndex:0,seasons:[season],
+    rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0,
+    world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r),league:makeLeague(r)};
+}
+const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
+function record(S,type,data){
+  const s=cur(S);
+  S.events.push({id:S.nextEventId++,season:s.number,week:s.completed,type,...data});
+}
+
+function playWeek(S){
+  const s=cur(S);
+  if(s.completed>=s.weeks.length)return;
+  const r=rngFor(S.rng);
+  const units=Object.fromEntries(clubs.map(t=>[t.id,personnel(S.rosters[t.id])]));
+  for(const g of s.weeks[s.completed]){
+    const result=simulate(units[g.home],units[g.away],r);
+    g.score=result.score;
+    if(result.ot)g.ot=true;
+  }
+  s.completed++;
+  finishMedicalWeek(S,units,r);
+  processStadium(S,r);
+  processLeague(S,r);
+  processFinance(S);
+  processNaming(S);
+}
+function finishMedicalWeek(S,units,r){
+  const s=cur(S),played=new Set(s.weeks[s.completed-1].flatMap(g=>[g.home,g.away]));
+  for(const t of clubs){
+    const active=Object.values(units[t.id].chart).flat().filter(p=>!p.out);
+    for(const p of S.rosters[t.id]){
+      if(p.out&&--p.out===0){
+        delete p.out;
+        if(t.id===S.club)record(S,'cleared',{player:snap(p)});
+      }
+    }
+    if(!played.has(t.id))continue;
+    for(const p of shuffled(r,active)){
+      const depth=units[t.id].chart[p.pos],starters=startersAt(p.pos);
+      const starter=depth.indexOf(p)<starters;
+      if(r()>(starter?.024:.006)*(t.id===S.club?injuryFactor(S):1))continue;
+      const healthy=S.rosters[t.id].filter(other=>other.pos===p.pos&&!other.out);
+      if(healthy.length<=starters)continue;
+      p.out=1+randInt(r,5);
+      if(t.id===S.club&&effectActive(S,'facility')&&p.out>1&&r()<.4)p.out--;
+      if(t.id===S.club&&starter){
+        const backup=personnel(S.rosters[t.id]).chart[p.pos][starters-1];
+        record(S,'injury',{player:snap(p),weeks:p.out,backup:snap(backup)});
+      }
+    }
+  }
+  if(S.offer){record(S,'quoteExpired',{seller:S.offer.seller});S.offer=null;}
+}
+
+// ---------------------------------------------------------------------------
+// Trades
+// ---------------------------------------------------------------------------
+const pickValues=[0,100,55,34,21,13,8,5];
+const pickKey=p=>p?p.origin+'/'+p.round:'none';
+function playerValue(p){
+  const weight={QB:1.9,DE:1.25,OT:1.2,WR:1.1,CB:1.1,K:.085,P:.065,LS:.04}[p.pos]??.85;
+  return weight*(Math.pow(Math.max(3,p.rating-49),1.55)/4)*Math.max(.7,1-(p.age-25)*.022);
+}
+function termsNeeded(target,out){
+  return Math.max(0,Math.ceil(playerValue(target)*1.04-(out?playerValue(out):0)));
+}
+function ownedPicks(S){
+  return S.picks.filter(p=>p.owner===S.club).sort((a,b)=>b.round-a.round);
+}
+function pickLabel(p){
+  return p?(byId.get(p.origin)?.abbr??'?')+' round '+p.round:'no draft pick';
+}
+// Healthy players a roster would have at pos after `leaving` goes and `arriving` comes.
+function healthyAfter(roster,pos,leaving,arriving){
+  return roster.filter(p=>p.pos===pos&&!p.out&&p.id!==leaving?.id).length+(arriving&&arriving.pos===pos&&!arriving.out?1:0);
+}
+// A club will not trade itself below a full set of healthy starters at the position.
+const sellerShort=(S,seller,target,out)=>healthyAfter(S.rosters[seller],target.pos,target,out)<startersAt(target.pos);
+const buyerShort=(S,target,out)=>!!out&&healthyAfter(S.rosters[S.club],out.pos,out,target)<startersAt(out.pos);
+
+function tradeQuote(S,seller,targetId){
+  const s=cur(S);
+  if(!S.club||seller===S.club||s.completed>=s.weeks.length||S.offer)return;
+  const target=S.rosters[seller]?.find(p=>p.id===targetId&&!p.out);
+  if(!target)return;
+  const base={seller,targetId,outId:null,origin:null,round:0,week:s.completed};
+  if(sellerShort(S,seller,target,null)){S.offer={...base,firm:false,status:'needsDepth'};return;}
+  const gap=termsNeeded(target,null);
+  const pick=ownedPicks(S).find(p=>pickValues[p.round]>=gap*1.3+3);
+  S.offer={...base,origin:pick?.origin??null,round:pick?.round??0,firm:!!pick||gap===0,status:pick||gap===0?'opening':'needMore'};
+}
+function counterTrade(S,outId,key){
+  const q=S.offer;if(!q||q.week!==cur(S).completed)return;
+  const target=S.rosters[q.seller].find(p=>p.id===q.targetId&&!p.out);
+  const out=outId==='none'?null:S.rosters[S.club].find(p=>p.id===outId&&!p.out);
+  const picks=ownedPicks(S),pick=picks.find(p=>pickKey(p)===key);
+  if(!target||(outId!=='none'&&!out)||(!pick&&key!=='none'))return;
+  if(!out&&!pick){q.status='incomplete';return;}
+  if(sellerShort(S,q.seller,target,out)){
+    Object.assign(q,{outId:out?.id??null,round:0,origin:null,firm:false,status:'needsDepth'});
+    return;
+  }
+  const needed=termsNeeded(target,out);
+  const value=pick?pickValues[pick.round]:0;
+  let terms=pick;
+  if(value>=needed){q.firm=true;q.status='accepted';}
+  else{
+    terms=picks.find(p=>pickValues[p.round]>=needed);
+    q.firm=!!terms;
+    q.status=terms?'countered':'declined';
+  }
+  Object.assign(q,{outId:out?.id??null,round:terms?.round??0,origin:terms?.origin??null});
+}
+function resolveOffer(S,accept){
+  const q=S.offer;if(!q)return;
+  if(!accept){S.offer=null;record(S,'talksEnded',{seller:q.seller});return;}
+  if(q.firm===false)return;
+  const theirs=S.rosters[q.seller],ours=S.rosters[S.club];
+  const i=theirs.findIndex(p=>p.id===q.targetId&&!p.out),j=ours.findIndex(p=>p.id===q.outId&&!p.out);
+  const target=theirs[i],out=j>=0?ours[j]:null;
+  const pick=ownedPicks(S).find(p=>p.origin===q.origin&&p.round===q.round);
+  if(i<0||(q.outId&&!out)||(!q.outId&&!pick)||(q.round&&!pick)||q.week!==cur(S).completed||sellerShort(S,q.seller,target,out)){
+    S.offer=null;record(S,'termsGone',{seller:q.seller});return;
+  }
+  if(out){theirs[i]=out;ours[j]=target;}else{theirs.splice(i,1);ours.push(target);}
+  if(pick)pick.owner=q.seller;
+  S.offer=null;
+  record(S,'trade',{seller:q.seller,incoming:snap(target),outgoing:out?snap(out):null,pick:pick?{origin:pick.origin,round:pick.round}:null});
+}
+
+
+// ---------------------------------------------------------------------------
+// Stadiums and relocation
+//
+// world.markets   open markets, each with a city and a regional official
+// world.sites     competing site offers, two per market, with their own
+//                 terms, sponsor, deadline and hidden facts
+// world.leases    every club's current stadium and lease
+// stadium.visits  private visits the owner authorized, with instructions
+// stadium.studies feasibility studies
+// stadium.knowledge  facts and who knows each one: the shared record that
+//                 leaks, press and owner memory will build on
+// ---------------------------------------------------------------------------
+const OPEN_MARKETS=[
+  {id:'san-antonio',name:'San Antonio',region:'Texas',country:'US',metro:2.7,potential:72,lat:29.42,lon:-98.49},
+  {id:'columbus',name:'Columbus',region:'Ohio',country:'US',metro:2.2,potential:66,lat:39.96,lon:-83.0},
+  {id:'oklahoma-city',name:'Oklahoma City',region:'Oklahoma',country:'US',metro:1.5,potential:52,lat:35.47,lon:-97.52},
+  {id:'mexico-city',name:'Mexico City',region:'Mexico',country:'MX',metro:22,potential:95,lat:19.43,lon:-99.13},
+  {id:'toronto',name:'Toronto',region:'Ontario',country:'CA',metro:6.7,potential:90,lat:43.65,lon:-79.38},
+  {id:'portland',name:'Portland',region:'Oregon',country:'US',metro:2.5,potential:68,lat:45.52,lon:-122.68},
+  {id:'st-louis',name:'St. Louis',region:'Missouri',country:'US',metro:2.8,potential:64,lat:38.63,lon:-90.2},
+  {id:'san-diego',name:'San Diego',region:'California',country:'US',metro:3.3,potential:74,lat:32.72,lon:-117.16},
+];
+const CITY_TITLE={US:'Mayor',CA:'Mayor',MX:'Head of Government'};
+const REGION_TITLE={US:'Governor',CA:'Premier',MX:'Tourism Secretary'};
+const SITE_KINDS={
+  downtown:{names:['Downtown rail yards','Riverfront district','Convention district','Warehouse district'],acres:[22,40],transit:'Strong',parking:[7,13],seats:[60000,68000],offer:[.85,1.05],infra:[50,120]},
+  edge:{names:['North interchange site','Airport corridor site','East fairgrounds site','South beltway site'],acres:[90,170],transit:'Limited',parking:[18,30],seats:[68000,78000],offer:[1.0,1.3],infra:[90,200]},
+};
+const SITE_ISSUES=[
+  {text:'part of the parcel sits in a floodplain',cost:45},
+  {text:'the new interchange depends on state transportation money that is not budgeted',cost:80},
+  {text:'a rail operator holds an easement across the site',cost:30},
+  {text:'two landowners have not agreed to sell',cost:55},
+  {text:'the soil needs cleanup from its industrial past',cost:40},
+];
+const LAND_TERMS=['purchase','ground lease','nominal lease'];
+const VISIT_OPTIONS={
+  who:{president:'Team president alone',owner:'You, in person',both:'You and the team president'},
+  discretion:{quiet:'Quietly, with no public schedule',open:'Openly'},
+  ask:{publicMoney:'Push for more public money',landTerms:'Improve land and parking terms',deadline:'Ask for more time',listen:'Mostly listen'},
+  signal:{exploring:'We are exploring options',serious:'We are serious about moving'},
+};
+const between=(r,[lo,hi])=>lo+r()*(hi-lo);
+const round5=n=>Math.round(n/5)*5;
+const personName=r=>givenNames[randInt(r,givenNames.length)]+' '+surnames[randInt(r,surnames.length)];
+
+function makeWorld(r,completed){
+  const markets=OPEN_MARKETS.map(m=>({...m,officials:[
+    {id:m.id+'-city',title:CITY_TITLE[m.country],name:personName(r),warmth:35+randInt(r,40)},
+    {id:m.id+'-region',title:REGION_TITLE[m.country],name:personName(r),warmth:30+randInt(r,40)}]}));
+  const sites=markets.flatMap(m=>Object.entries(SITE_KINDS).map(([kind,k])=>{
+    const estimate=round5(between(r,k.infra));
+    const issue=r()<.45?SITE_ISSUES[randInt(r,SITE_ISSUES.length)]:null;
+    return {id:m.id+'-'+kind,marketId:m.id,kind,name:k.names[randInt(r,k.names.length)],
+      control:kind==='downtown'?'city':'region',sponsor:m.id+(kind==='downtown'?'-city':'-region'),
+      acres:Math.round(between(r,k.acres)),transit:k.transit,parking:Math.round(between(r,k.parking)),
+      maxSeats:Math.round(between(r,k.seats)/500)*500,landTerms:LAND_TERMS[randInt(r,2)],
+      publicOffer:round5((180+m.potential*4)*between(r,k.offer)),
+      infraEstimate:estimate,infraTrue:round5(estimate*between(r,[.85,1.35])+(issue?issue.cost:0)),
+      issue,infraKnown:false,issueKnown:false,
+      expiresWeek:Math.min(REGULAR_WEEKS,completed+4+randInt(r,9)),status:'open'};
+  }));
+  const leases=Object.fromEntries(clubs.map(t=>{
+    const opened=1962+randInt(r,56),age=2026-opened;
+    return [t.id,{stadium:t.market+' '+['Memorial Stadium','Municipal Stadium','Stadium','Field','Coliseum'][randInt(r,5)],
+      opened,capacity:61000+randInt(r,16)*1000,yearsLeft:2+randInt(r,13),condition:age>40?'Worn':age>20?'Serviceable':'Modern'}];
+  }));
+  return {markets,sites,leases};
+}
+const newStadiumState=()=>({visits:[],studies:[],knowledge:[],nextFactId:1,homeMood:60,homeAware:false});
+const makeStaff=r=>({president:{name:personName(r)}});
+
+const siteById=(S,id)=>S.world.sites.find(s=>s.id===id);
+const marketById=(S,id)=>S.world.markets.find(m=>m.id===id);
+const officialById=(S,id)=>S.world.markets.flatMap(m=>m.officials).find(o=>o.id===id);
+const stance=w=>w>=65?'eager':w>=45?'open':'cautious';
+const plannedVisit=S=>S.stadium.visits.find(v=>v.status==='planned');
+
+function learn(S,fact,knownBy){
+  const s=cur(S),f={id:S.stadium.nextFactId++,season:s.number,week:s.completed,...fact,knownBy:[...new Set(knownBy)]};
+  S.stadium.knowledge.push(f);
+  return f;
+}
+function tell(f,...who){for(const w of who)if(!f.knownBy.includes(w))f.knownBy.push(w);}
+function leak(S,f){
+  tell(f,'press','home');
+  S.stadium.homeAware=true;
+  S.stadium.homeMood=Math.max(0,S.stadium.homeMood-10);
+}
+
+// Owner actions. Each returns a short status code; the page turns it into words.
+function authorizeVisit(S,siteId,plan){
+  const s=cur(S),site=siteById(S,siteId);
+  if(!S.club||s.completed>=s.weeks.length)return 'closed';
+  if(!site||site.status!=='open')return 'unavailable';
+  if(plannedVisit(S))return 'busy';
+  for(const key of Object.keys(VISIT_OPTIONS))if(!(plan?.[key] in VISIT_OPTIONS[key]))return 'invalid';
+  const visit={id:'v'+(S.stadium.visits.length+1),siteId,who:plan.who,discretion:plan.discretion,ask:plan.ask,signal:plan.signal,week:s.completed,status:'planned'};
+  const f=learn(S,{kind:'visit',siteId,visitId:visit.id},['owner','president']);
+  visit.factId=f.id;
+  S.stadium.visits.push(visit);
+  return 'ok';
+}
+function cancelVisit(S){
+  const v=plannedVisit(S);if(!v)return;
+  S.stadium.visits=S.stadium.visits.filter(x=>x!==v);
+  S.stadium.knowledge=S.stadium.knowledge.filter(f=>f.id!==v.factId);
+}
+function commissionStudy(S,siteId){
+  const s=cur(S),site=siteById(S,siteId);
+  if(!S.club||s.completed>=s.weeks.length)return 'closed';
+  if(!site||site.status!=='open')return 'unavailable';
+  if(site.infraKnown&&site.issueKnown||S.stadium.studies.some(x=>x.siteId===siteId))return 'done';
+  const f=learn(S,{kind:'study',siteId},['owner','president','consultants']);
+  S.stadium.studies.push({siteId,ordered:s.completed,due:s.completed+2,status:'underway',factId:f.id});
+  return 'ok';
+}
+
+// Runs after each played week.
+function processStadium(S,r){
+  if(!S.club)return;
+  const s=cur(S);
+  const v=plannedVisit(S);
+  if(v)resolveVisit(S,v,r);
+  for(const study of S.stadium.studies.filter(x=>x.status==='underway'&&x.due<=s.completed)){
+    const site=siteById(S,study.siteId),f=S.stadium.knowledge.find(x=>x.id===study.factId);
+    site.infraKnown=true;site.issueKnown=true;study.status='done';
+    const leaked=r()<.04;
+    if(leaked&&f)leak(S,f);
+    record(S,'studyReport',{siteId:site.id,siteName:site.name,marketName:marketById(S,site.marketId).name,
+      estimate:site.infraEstimate,infra:site.infraTrue,issue:site.issue?.text??null,leaked,homeMarket:byId.get(S.club).market});
+  }
+  for(const site of S.world.sites.filter(x=>x.status==='open'&&x.expiresWeek<=s.completed)){
+    site.status='expired';
+    if(S.stadium.knowledge.some(f=>f.siteId===site.id))record(S,'siteExpired',{siteId:site.id,siteName:site.name,marketName:marketById(S,site.marketId).name});
+  }
+}
+function resolveVisit(S,v,r){
+  const site=siteById(S,v.siteId),market=marketById(S,site.marketId),official=officialById(S,site.sponsor);
+  const f=S.stadium.knowledge.find(x=>x.id===v.factId);
+  const before={warmth:official.warmth,offer:site.publicOffer,parking:site.parking,land:site.landTerms,expires:site.expiresWeek};
+  let gain={president:3,owner:12,both:15}[v.who]+(v.signal==='serious'?8:0)+(v.discretion==='open'?3:0)+randInt(r,7)-3;
+  const suspicious=v.ask==='publicMoney'&&v.signal==='exploring'&&r()<.5;
+  if(suspicious)gain-=14;
+  official.warmth=Math.max(0,Math.min(100,official.warmth+gain));
+  const w=official.warmth;
+  if(v.ask==='publicMoney'&&!suspicious)site.publicOffer=round5(site.publicOffer*(1+.02+w/100*.08+(v.signal==='serious'?.03:0)));
+  if(v.ask==='landTerms'){
+    const i=LAND_TERMS.indexOf(site.landTerms);
+    if(w>=45&&i<LAND_TERMS.length-1)site.landTerms=LAND_TERMS[i+1];
+    site.parking+=w>=45?2+randInt(r,3):1;
+  }
+  if(v.ask==='deadline')site.expiresWeek+=w>=45?2+(v.signal==='serious'?2:0)+(v.who!=='president'?1:0)+randInt(r,2):1;
+  if(v.ask==='listen'){site.infraKnown=true;if(site.issue&&w>=50)site.issueKnown=true;}
+  const leaked=r()<(v.discretion==='quiet'?.06:.55)+(v.who!=='president'?.12:0);
+  if(f){tell(f,official.id);if(leaked)leak(S,f);}
+  if(leaked)news(S,byId.get(S.club).market+' ownership quietly courted '+market.name+', sources say');
+  v.status='done';
+  record(S,'visitReport',{visitId:v.id,siteId:site.id,siteName:site.name,marketName:market.name,homeMarket:byId.get(S.club).market,
+    plan:{who:v.who,discretion:v.discretion,ask:v.ask,signal:v.signal},
+    official:{id:official.id,title:official.title,name:official.name},
+    before,after:{warmth:w,offer:site.publicOffer,parking:site.parking,land:site.landTerms,expires:site.expiresWeek},
+    gain,suspicious,leaked,
+    revealed:v.ask==='listen'?{infra:site.infraTrue,issue:site.issueKnown?site.issue?.text??null:null}:null});
+}
+
+// Words for stadium events (plain text; describeEvent escapes it).
+function visitReportText(e){
+  const off=e.official.title+' '+e.official.name,b=e.before,a=e.after,p=e.plan;
+  const parts=[{president:'As you asked, I made the trip to '+e.marketName+' alone.',owner:'You met them yourself in '+e.marketName+', so this is my read from what you told me.',both:'Good trip to '+e.marketName+' together.'}[p.who],
+    p.discretion==='quiet'?'We kept it quiet, with no public schedule.':'We made no secret of it.',
+    p.signal==='exploring'?'We told them we are exploring options.':'We told them we are serious about moving.'];
+  if(p.ask==='publicMoney')parts.push(e.suspicious?off+' asked whether we are using '+e.marketName+' as leverage at home, and the public offer stayed at $'+b.offer+'M.':
+    a.offer>b.offer?'On public money, their offer for the '+e.siteName+' moved from $'+b.offer+'M to $'+a.offer+'M.':'On public money, their offer stayed at $'+b.offer+'M.');
+  if(p.ask==='landTerms')parts.push((a.land!==b.land?'On land, they moved from a '+b.land+' to a '+a.land+',':'On land, they held at a '+b.land+',')+' and our parking share rose from $'+b.parking+'M to $'+a.parking+'M a year.');
+  if(p.ask==='deadline')parts.push(a.expires-b.expires>1?'They extended the deadline from after week '+b.expires+' to after week '+a.expires+'.':'They gave us one more week, to after week '+a.expires+', and made clear that is all for now.');
+  if(p.ask==='listen')parts.push('We mostly listened. Their engineers put infrastructure at $'+e.revealed.infra+'M'+(e.revealed.issue?', and they admitted that '+e.revealed.issue+'.':'.'));
+  parts.push(off+' came away '+(e.gain>=8?'warmer toward us':e.gain>=0?'about where they started':'cooler toward us')+'.');
+  parts.push(e.leaked?'Someone talked: the visit is in the '+e.homeMarket+' papers.':'As far as I can tell, nobody outside the room knows.');
+  return parts.join(' ');
+}
+function studyReportText(e){
+  return 'The feasibility study of the '+e.siteName+' in '+e.marketName+' is back. Infrastructure comes to $'+e.infra+'M against their estimate of $'+e.estimate+'M'+
+    (e.issue?'. The consultants found that '+e.issue+'.':'. They found no other problems.')+(e.leaked?' Word of the study reached the '+e.homeMarket+' press.':'');
+}
+
+// ---------------------------------------------------------------------------
+// Stadium view
+// ---------------------------------------------------------------------------
+const money=n=>'$'+n+'M';
+function whoLabel(S,w){
+  if(w==='owner')return 'You';
+  if(w==='president')return S.staff.president.name+' (team president)';
+  if(w==='consultants')return 'Feasibility consultants';
+  if(w==='press')return 'Reporters';
+  if(w==='league')return 'League finance committee';
+  if(w==='station')return 'The local TV station';
+  if(w==='sponsors')return 'Prospective sponsors';
+  if(w==='home')return byId.get(S.club).market+' officials and fans';
+  const o=officialById(S,w);return o?possessive(o.title+' '+o.name)+' office':w;
+}
+function factText(S,f){
+  const site=siteById(S,f.siteId),market=site&&marketById(S,site.marketId);
+  const where=site?'the '+site.name+' in '+market.name:'a site';
+  if(f.kind==='visit'){
+    const v=S.stadium.visits.find(x=>x.id===f.visitId);
+    return (v?.status==='planned'?'Planned private visit to ':'Private visit to ')+where;
+  }
+  if(f.kind==='study')return 'Feasibility study of '+where;
+  if(f.kind==='ownerFunding')return 'You paid personally for the '+projectDef(f.project).name.toLowerCase();
+  if(f.kind==='namingTalks')return 'Naming-rights talks for your stadium';
+  if(f.kind==='stationVisit')return 'Your visit to the '+openMarket(f.marketId).name+' TV station';
+  return 'Note about '+where;
+}
+function stadiumView(){
+  const S=save,id=S.club;
+  if(!id)return heading('STADIUM AND RELOCATION','Choose a club first')+'<p>Take ownership on the Owner desk to open your stadium file.</p>';
+  const s=cur(),lease=S.world.leases[id],st=S.stadium,open=s.completed<s.weeks.length;
+  const sites=S.world.sites;
+  if(!siteById(S,stadiumUi.a))stadiumUi.a=sites[0].id;
+  if(!siteById(S,stadiumUi.b)||stadiumUi.b===stadiumUi.a)stadiumUi.b=sites.find(x=>x.id!==stadiumUi.a).id;
+  const openSites=sites.filter(x=>x.status==='open');
+  if(!openSites.some(x=>x.id===stadiumUi.plan.site))stadiumUi.plan.site=openSites[0]?.id??'';
+  const siteOptions=(selectedId,list)=>S.world.markets.map(m=>{
+    const inMarket=list.filter(x=>x.marketId===m.id);
+    return inMarket.length?'<optgroup label="'+esc(m.name)+'">'+inMarket.map(x=>option(x.id,x.name+(x.status==='expired'?' (expired)':''),x.id===selectedId)).join('')+'</optgroup>':'';
+  }).join('');
+
+  const summary='<div class="units">'+
+    '<div><small>Capacity</small><b>'+lease.capacity.toLocaleString('en-US')+'</b>Opened '+lease.opened+' · '+esc(lease.condition)+'</div>'+
+    '<div><small>Lease</small><b>'+lease.yearsLeft+'</b>years remaining</div>'+
+    '<div><small>'+esc(byId.get(id).market)+'</small><b>'+(st.homeAware?'Aware':'Unaware')+'</b>of your search · mood '+st.homeMood+'</div></div>';
+
+  const pair=[siteById(S,stadiumUi.a),siteById(S,stadiumUi.b)];
+  const cell=(site,fn)=>'<td>'+fn(site)+'</td>';
+  const rows=[
+    ['Market',x=>{const m=marketById(S,x.marketId);return esc(m.name+', '+m.region)+'<small>Metro '+m.metro+'M · ceiling '+m.potential+'/100</small>';}],
+    ['Land control',x=>{const m=marketById(S,x.marketId);return esc(x.control==='city'?'City of '+m.name:(m.country==='US'?'State of ':'')+m.region)+'<small>'+x.acres+' acres · '+esc(x.landTerms)+'</small>';}],
+    ['Fits',x=>x.maxSeats.toLocaleString('en-US')+' seats<small>Transit: '+esc(x.transit)+'</small>'],
+    ['Public offer',x=>money(x.publicOffer)],
+    ['Infrastructure',x=>x.infraKnown?money(x.infraTrue)+'<small>Verified</small>':money(x.infraEstimate)+'<small>Their estimate, unverified</small>'],
+    ['Net public money',x=>{const n=x.publicOffer-(x.infraKnown?x.infraTrue:x.infraEstimate);return money(n)+(x.infraKnown?'':'<small>Before verification</small>');}],
+    ['Parking revenue',x=>money(x.parking)+' a year'],
+    ['Known problems',x=>x.issueKnown?esc(x.issue?x.issue.text[0].toUpperCase()+x.issue.text.slice(1):'None found'):S.stadium.studies.some(y=>y.siteId===x.id&&y.status==='underway')?'Study underway':'Not studied'],
+    ['Deadline',x=>x.status==='expired'?'Expired after week '+x.expiresWeek:'Offer expires after week '+x.expiresWeek],
+    ['Sponsor',x=>{const o=officialById(S,x.sponsor);return esc(o.title+' '+o.name)+'<small>'+stance(o.warmth)+' ('+o.warmth+'/100)</small>';}],
+    ['',x=>{
+      const studied=x.infraKnown&&x.issueKnown||S.stadium.studies.some(y=>y.siteId===x.id);
+      return x.status!=='open'||!open?'':studied?'<small>Study ordered</small>':'<button data-study="'+esc(x.id)+'">Commission study · 2 weeks</button>';
+    }],
+  ];
+  const compare='<h2>Compare sites</h2><div class="controls"><label>Site A <select id="compareA">'+siteOptions(stadiumUi.a,sites)+'</select></label><label>Site B <select id="compareB">'+siteOptions(stadiumUi.b,sites)+'</select></label></div>'+
+    '<div class="wide"><table class="compare"><thead><tr><th></th>'+pair.map(x=>'<th>'+esc(x.name)+'</th>').join('')+'</tr></thead><tbody>'+
+    rows.map(([label,fn])=>'<tr><th>'+label+'</th>'+pair.map(x=>cell(x,fn)).join('')+'</tr>').join('')+'</tbody></table></div>';
+
+  const v=plannedVisit(S),plan=stadiumUi.plan;
+  const select=(id,key)=>'<select id="'+id+'">'+Object.entries(VISIT_OPTIONS[key]).map(([k,label])=>option(k,label,plan[key]===k)).join('')+'</select>';
+  let visit='<h2>Private visit</h2>';
+  if(v){
+    const site=siteById(S,v.siteId),m=marketById(S,site.marketId);
+    const who={president:S.staff.president.name,owner:'You',both:'You and '+S.staff.president.name}[v.who];
+    visit+='<p>'+esc('Scheduled this week: '+who+' to the '+site.name+' in '+m.name+', '+VISIT_OPTIONS.discretion[v.discretion].toLowerCase()+'. '+VISIT_OPTIONS.ask[v.ask]+'. Message: “'+VISIT_OPTIONS.signal[v.signal]+'.” The report arrives after the next game.')+'</p><button id="cancelVisit">Cancel visit</button>';
+  }else if(!open)visit+='<p>The regular season has ended. Visits resume with the offseason.</p>';
+  else if(!openSites.length)visit+='<p>Every site offer has expired.</p>';
+  else visit+='<p>'+esc(S.staff.president.name)+' can make one visit a week. The visit happens while the week plays, and the report reaches your desk afterward.</p>'+
+    '<div class="controls"><label>Site <select id="visitSite">'+siteOptions(plan.site,openSites)+'</select></label><label>Who goes '+select('visitWho','who')+'</label><label>How '+select('visitDiscretion','discretion')+'</label></div>'+
+    '<div class="controls"><label>Priority '+select('visitAsk','ask')+'</label><label>Our message '+select('visitSignal','signal')+'</label><button id="authorizeVisit">Authorize visit</button></div>'+
+    (stadiumUi.notice?'<p>'+esc(stadiumUi.notice)+'</p>':'');
+
+  const facts=[...st.knowledge].reverse();
+  const knows='<h2>Who knows</h2>'+(facts.length?'<ul>'+facts.map(f=>'<li><div><strong>'+esc(factText(S,f))+'</strong><small>'+esc((f.week?'Since week '+f.week:'Preseason')+' · '+f.knownBy.map(w=>whoLabel(S,w)).join(', '))+'</small></div></li>').join('')+'</ul>':
+    '<p>Nobody outside your office knows anything yet. Visits and studies you authorize appear here with everyone who knows about them.</p>');
+
+  return heading('STADIUM AND RELOCATION',lease.stadium)+summary+compare+visit+knows;
+}
+const stadiumUi={a:null,b:null,notice:'',plan:{site:'',who:'president',discretion:'quiet',ask:'publicMoney',signal:'exploring'}};
+
+
+// ---------------------------------------------------------------------------
+// Money and authority
+//
+// finance.ownerCash     the owner's personal cash, topped up every 4 weeks by
+//                       a distribution from the business that made them rich
+// finance.clubCash/debt the club's own accounts. The fiscal year runs with the
+//                       18-week season; annual figures are spread across it.
+// finance.ledger        one operating report per played week, before owner money
+// finance.capitalLog    every project funding decision and who paid
+// finance.projects      staff proposals competing for the same money
+// finance.naming        naming-rights talks the team president runs on a mandate
+// ---------------------------------------------------------------------------
+const DEBT_LIMIT=450;          // league ceiling on club debt, $M
+const HOME_METRO={buffalo:1.2,miami:6.1,'new-england':4.9,'new-york':19.6,baltimore:2.8,cincinnati:2.3,cleveland:2.1,pittsburgh:2.4,
+  houston:7.3,indianapolis:2.1,jacksonville:1.7,tennessee:2.0,denver:3.0,'kansas-city':2.2,'las-vegas':2.3,'los-angeles':13.0,
+  dallas:7.9,philadelphia:6.2,washington:6.3,'green-bay':0.33,chicago:9.3,detroit:4.4,minnesota:3.7,atlanta:6.3,carolina:2.8,
+  'new-orleans':1.3,'tampa-bay':3.3,arizona:5.0,'san-francisco':4.6,seattle:4.0};
+const PROJECTS=[
+  {id:'plane',name:'Team plane',cost:85,recurring:5,build:4,
+    effect:'Replaces $8M a season of charter flights with $3M of travel, and trims injuries about 10%.',
+    note:'Some owners treat a personally funded plane as an ordinary perk. Others ask why their own players still fly charter.'},
+  {id:'facility',name:'Training facility rebuild',cost:140,recurring:3,build:10,
+    effect:'Cuts injuries about 20% and shortens some absences once it opens.'},
+  {id:'upgrade',name:'Video boards and concourses',cost:60,recurring:1,build:6,
+    effect:'Raises suite and concession revenue about 12% and helps attendance.',note:'Money spent here stays behind if the club moves.'},
+  {id:'science',name:'Sports science department',cost:0,recurring:8,build:0,
+    effect:'Cuts injuries about 10%. Nothing to build: it costs $8M a season from the day you approve it.'},
+];
+const projectDef=id=>PROJECTS.find(p=>p.id===id);
+const NAMING_SPONSORS={
+  bank:['Riverline Bank','Keystone Federal','First Meridian Bank'],insurance:['Summit Mutual','Harborview Insurance','Granite Life'],
+  airline:['Northstar Air','Skyway Airlines'],telecom:['Beacon Wireless','Lattice Telecom'],sportsbook:['Lucky Lane Sportsbook','Overtime Bet'],
+  crypto:['CoinHarbor Exchange','Blockfield'],energy:['Prairie Power','Lakeshore Energy'],grocery:['FreshWay Markets','Cornerstone Foods']};
+const CATEGORY_LABEL={bank:'Bank',insurance:'Insurance',airline:'Airline',telecom:'Telecom',sportsbook:'Sportsbook',crypto:'Crypto exchange',energy:'Energy',grocery:'Grocery'};
+const NAMING_ROUNDS=3;
+const LINE_LABELS={
+  nationalTV:'National TV share',localMedia:'Local media',marketRights:'Out-of-market broadcast rights (net)',sponsorship:'Sponsorship',namingRights:'Naming rights',
+  tickets:'Tickets',premium:'Suites and club seats',concessions:'Concessions and parking',visitorShare:'Gate sharing (34% goes to the visitor)',
+  payroll:'Player payroll',footballOps:'Coaches, scouting and medical',businessOps:'Business operations',travel:'Team travel',
+  stadiumRent:'Stadium rent',gameDay:'Game-day operations',projects:'Project running costs',debtService:'Debt payments'};
+const RECEIPT_LINES=['nationalTV','localMedia','marketRights','sponsorship','namingRights','tickets','premium','concessions','visitorShare'];
+const EXPENSE_LINES=['payroll','footballOps','businessOps','travel','stadiumRent','gameDay','projects','debtService'];
+
+function makeFinance(r){
+  return {ownerCash:350+randInt(r,401),distributionAnnual:90+randInt(r,71),clubCash:25+randInt(r,41),debt:150+randInt(r,151),rate:.06,
+    lossPolicy:'borrow',projects:PROJECTS.map(p=>({id:p.id,status:'proposed'})),ledger:[],capitalLog:[],
+    contributions:{capital:0,operating:0},naming:{status:'none'}};
+}
+const perWeek=annual=>annual/REGULAR_WEEKS;
+const round2=n=>Math.round(n*100)/100;
+const round1=n=>Math.round(n*10)/10;
+function localMetro(team){
+  const sharing=clubs.filter(t=>t.marketId===team.marketId).length;
+  return (HOME_METRO[team.marketId]??2)/sharing;
+}
+const leaseRent=lease=>round1(4+(lease.capacity-61000)/1000*.3+({Modern:6,Serviceable:3}[lease.condition]??1));
+const effectActive=(S,id)=>S.finance.projects.some(p=>p.id===id&&p.status==='active');
+function injuryFactor(S){
+  return (effectActive(S,'plane')?.9:1)*(effectActive(S,'facility')?.8:1)*(effectActive(S,'science')?.9:1);
+}
+function winPct(S,id){
+  const s=cur(S);let w=0,n=0;
+  for(const g of s.weeks.slice(0,s.completed).flat()){
+    if(g.home!==id&&g.away!==id)continue;
+    const [a,b]=g.home===id?g.score:[g.score[1],g.score[0]];
+    n++;w+=a>b?1:a===b?.5:0;
+  }
+  return n?w/n:.5;
+}
+function gate(S,clubId){
+  const lease=S.world.leases[clubId],metro=localMetro(byId.get(clubId)),owned=clubId===S.club;
+  const upgraded=owned&&effectActive(S,'upgrade'),mood=owned?S.stadium.homeMood:60;
+  const fill=Math.max(.55,Math.min(1,.8+(winPct(S,clubId)-.5)*.3+(mood-60)/300+(upgraded?.02:0)+({Modern:.03,Worn:-.03}[lease.condition]??0)));
+  const attendance=lease.capacity*fill,price=90+12*Math.sqrt(metro);
+  return {attendance,tickets:attendance*price/1e6,
+    premium:lease.capacity/1000*.09*({Modern:1.15,Worn:.85}[lease.condition]??1)*(upgraded?1.12:1),
+    concessions:attendance*32/1e6*(upgraded?1.12:1)};
+}
+const salaryRaw=p=>.9+playerValue(p)*.06;
+function payroll(S,id){
+  const raw=c=>S.rosters[c].reduce((sum,p)=>sum+salaryRaw(p),0);
+  const avg=clubs.reduce((sum,t)=>sum+raw(t.id),0)/clubs.length;
+  return 255*raw(id)/avg;
+}
+function weekLines(S,g){
+  const id=S.club,team=byId.get(id),lease=S.world.leases[id],F=S.finance,metro=localMetro(team);
+  const L={nationalTV:perWeek(300),localMedia:perWeek(40+18*Math.sqrt(metro)),sponsorship:perWeek(25+10*Math.sqrt(metro)),
+    namingRights:F.naming.status==='signed'?perWeek(F.naming.deal.annual):0,
+    marketRights:S.league?Object.entries(S.league.markets).filter(([,M])=>M.holder===id).reduce((sum,[mk,M])=>sum+perWeek(adValue(mk,M.fans[id]??0)-M.fee),0):0,tickets:0,premium:0,concessions:0,visitorShare:0,
+    payroll:-perWeek(payroll(S,id)),footballOps:-perWeek(70),businessOps:-perWeek(45),travel:-perWeek(effectActive(S,'plane')?3:8),
+    stadiumRent:-perWeek(leaseRent(lease)),gameDay:0,
+    projects:-perWeek(F.projects.filter(p=>p.status==='active').reduce((sum,p)=>sum+projectDef(p.id).recurring,0)),
+    debtService:-perWeek(F.debt*F.rate+(F.debt>0?12:0))};
+  if(g&&g.home===id){const G=gate(S,id);Object.assign(L,{tickets:G.tickets,premium:G.premium,concessions:G.concessions,gameDay:-2.5,visitorShare:-.34*G.tickets});}
+  else if(g)L.visitorShare=.34*gate(S,g.home).tickets;
+  return Object.fromEntries(Object.entries(L).map(([k,v])=>[k,round2(v)]));
+}
+const sumLines=lines=>round2(Object.values(lines).reduce((a,b)=>a+b,0));
+
+// Runs after each played week, for the owner's club.
+function processFinance(S){
+  if(!S.club)return;
+  const s=cur(S),F=S.finance,week=s.completed;
+  const g=s.weeks[week-1].find(x=>x.home===S.club||x.away===S.club);
+  const lines=weekLines(S,g),result=sumLines(lines);
+  F.clubCash=round2(F.clubCash+result);
+  if(F.debt>0)F.debt=round2(Math.max(0,F.debt-perWeek(12)));
+  let ownerIncome=0,ownerOperating=0,borrowed=0;
+  if(week%4===0){ownerIncome=round2(F.distributionAnnual*4/REGULAR_WEEKS);F.ownerCash=round2(F.ownerCash+ownerIncome);}
+  if(F.clubCash<0){
+    const need=-F.clubCash;
+    if(F.lossPolicy==='owner'&&F.ownerCash>=need){F.ownerCash=round2(F.ownerCash-need);F.contributions.operating=round2(F.contributions.operating+need);ownerOperating=round2(need);}
+    else{F.debt=round2(F.debt+need);borrowed=round2(need);}
+    F.clubCash=0;
+  }
+  F.ledger.push({season:s.number,week,lines,result,ownerIncome,ownerOperating,borrowed});
+  for(const p of F.projects.filter(x=>x.status==='building')){
+    if(--p.weeksLeft<=0){p.status='active';delete p.weeksLeft;record(S,'projectDone',{project:p.id});}
+  }
+}
+
+// Owner decisions. Each returns a status code the page turns into words.
+function fundProject(S,id,funding){
+  const F=S.finance,p=F.projects.find(x=>x.id===id),def=projectDef(id),s=cur(S);
+  if(!S.club||!p||p.status!=='proposed')return 'unavailable';
+  if(!['club','debt','owner'].includes(funding))return 'invalid';
+  if(def.cost>0){
+    if(funding==='club'&&F.clubCash<def.cost)return 'clubShort';
+    if(funding==='owner'&&F.ownerCash<def.cost)return 'ownerShort';
+    if(funding==='debt'&&F.debt+def.cost>DEBT_LIMIT)return 'debtLimit';
+    if(funding==='club')F.clubCash=round2(F.clubCash-def.cost);
+    if(funding==='debt')F.debt=round2(F.debt+def.cost);
+    if(funding==='owner'){F.ownerCash=round2(F.ownerCash-def.cost);F.contributions.capital=round2(F.contributions.capital+def.cost);}
+    F.capitalLog.push({season:s.number,week:s.completed,project:id,amount:def.cost,funding});
+    if(funding==='owner')learn(S,{kind:'ownerFunding',project:id},['owner','president','league']);
+  }
+  p.funding=def.cost>0?funding:'club';
+  if(def.build>0){p.status='building';p.weeksLeft=def.build;}else p.status='active';
+  return 'ok';
+}
+function declineProject(S,id){const p=S.finance.projects.find(x=>x.id===id);if(p?.status==='proposed')p.status='declined';}
+function reopenProject(S,id){const p=S.finance.projects.find(x=>x.id===id);if(p?.status==='declined')p.status='proposed';}
+function setLossPolicy(S,policy){if(['borrow','owner'].includes(policy))S.finance.lossPolicy=policy;}
+
+// Naming rights: the president negotiates on the owner's mandate.
+function namingValue(S){
+  const lease=S.world.leases[S.club];
+  return round1((6+4*Math.sqrt(localMetro(byId.get(S.club))))*({Modern:1.15,Worn:.8}[lease.condition]??1));
+}
+function startNaming(S,mandate){
+  const s=cur(S),F=S.finance;
+  if(!S.club||s.completed>=s.weeks.length)return 'closed';
+  if(F.naming.status==='negotiating'||F.naming.status==='awaiting')return 'busy';
+  if(F.naming.status==='signed')return 'signed';
+  const m={minAnnual:Number(mandate?.minAnnual),maxYears:Number(mandate?.maxYears),
+    exclude:Array.isArray(mandate?.exclude)?mandate.exclude.filter(c=>c in CATEGORY_LABEL):[],authority:mandate?.authority};
+  if(!(m.minAnnual>0&&m.minAnnual<=60)||![10,15,20,25].includes(m.maxYears)||!['sign','report'].includes(m.authority))return 'invalid';
+  const r=rngFor(S.rng);
+  const bidders=shuffled(r,Object.keys(NAMING_SPONSORS)).slice(0,4).map((category,i)=>{
+    const names=NAMING_SPONSORS[category];
+    return {id:'b'+(i+1),company:names[randInt(r,names.length)],category,appetite:round2(.75+r()*.55),years:8+randInt(r,14)};
+  });
+  const f=learn(S,{kind:'namingTalks'},['owner','president','sponsors']);
+  F.naming={status:'negotiating',round:0,mandate:m,bidders,value:namingValue(S),startedWeek:s.completed,factId:f.id};
+  return 'ok';
+}
+function namingOffers(N){
+  const m=N.mandate;
+  return N.bidders.map(b=>{
+    let annual=N.value*b.appetite*Math.min(1,.86+.05*N.round),years=b.years,reason=null;
+    if(years>m.maxYears){
+      if(years-m.maxYears<=6){years=m.maxYears;annual*=.95;}
+      else reason='they will not go below '+b.years+' years';
+    }
+    annual=round1(annual);
+    if(!reason&&m.exclude.includes(b.category))reason='you ruled out '+CATEGORY_LABEL[b.category].toLowerCase()+' sponsors';
+    if(!reason&&annual<m.minAnnual)reason='it is below your $'+m.minAnnual+'M floor';
+    return {bidderId:b.id,company:b.company,category:b.category,annual,years,reason};
+  }).sort((a,b)=>b.annual-a.annual);
+}
+function processNaming(S){
+  if(!S.club)return;
+  const s=cur(S),F=S.finance,N=F.naming;
+  if(N.status==='awaiting'&&s.completed>=N.expiresWeek){
+    record(S,'namingLapsed',{company:N.offer.company});
+    F.naming={status:'none'};return;
+  }
+  if(N.status!=='negotiating')return;
+  N.round++;
+  const offers=namingOffers(N),valid=offers.find(o=>!o.reason);
+  if(valid&&N.mandate.authority==='sign')return signNaming(S,valid,true);
+  if(valid||N.round>=NAMING_ROUNDS){
+    const offer=valid??offers[0];
+    Object.assign(N,{status:'awaiting',offer,outside:!valid,expiresWeek:s.completed+2});
+    record(S,'namingAwaiting',{offer,outside:!valid,expiresWeek:N.expiresWeek,rounds:N.round});
+  }
+}
+function signNaming(S,offer,delegated){
+  const lease=S.world.leases[S.club],old=lease.stadium;
+  const suffix=['Stadium','Field','Coliseum'].find(w=>old.endsWith(w))??'Stadium';
+  lease.stadium=offer.company+' '+suffix;
+  const deal={company:offer.company,category:offer.category,annual:offer.annual,years:offer.years,season:cur(S).number,week:cur(S).completed,originalName:old,newName:lease.stadium,delegated};
+  const f=S.stadium.knowledge.find(x=>x.id===S.finance.naming.factId);
+  if(f)tell(f,'press','home');
+  S.finance.naming={status:'signed',deal};
+  news(S,old+' will become '+lease.stadium+' under a '+deal.years+'-year naming deal');
+  record(S,'namingSigned',{deal});
+}
+function approveNaming(S){const N=S.finance.naming;if(N.status==='awaiting')signNaming(S,N.offer,false);}
+function declineNaming(S){
+  const N=S.finance.naming;
+  if(N.status==='awaiting')record(S,'namingDeclined',{company:N.offer.company});
+  if(N.status==='awaiting'||N.status==='negotiating')S.finance.naming={status:'none'};
+}
+
+// Words for money events.
+function financeEventText(e){
+  const def=e.project&&projectDef(e.project);
+  switch(e.type){
+    case 'projectDone':return e.project==='plane'?'The team plane is in service.':e.project==='science'?'The sports science department is running.':def.name+' is finished.';
+    case 'namingSigned':{const d=e.deal;return (d.delegated?'Done. Inside your terms, I signed ':'Signed, as you approved: ')+d.company+' names the stadium for '+d.years+' years at $'+d.annual+'M a year. '+d.originalName+' becomes '+d.newName+'.';}
+    case 'namingAwaiting':{const o=e.offer;return e.outside?
+      'After '+e.rounds+' rounds nobody met your terms. The best offer is '+o.company+' ('+CATEGORY_LABEL[o.category].toLowerCase()+') at $'+o.annual+'M a year for '+o.years+' years, but '+o.reason+'. It is on the Finances page through week '+e.expiresWeek+' if you want it anyway.':
+      o.company+' offered $'+o.annual+'M a year for '+o.years+' years, inside your terms. You asked to approve it yourself, so it is on the Finances page through week '+e.expiresWeek+'.';}
+    case 'namingLapsed':return possessive(e.company)+' naming offer lapsed without an answer.';
+    case 'namingDeclined':return 'I told '+e.company+' we are passing on their naming offer.';
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// Finances view
+// ---------------------------------------------------------------------------
+const m1=n=>(n<0?'−':'')+'$'+Math.abs(n).toFixed(1)+'M';
+const financeUi={notice:'',mandate:null};
+function financesView(){
+  const S=save,id=S.club;
+  if(!id)return heading('FINANCES','Choose a club first')+'<p>Take ownership on the Owner desk to open the books.</p>';
+  const s=cur(),F=S.finance,season=F.ledger.filter(x=>x.season===s.number),last=season.at(-1);
+  const total=k=>round2(season.reduce((sum,x)=>sum+(x.lines[k]??0),0));
+  const result=round2(season.reduce((sum,x)=>sum+x.result,0));
+  const ownerCapital=round2(F.capitalLog.filter(x=>x.season===s.number&&x.funding==='owner').reduce((a,x)=>a+x.amount,0));
+  const ownerOperating=round2(season.reduce((a,x)=>a+x.ownerOperating,0));
+  const nextDist=Math.min(s.weeks.length,(Math.floor(s.completed/4)+1)*4);
+  const units='<div class="units">'+
+    '<div><small>Your cash</small><b>'+m1(F.ownerCash)+'</b>'+(s.completed<s.weeks.length?'+'+m1(round2(F.distributionAnnual*4/REGULAR_WEEKS))+' after week '+nextDist:'Distributions resume next season')+'</div>'+
+    '<div><small>Club cash</small><b>'+m1(F.clubCash)+'</b>Operating account</div>'+
+    '<div><small>Club debt</small><b>'+m1(F.debt)+'</b>League limit '+m1(DEBT_LIMIT)+'</div>'+
+    '<div><small>Operating result</small><b>'+m1(result)+'</b>Season to date, before owner money</div></div>';
+
+  const row=k=>'<tr><td>'+LINE_LABELS[k]+'</td><td>'+(last?m1(last.lines[k]??0):'—')+'</td><td>'+(season.length?m1(total(k)):'—')+'</td></tr>';
+  const sub=(label,keys)=>{const t=round2(keys.reduce((a,k)=>a+total(k),0)),l=last?round2(keys.reduce((a,k)=>a+(last.lines[k]??0),0)):null;
+    return '<tr class="sum"><th>'+label+'</th><th>'+(l===null?'—':m1(l))+'</th><th>'+(season.length?m1(t):'—')+'</th></tr>';};
+  const report='<h2>Operating report</h2><p>'+(season.length?season.length+' week'+(season.length===1?'':'s')+' recorded this season'+(season[0].week>1?', starting after week '+season[0].week:'')+'.':'The first report arrives after your next game.')+
+    ' The club’s fiscal year runs with the 18-week season. Payroll follows the roster, so trades change it.</p>'+
+    '<div class="wide"><table class="ledger"><thead><tr><th>Line</th><th>Last week</th><th>Season</th></tr></thead><tbody>'+
+    RECEIPT_LINES.map(row).join('')+sub('Receipts',RECEIPT_LINES)+EXPENSE_LINES.map(row).join('')+sub('Expenses',EXPENSE_LINES)+
+    '<tr class="sum"><th>Operating result</th><th>'+(last?m1(last.result):'—')+'</th><th>'+(season.length?m1(result):'—')+'</th></tr>'+
+    '<tr><td>Your money into the club: projects</td><td colspan="2">'+m1(ownerCapital)+'</td></tr>'+
+    '<tr><td>Your money into the club: covering losses</td><td colspan="2">'+m1(ownerOperating)+'</td></tr>'+
+    '</tbody></table></div>'+
+    '<div class="controls"><label>When club cash runs out <select id="lossPolicy">'+option('borrow','Borrow on the club’s credit line',F.lossPolicy==='borrow')+option('owner','Cover it with your own money',F.lossPolicy==='owner')+'</select></label></div>';
+
+  const statusText=p=>({building:'Under construction · '+p.weeksLeft+' week'+(p.weeksLeft===1?'':'s')+' left',active:'In service',declined:'Declined'}[p.status]??'Awaiting your decision')+
+    (p.funding&&projectDef(p.id).cost>0?' · paid by '+{club:'the club',debt:'borrowing',owner:'you'}[p.funding]:'');
+  const projects='<h2>Funding decisions</h2>'+(financeUi.notice?'<p><b>'+esc(financeUi.notice)+'</b></p>':'')+'<div class="projects">'+F.projects.map(p=>{
+    const d=projectDef(p.id);
+    const buttons=p.status==='proposed'?(d.cost>0?
+      '<button data-fund="'+d.id+':club"'+(F.clubCash<d.cost?' disabled':'')+'>Club pays</button><button data-fund="'+d.id+':debt"'+(F.debt+d.cost>DEBT_LIMIT?' disabled':'')+'>Borrow</button><button data-fund="'+d.id+':owner"'+(F.ownerCash<d.cost?' disabled':'')+'>Pay personally</button>':
+      '<button data-fund="'+d.id+':club">Approve</button>')+'<button data-decline="'+d.id+'">Decline</button>':p.status==='declined'?'<button data-reopen="'+d.id+'">Reconsider</button>':'';
+    return '<article><h3>'+esc(d.name)+'</h3><div class="project"><p>'+esc(d.effect)+'</p>'+(d.note?'<small>'+esc(d.note)+'</small>':'')+
+      '<p class="terms">'+(d.cost?m1(d.cost)+' up front · ':'')+m1(d.recurring)+' a season'+(d.build?' · '+d.build+' weeks to build':'')+'</p>'+
+      '<small>'+esc(statusText(p))+'</small><div class="controls">'+buttons+'</div></div></article>';
+  }).join('')+'</div>';
+
+  const N=F.naming,president=S.staff.president.name,lease=S.world.leases[id];
+  let naming='<h2>Naming rights</h2>';
+  if(N.status==='signed'){const d=N.deal;naming+='<p>'+esc(d.newName+': '+d.company+' pays $'+d.annual+'M a year for '+d.years+' years. '+(d.delegated?president+' signed it within your mandate':'You approved it')+' after week '+d.week+'.')+'</p>';}
+  else if(N.status==='negotiating'){
+    const m=N.mandate;
+    naming+='<p>'+esc(president+' is talking to sponsors (round '+(N.round+1)+' of '+NAMING_ROUNDS+'). Your terms: at least $'+m.minAnnual+'M a year, no more than '+m.maxYears+' years'+(m.exclude.length?', no '+m.exclude.map(c=>CATEGORY_LABEL[c].toLowerCase()).join(' or ')+' sponsors':'')+'. '+(m.authority==='sign'?'Authorized to sign within those terms.':'Bringing the best offer to you.'))+'</p><button id="endNaming">Call off talks</button>';
+  }else if(N.status==='awaiting'){
+    const o=N.offer;
+    naming+='<p>'+esc(o.company+' ('+CATEGORY_LABEL[o.category].toLowerCase()+') offers $'+o.annual+'M a year for '+o.years+' years. '+(N.outside?'This is outside your terms: '+o.reason+'.':'This is inside your terms.')+' The offer stands through week '+N.expiresWeek+'. The stadium would become '+o.company+' '+(['Stadium','Field','Coliseum'].find(w=>lease.stadium.endsWith(w))??'Stadium')+'.')+'</p><div class="controls"><button id="signNaming">Sign the deal</button><button id="declineNaming">Turn it down</button></div>';
+  }else if(s.completed>=s.weeks.length)naming+='<p>The season has ended. Naming talks resume with the offseason.</p>';
+  else{
+    const value=namingValue(S);
+    financeUi.mandate??={minAnnual:Math.max(4,Math.round(value*.9)),maxYears:15,exclude:[],authority:'report'};
+    const m=financeUi.mandate,floors=[...new Set([4,6,8,10,12,14,16,18,20,24,28,32,m.minAnnual])].sort((a,b)=>a-b);
+    naming+='<p>'+esc(lease.stadium+' has no naming sponsor. '+president+' puts its value near $'+value+'M a year. Set the terms and hand it off; talks take up to '+NAMING_ROUNDS+' weeks.')+'</p>'+
+      '<div class="controls"><label>Minimum a year <select id="nameMin">'+floors.map(v=>option(v,'$'+v+'M',v===m.minAnnual)).join('')+'</select></label>'+
+      '<label>Longest term <select id="nameYears">'+[10,15,20,25].map(v=>option(v,v+' years',v===m.maxYears)).join('')+'</select></label>'+
+      '<label>Authority <select id="nameAuthority">'+option('report','Bring me the best offer',m.authority==='report')+option('sign','Sign anything within these terms',m.authority==='sign')+'</select></label></div>'+
+      '<fieldset class="exclude"><legend>Rule out sponsors in</legend>'+Object.entries(CATEGORY_LABEL).map(([c,label])=>'<label><input type="checkbox" id="excl-'+c+'"'+(m.exclude.includes(c)?' checked':'')+'> '+label+'</label>').join('')+'</fieldset>'+
+      '<button id="delegateNaming">Hand it to '+esc(president)+'</button>';
+  }
+  return heading('FINANCES',teamName(id))+units+report+projects+naming;
+}
+
+
+// ---------------------------------------------------------------------------
+// Owners, press and markets
+//
+// league.markets   broadcast control and fan preference for each open market.
+//                  Control and fans are separate: Cleveland can keep more
+//                  Columbus fans after Cincinnati wins the rights.
+// league.contest   the rights renewal the owner can fight for: the nearest
+//                  open market another club controls
+// league.owners    the other 31 owners: style, traits, how they feel about
+//                  you, and what they remember
+// league.meeting   a vote the losing owner calls, which you can lobby
+// league.news      headlines, written from the same events as the inbox
+// ---------------------------------------------------------------------------
+const HOME_COORDS={buffalo:[42.89,-78.88],miami:[25.76,-80.19],'new-england':[42.09,-71.26],'new-york':[40.71,-74.0],baltimore:[39.29,-76.61],
+  cincinnati:[39.10,-84.51],cleveland:[41.50,-81.69],pittsburgh:[40.44,-79.99],houston:[29.76,-95.37],indianapolis:[39.77,-86.16],
+  jacksonville:[30.33,-81.66],tennessee:[36.16,-86.78],denver:[39.74,-104.99],'kansas-city':[39.10,-94.58],'las-vegas':[36.17,-115.14],
+  'los-angeles':[34.05,-118.24],dallas:[32.78,-96.80],philadelphia:[39.95,-75.17],washington:[38.91,-77.04],'green-bay':[44.51,-88.01],
+  chicago:[41.88,-87.63],detroit:[42.33,-83.05],minnesota:[44.98,-93.27],atlanta:[33.75,-84.39],carolina:[35.23,-80.84],
+  'new-orleans':[29.95,-90.07],'tampa-bay':[27.95,-82.46],arizona:[33.45,-112.07],'san-francisco':[37.77,-122.42],seattle:[47.61,-122.33]};
+// Placeholder initial rights; the bible leaves the real list open.
+const INITIAL_RIGHTS={columbus:'club-07','san-antonio':'club-09','oklahoma-city':'club-17','mexico-city':'club-29',
+  toronto:'club-01',portland:'club-32','st-louis':'club-14','san-diego':'club-30'};
+const OWNER_STYLES=['old guard','operator','maverick'];
+const possessive=n=>n+(n.endsWith('s')?'’':'’s');
+const VOTE_THRESHOLD=24;  // three quarters of 32 clubs
+const MEETING_CALLS=6;
+
+function milesBetween([la1,lo1],[la2,lo2]){
+  const rad=Math.PI/180,dla=(la2-la1)*rad,dlo=(lo2-lo1)*rad;
+  const h=Math.sin(dla/2)**2+Math.cos(la1*rad)*Math.cos(la2*rad)*Math.sin(dlo/2)**2;
+  return 3959*2*Math.asin(Math.sqrt(h));
+}
+const openMarket=id=>OPEN_MARKETS.find(m=>m.id===id);
+const clubCoords=id=>HOME_COORDS[byId.get(id).marketId];
+function nearestClubs(marketId,n){
+  const m=openMarket(marketId),seen=new Set();
+  return clubs.map(t=>({id:t.id,miles:milesBetween([m.lat,m.lon],HOME_COORDS[t.marketId])})).sort((a,b)=>a.miles-b.miles)
+    .filter(x=>{const mk=byId.get(x.id).marketId;if(seen.has(mk))return false;seen.add(mk);return true;}).slice(0,n).map(x=>x.id);
+}
+function makeLeague(r){
+  const owners=Object.fromEntries(clubs.map(t=>[t.id,{name:personName(r),style:OWNER_STYLES[randInt(r,3)],
+    tradition:round2(r()-.5),subsidy:round2(r()*1.2-.6),sponsorAffinity:round2(r()*.6-.3),relation:randInt(r,26)-5,memory:[]}]));
+  const markets=Object.fromEntries(OPEN_MARKETS.map(m=>{
+    const holder=INITIAL_RIGHTS[m.id],second=nearestClubs(m.id,3).find(id=>id!==holder);
+    return [m.id,{holder,fee:round1(1.5+randInt(r,6)*.5),signedSeason:0,fans:{[holder]:45+randInt(r,16),[second]:20+randInt(r,16)}}];
+  }));
+  return {owners,markets,contest:null,meeting:null,news:[],promises:[],planeNoted:false};
+}
+const adValue=(marketId,share)=>round1(share/100*openMarket(marketId).metro*4);
+const holdsOpenMarket=(S,clubId)=>Object.values(S.league.markets).some(m=>m.holder===clubId);
+function remember(S,clubId,text,delta){
+  const o=S.league.owners[clubId],s=cur(S);
+  o.relation=Math.max(-100,Math.min(100,o.relation+delta));
+  o.memory.push({season:s.number,week:s.completed,text,delta});
+}
+function news(S,text){const s=cur(S);S.league.news.push({season:s.number,week:s.completed,text});}
+
+// The rights fight starts once the owner has a club.
+function ensureContest(S){
+  if(!S.club||S.league.contest)return;
+  const s=cur(S),home=clubCoords(S.club);
+  const target=OPEN_MARKETS.filter(m=>S.league.markets[m.id].holder!==S.club)
+    .sort((a,b)=>milesBetween(home,[a.lat,a.lon])-milesBetween(home,[b.lat,b.lon]))[0];
+  const M=S.league.markets[target.id];
+  if(!(S.club in M.fans))M.fans[S.club]=8;
+  const deadline=Math.min(s.weeks.length,s.completed+4);
+  S.league.contest={marketId:target.id,holder:M.holder,deadlineWeek:deadline,status:'open',bid:null,lobbied:false};
+}
+function stationRange(S){
+  const C=S.league.contest,M=S.league.markets[C.marketId],base=adValue(C.marketId,M.fans[C.holder]??40);
+  return [round1(Math.max(1,base*.8)),round1(base*1.3)];
+}
+function submitBid(S,annual,years,lobby){
+  const C=S.league.contest,s=cur(S);
+  if(!C||C.status!=='open'||s.completed>=C.deadlineWeek)return 'closed';
+  if(!(annual>=1&&annual<=12)||![3,5,7].includes(years))return 'invalid';
+  C.bid={annual:round1(annual),years};
+  if(lobby&&!C.lobbied){
+    C.lobbied=true;
+    learn(S,{kind:'stationVisit',marketId:C.marketId},['owner','president','station']);
+  }
+  return 'ok';
+}
+function withdrawBid(S){const C=S.league.contest;if(C?.status==='open')C.bid=null;}
+
+// Kickoff windows decide whether two clubs' games compete for the same audience.
+function slotFor(weekIndex,g){
+  let h=weekIndex*31+7;
+  for(const ch of g.home)h=(h*33+ch.charCodeAt(0))%9973;
+  const v=h%7;
+  return v<3?'early':v<6?'late':'night';
+}
+function gameOf(S,weekIndex,clubId){return cur(S).weeks[weekIndex]?.find(g=>g.home===clubId||g.away===clubId)??null;}
+// Who a market sees in a given week.
+function coverage(S,marketId,weekIndex){
+  const M=S.league.markets[marketId],H=M.holder,hg=H&&gameOf(S,weekIndex,H),hs=hg&&slotFor(weekIndex,hg);
+  return Object.keys(M.fans).map(id=>{
+    const g=gameOf(S,weekIndex,id);
+    if(!g)return {id,slot:null,airs:false};
+    const slot=slotFor(weekIndex,g);
+    return {id,slot,airs:id===H||!hg||slot!==hs};
+  });
+}
+function coverageText(S,weekIndex){
+  const C=S.league.contest;if(!C)return '';
+  const M=S.league.markets[C.marketId],name=openMarket(C.marketId).name,rows=coverage(S,C.marketId,weekIndex);
+  const me=rows.find(x=>x.id===S.club),H=M.holder,them=rows.find(x=>x.id===H);
+  if(!me?.slot)return 'You are off that week.';
+  if(H===S.club)return 'Your game airs in '+name+' in the '+me.slot+' window.';
+  if(!them?.slot)return byId.get(H).market+' is off, so your game airs in '+name+'.';
+  return me.airs?'Both games air in '+name+': '+byId.get(H).market+' '+them.slot+', yours '+me.slot+'.':
+    'Both games are in the '+me.slot+' window, so '+name+' sees '+byId.get(H).market+', not you.';
+}
+
+// Runs after each played week.
+function processLeague(S,r){
+  ensureContest(S);
+  const L=S.league,s=cur(S),wi=s.completed-1;
+  // Fans follow what they can watch.
+  for(const [id,M] of Object.entries(L.markets)){
+    for(const row of coverage(S,id,wi)){
+      if(!row.slot)continue;
+      const growth=row.id===M.holder?.35:row.airs?.08:0;
+      const other=100-Object.values(M.fans).reduce((a,b)=>a+b,0);
+      M.fans[row.id]=round2(M.fans[row.id]+Math.min(growth,Math.max(0,other-5)));
+    }
+  }
+  // Other owners hear about a personally funded plane through the finance committee.
+  if(!L.planeNoted&&S.stadium.knowledge.some(f=>f.kind==='ownerFunding'&&f.project==='plane'&&f.knownBy.includes('league'))){
+    L.planeNoted=true;
+    for(const [id,o] of Object.entries(L.owners))if(id!==S.club&&o.subsidy<-.3)remember(S,id,'You paid for your team plane personally. Their players still fly charter.',-6);
+  }
+  const C=L.contest;
+  if(C&&C.status==='open'&&s.completed>=C.deadlineWeek)decideContest(S,r);
+  const V=L.meeting;
+  if(V&&V.status==='scheduled'&&s.completed>=V.week)resolveVote(S);
+}
+function decideContest(S,r){
+  const L=S.league,C=L.contest,M=L.markets[C.marketId],name=openMarket(C.marketId).name,rival=C.holder,ro=L.owners[rival];
+  const [lo,hi]=stationRange(S);
+  const rivalBid={annual:round1(lo+(hi-lo)*(.25+r()*.6)*(ro.style==='maverick'?1.1:1)),years:5};
+  const score=(clubId,b)=>b.annual+b.years*.15+(M.fans[clubId]??0)*.03+(clubId===rival?.4:0)+(clubId===S.club&&C.lobbied?.8:0);
+  C.rivalBid=rivalBid;
+  const won=!!C.bid&&score(S.club,C.bid)>score(rival,rivalBid);
+  C.status='decided';C.winner=won?S.club:rival;
+  if(won){
+    Object.assign(M,{holder:S.club,fee:C.bid.annual,signedSeason:cur(S).number});
+    remember(S,rival,'You took the '+name+' broadcast rights from them.',-25);
+    record(S,'rightsWon',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
+    news(S,teamName(S.club)+' win '+name+' TV rights from '+teamName(rival));
+  }else if(C.bid){
+    M.fee=rivalBid.annual;
+    remember(S,rival,'You bid against them for '+name+'.',-5);
+    record(S,'rightsLost',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
+    news(S,teamName(rival)+' hold on to '+name+' after a bidding fight with '+byId.get(S.club).market);
+  }else{
+    M.fee=rivalBid.annual;
+    record(S,'rightsRenewed',{marketId:C.marketId,marketName:name,rival});
+  }
+  scheduleMeeting(S);
+}
+// The rival owner takes the fight to the owners' room.
+function scheduleMeeting(S){
+  const s=cur(S),L=S.league,C=L.contest;
+  const week=Math.min(s.weeks.length,s.completed+3);
+  if(week<=s.completed)return;
+  L.meeting={week,sponsor:C.holder,marketId:C.marketId,status:'scheduled',callsLeft:MEETING_CALLS,lobby:{},revealed:{},playerVote:null,
+    reversal:C.winner===S.club};
+  const name=openMarket(C.marketId).name,o=L.owners[C.holder];
+  record(S,'meetingCalled',{sponsor:C.holder,owner:o.name,marketName:name,week,reversal:L.meeting.reversal});
+  news(S,byId.get(C.holder).market+' owner '+o.name+' asks the league for a first-refusal rule on broadcast markets');
+}
+const playerOpposes=S=>S.league.meeting&&(S.league.meeting.reversal||S.league.contest?.bid!=null);
+function ownerLean(S,clubId){
+  const L=S.league,V=L.meeting,o=L.owners[clubId];
+  if(clubId===V.sponsor)return 9;
+  let x=.2+o.tradition*.6+o.sponsorAffinity+(holdsOpenMarket(S,clubId)?.5:0);
+  x+=(playerOpposes(S)?-1:1)*o.relation/100*.9;
+  return round2(x+(V.lobby[clubId]??0));
+}
+const leanLabel=x=>x>.15?'Leaning yes':x<-.15?'Leaning no':'Undecided';
+function callOwner(S,clubId,promise){
+  const L=S.league,V=L.meeting,o=L.owners[clubId];
+  if(!V||V.status!=='scheduled'||!o||clubId===S.club||clubId===V.sponsor)return 'unavailable';
+  if(V.callsLeft<=0)return 'noCalls';
+  V.callsLeft--;
+  const toward=playerOpposes(S)?-1:1;
+  let shift=o.relation>=10?.2:o.relation<=-10?-.1:.1;
+  if(promise){
+    shift=.6;
+    L.promises.push({clubId,season:cur(S).number,week:cur(S).completed,text:'Back their next proposal at a league meeting'});
+    remember(S,clubId,'You promised to back their next proposal.',5);
+  }
+  V.lobby[clubId]=round2((V.lobby[clubId]??0)+toward*shift);
+  V.revealed[clubId]=ownerLean(S,clubId);
+  return 'ok';
+}
+function setPlayerVote(S,vote){const V=S.league.meeting;if(V?.status==='scheduled'&&['yes','no'].includes(vote))V.playerVote=vote;}
+function resolveVote(S){
+  const L=S.league,V=L.meeting,name=openMarket(V.marketId).name,sponsor=V.sponsor,o=L.owners[sponsor];
+  const mine=V.playerVote??(playerOpposes(S)?'no':'yes');
+  const votes=Object.fromEntries(clubs.map(t=>[t.id,t.id===S.club?mine:ownerLean(S,t.id)>0?'yes':'no']));
+  const yes=Object.values(votes).filter(v=>v==='yes').length,passed=yes>=VOTE_THRESHOLD;
+  Object.assign(V,{status:'decided',votes,yes,passed});
+  let lostMarket=false;
+  if(passed&&V.reversal&&L.markets[V.marketId].holder===S.club){
+    Object.assign(L.markets[V.marketId],{holder:sponsor,signedSeason:cur(S).number});
+    lostMarket=true;
+  }
+  if(passed)remember(S,sponsor,'The owners backed their first-refusal rule.',4);
+  else if(mine==='no')remember(S,sponsor,'You helped block their first-refusal rule.',-10);
+  for(const t of clubs)if(t.id!==S.club&&t.id!==sponsor&&votes[t.id]===mine&&V.lobby[t.id])remember(S,t.id,'Voted with you on first refusal after your call.',2);
+  record(S,'voteResult',{sponsor,owner:o.name,marketName:name,yes,no:32-yes,passed,lostMarket,mine});
+  news(S,passed?'Owners approve first-refusal rule '+yes+'–'+(32-yes)+(lostMarket?'; '+name+' returns to '+byId.get(sponsor).market:''):
+    'First-refusal rule falls short, '+yes+'–'+(32-yes)+(V.reversal?'; '+byId.get(S.club).market+' keeps '+name:''));
+}
+
+// Words for league events.
+function leagueEventText(e){
+  const rival=e.rival&&teamName(e.rival);
+  switch(e.type){
+    case 'rightsWon':return 'The '+e.marketName+' station took our offer: $'+e.bid.annual+'M a year for '+e.bid.years+' years against '+possessive(rival)+' $'+e.rivalBid.annual+'M. Our games get preferred coverage there. Expect to hear from their owner.';
+    case 'rightsLost':return rival+' kept '+e.marketName+'. They offered $'+e.rivalBid.annual+'M a year against our $'+e.bid.annual+'M. They know we tried.';
+    case 'rightsRenewed':return rival+' renewed the '+e.marketName+' broadcast rights unopposed.';
+    case 'meetingCalled':return e.owner+' has called a league vote after week '+e.week+' on a first-refusal rule for broadcast markets.'+(e.reversal?' It would apply to deals signed this season, which means '+e.marketName+'.':'');
+    case 'voteResult':return 'The owners voted '+e.yes+'–'+e.no+' on '+possessive(e.owner)+' first-refusal rule. It needed '+VOTE_THRESHOLD+'. '+(e.passed?'It passed.'+(e.lostMarket?' '+e.marketName+' goes back to '+byId.get(e.sponsor).market+'.':''):'It failed.')+' You voted '+e.mine+'.';
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// The market map: one Voronoi cell per market city. Fill is the controlling
+// club's primary color, border its secondary. Shared home markets are striped.
+// ---------------------------------------------------------------------------
+const MAP={w:760,h:590,lon0:-128.5,lat0:53.5,k:.788};
+const mapScale=MAP.w/(64*MAP.k);
+const project=(lat,lon)=>[(lon-MAP.lon0)*MAP.k*mapScale,(MAP.lat0-lat)*mapScale];
+// Rough coastline and northern edge of the playable map, as [lon, lat].
+const OUTLINE=[[-124.7,48.4],[-124.1,46.2],[-124.5,42.8],[-124.2,40.4],[-122.5,37.7],[-120.6,34.6],[-118.4,33.9],[-117.1,32.5],
+  [-116.6,31.5],[-115.8,30.3],[-114.2,28.0],[-112.1,24.8],[-109.9,22.9],[-106.4,23.2],[-105.3,20.6],[-104.3,19.1],[-101.0,17.9],
+  [-98.0,16.3],[-94.0,16.0],[-92.2,14.6],[-91.4,17.3],[-89.1,17.9],[-87.5,18.5],[-87.0,21.5],[-90.4,21.2],[-90.5,19.5],[-92.5,18.6],
+  [-94.5,18.1],[-96.1,19.2],[-97.2,21.0],[-97.7,23.5],[-97.2,25.9],[-97.4,27.8],[-94.8,29.3],[-93.8,29.7],[-91.5,29.5],[-89.4,29.0],
+  [-89.6,30.2],[-88.0,30.4],[-85.4,29.7],[-84.0,30.1],[-82.8,28.0],[-81.8,26.1],[-80.9,25.1],[-80.1,25.8],[-80.6,28.4],[-81.4,30.5],
+  [-81.0,32.0],[-79.0,33.6],[-76.6,34.7],[-75.5,35.3],[-76.0,37.0],[-75.0,38.5],[-74.0,40.4],[-72.0,41.0],[-70.0,41.6],[-70.8,42.6],
+  [-70.2,43.7],[-67.0,44.8],[-65.8,44.3],[-63.6,44.6],[-61.0,45.6],[-64.8,48.8],[-68.5,49.0],[-66.5,50.2],[-60.0,50.3],[-70,52],
+  [-80,52],[-90,53],[-100,53],[-115,53],[-123,53],[-127.9,50.6],[-125.3,48.8],[-123.4,48.3]];
+function mapPoints(S){
+  const home=[...new Set(clubs.map(t=>t.marketId))].map(mk=>{
+    const ids=clubs.filter(t=>t.marketId===mk).map(t=>t.id),[x,y]=project(...HOME_COORDS[mk]);
+    return {id:mk,x,y,holders:ids,label:byId.get(ids[0]).market,open:false};
+  });
+  const open=OPEN_MARKETS.map(m=>{const [x,y]=project(m.lat,m.lon),h=S.league.markets[m.id].holder;return {id:m.id,x,y,holders:h?[h]:[],label:m.name,open:true};});
+  return [...home,...open];
+}
+function clipHalfPlane(poly,a,b,c){ // keep a*x + b*y <= c
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const P=poly[i],Q=poly[(i+1)%poly.length],fp=a*P[0]+b*P[1]-c,fq=a*Q[0]+b*Q[1]-c;
+    if(fp<=0)out.push(P);
+    if((fp<0&&fq>0)||(fp>0&&fq<0)){const t=fp/(fp-fq);out.push([P[0]+t*(Q[0]-P[0]),P[1]+t*(Q[1]-P[1])]);}
+  }
+  return out;
+}
+function voronoiCells(points,w,h){
+  return points.map((p,i)=>points.reduce((poly,q,j)=>i===j?poly:
+    clipHalfPlane(poly,q[0]-p[0],q[1]-p[1],(q[0]*q[0]+q[1]*q[1]-p[0]*p[0]-p[1]*p[1])/2),[[0,0],[w,0],[w,h],[0,h]]));
+}
+function drawMap(canvas,S){
+  const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
+  canvas.width=MAP.w*dpr;canvas.height=MAP.h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const css=getComputedStyle(document.documentElement),token=(n,f)=>css.getPropertyValue(n).trim()||f;
+  const fg=token('--fg','#192d36'),bg=token('--bg','#f5f3eb'),neutral=token('--rule','#c4ccc5');
+  const pts=mapPoints(S),cells=voronoiCells(pts.map(p=>[p.x,p.y]),MAP.w,MAP.h);
+  const land=new Path2D();
+  OUTLINE.forEach(([lon,lat],i)=>{const [x,y]=project(lat,lon);i?land.lineTo(x,y):land.moveTo(x,y);});
+  land.closePath();
+  const stripes=(a,b)=>{
+    const c=document.createElement('canvas');c.width=c.height=14;const g=c.getContext('2d');
+    g.fillStyle=a;g.fillRect(0,0,14,14);g.strokeStyle=b;g.lineWidth=5;
+    g.beginPath();g.moveTo(-3,3);g.lineTo(3,-3);g.moveTo(0,14);g.lineTo(14,0);g.moveTo(11,17);g.lineTo(17,11);g.stroke();
+    return ctx.createPattern(c,'repeat');
+  };
+  ctx.clearRect(0,0,MAP.w,MAP.h);
+  ctx.save();ctx.clip(land);
+  cells.forEach((cell,i)=>{
+    const teams=pts[i].holders.map(id=>byId.get(id));
+    ctx.beginPath();cell.forEach(([x,y],k)=>k?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+    ctx.fillStyle=teams.length>1?stripes(color(teams[0].primary),color(teams[1].primary)):teams[0]?color(teams[0].primary):neutral;
+    ctx.fill();
+    ctx.strokeStyle=teams[0]?color(teams[0].secondary):fg;ctx.lineWidth=2.5;ctx.stroke();
+  });
+  ctx.restore();
+  ctx.strokeStyle=fg;ctx.lineWidth=1.5;ctx.stroke(land);
+  const contested=S.league.contest?.status==='open'?S.league.contest.marketId:null,home=S.club&&byId.get(S.club).marketId;
+  ctx.font='600 11px '+token('--body','sans-serif');ctx.textBaseline='middle';
+  for(const p of pts){
+    ctx.beginPath();ctx.arc(p.x,p.y,p.open?4:3,0,Math.PI*2);ctx.fillStyle=p.open?bg:fg;ctx.fill();ctx.strokeStyle=p.open?fg:bg;ctx.lineWidth=1.5;ctx.stroke();
+    if(p.id===contested||p.id===home){ctx.beginPath();ctx.setLineDash(p.id===contested?[3,3]:[]);ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.strokeStyle=fg;ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);}
+    if(p.open||p.id===home){
+      ctx.lineWidth=3;ctx.strokeStyle=bg;ctx.strokeText(p.label,p.x+8,p.y-9);ctx.fillStyle=fg;ctx.fillText(p.label,p.x+8,p.y-9);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// League view
+// ---------------------------------------------------------------------------
+const leagueUi={bid:null,lobby:false,notice:''};
+const relationLabel=v=>v>=25?'Warm':v>=5?'Friendly':v>-10?'Neutral':v>-30?'Cool':'Hostile';
+function leagueView(){
+  const S=save,L=S.league,s=cur();
+  let html=heading('LEAGUE','Broadcast markets')+
+    '<figure class="map"><canvas id="marketMap" role="img" aria-label="Map of broadcast markets. Each market city’s area is filled with the color of the club that holds its broadcast rights."></canvas>'+
+    '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed ring the rights you can contest':'')+'.</figcaption></figure>';
+  html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
+    const M=L.markets[m.id],fans=Object.entries(M.fans).sort((a,b)=>b[1]-a[1]).map(([id,v])=>byId.get(id).abbr+' '+Math.round(v)+'%').join(' · ');
+    return '<tr><td>'+esc(m.name)+'</td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(fans)+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>'+headlines(S);
+  const C=L.contest;
+  if(C){
+    const name=openMarket(C.marketId).name,M=L.markets[C.marketId];
+    html+='<h2>'+esc(name)+' broadcast rights</h2>';
+    if(C.status==='open'){
+      const [lo,hi]=stationRange(S);
+      leagueUi.bid??={annual:C.bid?.annual??Math.round(hi*2)/2,years:C.bid?.years??5};
+      const b=leagueUi.bid,amounts=[];for(let v=1;v<=12;v+=.5)amounts.push(v);
+      html+='<p>'+esc(teamName(C.holder)+' hold the rights. The station decides after week '+C.deadlineWeek+' and expects offers of $'+lo+'M to $'+hi+'M a year. It also weighs term length, ratings (fan preference) and who shows up in person. '+
+        'The rights would earn us about $'+adValue(C.marketId,M.fans[S.club]??0)+'M a year in local advertising at today’s fan preference.')+'</p>'+
+        '<p>'+esc('This week: '+coverageText(S,s.completed))+'</p>'+
+        (C.bid?'<p><b>'+esc('Your offer: $'+C.bid.annual+'M a year for '+C.bid.years+' years'+(C.lobbied?', and you visited the station yourself.':'.'))+'</b></p>':'')+
+        (s.completed<C.deadlineWeek?'<div class="controls"><label>Annual guarantee <select id="bidAnnual">'+amounts.map(v=>option(v,'$'+v.toFixed(1)+'M',v===b.annual)).join('')+'</select></label>'+
+        '<label>Term <select id="bidYears">'+[3,5,7].map(v=>option(v,v+' years',v===b.years)).join('')+'</select></label>'+
+        (C.lobbied?'':'<label><input type="checkbox" id="bidLobby"'+(leagueUi.lobby?' checked':'')+'> Visit the station yourself</label>')+
+        '<button id="submitBid">'+(C.bid?'Revise offer':'Make offer')+'</button>'+(C.bid?'<button id="withdrawBid">Withdraw</button>':'')+'</div>':'')+
+        (leagueUi.notice?'<p>'+esc(leagueUi.notice)+'</p>':'');
+    }else html+='<p>'+esc(C.winner===S.club?'You won the rights: $'+C.bid.annual+'M a year for '+C.bid.years+' years. '+(M.holder===S.club?'This week: '+coverageText(S,Math.min(s.completed,s.weeks.length-1)):'The league has since returned them to '+byId.get(M.holder).market+'.'):
+      teamName(C.winner)+' kept the rights'+(C.bid?' with $'+C.rivalBid.annual+'M a year against your $'+C.bid.annual+'M.':'.'))+'</p>';
+  }
+  const V=L.meeting;
+  if(V){
+    const sponsor=L.owners[V.sponsor],name=openMarket(V.marketId).name;
+    html+='<h2>League meeting</h2><p>'+esc(sponsor.name+' ('+teamName(V.sponsor)+') proposes a first-refusal rule: a club that held a market’s broadcast rights before this season may match any rival’s offer at renewal. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
+      '<p><b>Effect on your club:</b> '+esc(V.reversal?name+' would go back to '+byId.get(V.sponsor).market+'. You would lose preferred coverage there and about $'+round1(adValue(V.marketId,L.markets[V.marketId].fans[S.club]??0)-(L.markets[V.marketId].fee??0))+'M a year net.':'It would lock '+possessive(byId.get(V.sponsor).market)+' hold on '+name+' at the next renewal.')+'</p>';
+    if(V.status==='scheduled'){
+      const mine=V.playerVote??(playerOpposes(S)?'no':'yes');
+      html+='<p>'+esc('The vote is after week '+V.week+'. Calls left before the meeting: '+V.callsLeft+'. A call tells you where an owner stands and nudges them your way; a promise moves them further and is recorded.')+'</p>'+
+        '<div class="controls"><label>Your vote <select id="playerVote">'+option('no','No',mine==='no')+option('yes','Yes',mine==='yes')+'</select></label></div>';
+    }else html+='<p>'+esc('Result: '+V.yes+'–'+(32-V.yes)+', '+(V.passed?'passed':'failed')+'.')+'</p>';
+    html+='<div class="wide"><table class="owners"><thead><tr><th>Club</th><th>Owner</th><th>Toward you</th><th>'+(V.status==='scheduled'?'Where they stand':'Vote')+'</th><th>What they remember</th><th></th></tr></thead><tbody>'+
+      clubs.filter(t=>t.id!==S.club).map(t=>{
+        const o=L.owners[t.id],m=o.memory.at(-1);
+        const stand=V.status==='decided'?(V.votes[t.id]==='yes'?'Yes':'No'):t.id===V.sponsor?'Sponsor':t.id in V.revealed?leanLabel(V.revealed[t.id]):'Unknown';
+        const calls=V.status==='scheduled'&&t.id!==V.sponsor&&V.callsLeft>0?'<button data-call="'+t.id+'">Call</button><button data-promise="'+t.id+'">Promise support</button>':'';
+        return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+esc(stand)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td><td class="calls">'+calls+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  return html+headlines(S);
+}
+function headlines(S){
+  const items=[...S.league.news].reverse().slice(0,8);
+  return '<h2>Headlines</h2>'+(items.length?'<ul>'+items.map(n=>'<li><strong>'+(n.week?'Week '+n.week:'Preseason')+'</strong> '+esc(n.text)+'</li>').join('')+'</ul>':'<p>Quiet week around the league.</p>');
+}
+
+// ---------------------------------------------------------------------------
+// Words. Everything returned here is already escaped HTML.
+// ---------------------------------------------------------------------------
+const weeksText=n=>n+' week'+(n===1?'':'s');
+const playerText=p=>(p.pos?p.pos+' ':'')+p.name;
+function describeEvent(e){
+  switch(e.type){
+    case 'injury':return esc(e.player.name+' ('+e.player.pos+', '+e.player.rating+') is out '+weeksText(e.weeks)+'. '+e.backup.name+' ('+e.backup.rating+') moves into the starting group.');
+    case 'cleared':return esc(e.player.name+' ('+e.player.pos+') is cleared to play. The staff has updated the depth chart.');
+    case 'trade':return esc('Acquired '+playerText(e.incoming)+' from '+teamName(e.seller)+' for '+[e.outgoing&&playerText(e.outgoing),e.pick&&pickLabel(e.pick)].filter(Boolean).join(' and ')+'.');
+    case 'quoteExpired':return esc('The trade quote'+(e.seller?' from '+teamName(e.seller):'')+' expired when the week advanced.');
+    case 'talksEnded':return esc('Ended trade talks with '+teamName(e.seller)+'.');
+    case 'termsGone':return esc('The terms are no longer available.');
+    case 'visitReport':return esc(visitReportText(e));
+    case 'studyReport':return esc(studyReportText(e));
+    case 'projectDone':case 'namingSigned':case 'namingAwaiting':case 'namingLapsed':case 'namingDeclined':return esc(financeEventText(e));
+    case 'rightsWon':case 'rightsLost':case 'rightsRenewed':case 'meetingCalled':case 'voteResult':return esc(leagueEventText(e));
+    case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
+    case 'legacy':return esc(e.text);
+    default:return esc('Unrecognized staff report ('+e.type+').');
+  }
+}
+function offerMessage(S,q){
+  const seller=teamName(q.seller),target=S.rosters[q.seller].find(p=>p.id===q.targetId);
+  switch(q.status){
+    case 'opening':return 'Opening terms from '+seller+'.';
+    case 'needMore':return 'They want more than your available picks cover. Try offering a stronger player.';
+    case 'incomplete':return 'Select a player or a draft pick before sending a proposal.';
+    case 'accepted':return seller+' accepts your proposal, pending your authorization.';
+    case 'countered':return seller+' turned down your price. Their counter is below.';
+    case 'declined':return seller+' declined. Your available picks cannot bridge the gap for this player.';
+    case 'needsDepth':return seller+' will not leave itself without a healthy '+(target?.pos??'starter')+'. They would need one back in the deal.';
+    default:return 'Existing offer from '+seller+'.';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loading, validating and upgrading saves
+// ---------------------------------------------------------------------------
+function detectVersion(raw){
+  if(raw&&isInt(raw.schemaVersion,1))return raw.schemaVersion;
+  if(raw&&Array.isArray(raw.weeks))return 1; // November 18 prototype: the season object was the save
+  throw Error('this is not a league save');
+}
+const migrations={
+  1:migrateV1,
+  2:migrateV2,
+  3:migrateV3,
+  4:migrateV4,
+};
+// v4 -> v5: adds owners, open-market broadcast control and fan preference,
+// headlines, and (for a save with a club) the rights contest.
+function migrateV4(old){
+  old.league=makeLeague(rngFor(old.rng));
+  old.schemaVersion=5;
+  ensureContest(old);
+  (old.migrations??=[]).push({from:4,to:5,at:new Date().toISOString()});
+  return old;
+}
+// v3 -> v4: adds owner and club finances, funding proposals and naming-rights
+// state. Operating reports start with the next played week.
+function migrateV3(old){
+  old.finance=makeFinance(rngFor(old.rng));
+  (old.migrations??=[]).push({from:3,to:4,at:new Date().toISOString()});
+  old.schemaVersion=4;
+  return old;
+}
+// v2 -> v3: adds the stadium world (open markets, site offers, leases), the team
+// president, and empty stadium records. Generated from the save's own seed.
+function migrateV2(old){
+  const r=rngFor(old.rng);
+  old.world=makeWorld(r,cur(old)?.completed??0);
+  old.staff=makeStaff(r);
+  old.stadium=newStadiumState();
+  (old.migrations??=[]).push({from:2,to:3,at:new Date().toISOString()});
+  old.schemaVersion=3;
+  return old;
+}
+function upgrade(raw){
+  let S=JSON.parse(JSON.stringify(raw));
+  const from=detectVersion(S);
+  if(from>SCHEMA_VERSION)throw Error('it was made by a newer build of the game (save format v'+from+'). Open it with that build');
+  for(let v=from;v<SCHEMA_VERSION;v=S.schemaVersion){
+    if(!migrations[v])throw Error('there is no upgrade path from save format v'+v);
+    S=migrations[v](S);
+  }
+  const errors=validateSave(S);
+  if(errors.length)throw Error(errors.join(' '));
+  return {save:S,from};
+}
+function validateSave(S){
+  const errors=[],fail=m=>{if(errors.length<10)errors.push(m);};
+  if(!S||typeof S!=='object')return ['The save is empty.'];
+  if(S.schemaVersion!==SCHEMA_VERSION)fail('Unexpected save format '+S.schemaVersion+'.');
+  if(typeof S.saveId!=='string'||!S.saveId)fail('The save has no id.');
+  if(!S.rng||!isInt(S.rng.seed,0,4294967295)||!isInt(S.rng.state,0,4294967295))fail('The random generator state is missing.');
+  if(S.club!==null&&!byId.has(S.club))fail('The owned club is not in the league.');
+  if(S.revision!==undefined&&!isInt(S.revision,0))fail('The save revision is invalid.');
+  if(!Array.isArray(S.seasons)||!S.seasons.length)fail('No seasons are recorded.');
+  else{
+    if(!isInt(S.seasonIndex,0,S.seasons.length-1))fail('The current season is invalid.');
+    S.seasons.forEach((s,si)=>{
+      const label='Season '+(si+1);
+      if(!s||!isInt(s.number,1))return fail(label+' has no number.');
+      if(!Array.isArray(s.weeks)||!s.weeks.length)return fail(label+' has no schedule.');
+      if(!isInt(s.completed,0,s.weeks.length))fail(label+' has an invalid week count.');
+      s.weeks.forEach((games,wi)=>{
+        const where=label+' week '+(wi+1);
+        if(!Array.isArray(games))return fail(where+' is not a list of games.');
+        const seen=new Set();
+        for(const g of games){
+          if(!g||!byId.has(g.home)||!byId.has(g.away)||g.home===g.away){fail(where+' has a game with an unknown club.');continue;}
+          if(seen.has(g.home)||seen.has(g.away))fail(where+' schedules a club twice.');
+          seen.add(g.home);seen.add(g.away);
+          const scored=Array.isArray(g.score)&&g.score.length===2&&g.score.every(n=>isInt(n,0));
+          if(wi<s.completed?!scored:g.score!==null)fail(where+' has a score that does not match its status.');
+          if(g.ot!==undefined&&g.ot!==true)fail(where+' has an invalid overtime flag.');
+        }
+      });
+      if(!clubs.every(t=>Number.isFinite(s.ratings?.[t.id]?.offense)&&Number.isFinite(s.ratings[t.id].defense)))fail(label+' is missing club ratings.');
+    });
+  }
+  if(!S.rosters||typeof S.rosters!=='object')fail('Rosters are missing.');
+  else{
+    const ids=new Set();
+    for(const t of clubs){
+      const roster=S.rosters[t.id];
+      if(!Array.isArray(roster)){fail(teamName(t.id)+' has no roster.');continue;}
+      for(const p of roster){
+        if(!p||typeof p.id!=='string'||ids.has(p.id)){fail(teamName(t.id)+' has a player with a missing or duplicate id.');continue;}
+        ids.add(p.id);
+        if(typeof p.name!=='string'||!positionNames.has(p.pos)||!Number.isFinite(p.rating)||!isInt(p.age,15,60)||(p.out!==undefined&&!isInt(p.out,1,52)))fail(teamName(t.id)+' has an invalid player record ('+p.id+').');
+      }
+    }
+  }
+  if(!Array.isArray(S.picks))fail('Draft picks are missing.');
+  else{
+    const keys=new Set();
+    for(const p of S.picks){
+      if(!p||!byId.has(p.origin)||!byId.has(p.owner)||!isInt(p.round,1,7)||keys.has(pickKey(p))){fail('A draft pick record is invalid.');continue;}
+      keys.add(pickKey(p));
+    }
+  }
+  if(S.offer!==null&&(!S.offer||!byId.has(S.offer.seller)||typeof S.offer.targetId!=='string'||!isInt(S.offer.week,0)))fail('The open trade offer is invalid.');
+  if(!Array.isArray(S.events))fail('Staff reports are missing.');
+  else{
+    let max=0;
+    for(const e of S.events){
+      if(!e||!isInt(e.id,1)||typeof e.type!=='string'||!isInt(e.week,0)){fail('A staff report is invalid.');continue;}
+      max=Math.max(max,e.id);
+    }
+    if(!isInt(S.nextEventId,max+1))fail('The report counter is behind the reports.');
+  }
+  const W=S.world;
+  if(!W||!Array.isArray(W.markets)||!Array.isArray(W.sites)||!W.leases)fail('The stadium market list is missing.');
+  else{
+    const marketIds=new Set(W.markets.map(m=>m?.id)),officialIds=new Set(W.markets.flatMap(m=>Array.isArray(m?.officials)?m.officials.map(o=>o?.id):[]));
+    for(const site of W.sites){
+      if(!site||typeof site.id!=='string'||!marketIds.has(site.marketId)||!officialIds.has(site.sponsor)||!['open','expired'].includes(site.status)||
+        !isInt(site.expiresWeek,0,99)||![site.publicOffer,site.parking,site.infraEstimate,site.infraTrue,site.maxSeats].every(Number.isFinite)||!LAND_TERMS.includes(site.landTerms))
+        fail('A stadium site record is invalid.');
+    }
+    if(!clubs.every(t=>typeof W.leases[t.id]?.stadium==='string'&&isInt(W.leases[t.id].capacity,1)))fail('A club lease is missing.');
+  }
+  const st=S.stadium;
+  if(!st||!Array.isArray(st.visits)||!Array.isArray(st.studies)||!Array.isArray(st.knowledge)||!Number.isFinite(st.homeMood)||!isInt(st.nextFactId,1))fail('Stadium records are missing.');
+  else{
+    if(st.visits.filter(v=>v?.status==='planned').length>1)fail('More than one visit is planned.');
+    if(st.knowledge.some(f=>!f||!isInt(f.id,1)||!Array.isArray(f.knownBy)||f.id>=st.nextFactId))fail('A record of who knows what is invalid.');
+  }
+  if(typeof S.staff?.president?.name!=='string')fail('The team president is missing.');
+  const F=S.finance;
+  if(!F||![F.ownerCash,F.clubCash,F.debt,F.rate,F.distributionAnnual].every(Number.isFinite)||!Array.isArray(F.projects)||!Array.isArray(F.ledger)||
+    !Array.isArray(F.capitalLog)||!F.contributions||!F.naming||!['borrow','owner'].includes(F.lossPolicy))fail('Club finances are missing.');
+  else{
+    if(F.projects.some(p=>!projectDef(p?.id)||!['proposed','declined','building','active'].includes(p.status)||(p.status==='building'&&!isInt(p.weeksLeft,1))))fail('A funding project is invalid.');
+    if(!['none','negotiating','awaiting','signed'].includes(F.naming.status))fail('The naming-rights talks are invalid.');
+    if(F.naming.status==='signed'&&!(F.naming.deal&&Number.isFinite(F.naming.deal.annual)))fail('The naming-rights deal is invalid.');
+    if(F.ledger.some(x=>!x||!x.lines||!Number.isFinite(x.result)))fail('An operating report is invalid.');
+  }
+  const Lg=S.league;
+  if(!Lg||!Lg.owners||!Lg.markets||!Array.isArray(Lg.news)||!Array.isArray(Lg.promises))fail('League records are missing.');
+  else{
+    if(!clubs.every(t=>{const o=Lg.owners[t.id];return o&&typeof o.name==='string'&&Number.isFinite(o.relation)&&Array.isArray(o.memory);}))fail('An owner record is invalid.');
+    if(!OPEN_MARKETS.every(m=>{const M=Lg.markets[m.id];return M&&(M.holder===null||byId.has(M.holder))&&M.fans&&Object.entries(M.fans).every(([id,v])=>byId.has(id)&&Number.isFinite(v));}))fail('A broadcast market record is invalid.');
+    if(Lg.contest&&(!openMarket(Lg.contest.marketId)||!byId.has(Lg.contest.holder)||!['open','decided'].includes(Lg.contest.status)))fail('The broadcast rights contest is invalid.');
+    if(Lg.meeting&&(!byId.has(Lg.meeting.sponsor)||!['scheduled','decided'].includes(Lg.meeting.status)||!isInt(Lg.meeting.callsLeft,0)))fail('The league meeting record is invalid.');
+  }
+  return errors;
+}
+
+// v1 -> v2. The v1 save was the season object itself, with office notes stored as sentences.
+function migrateV1(old){
+  if(!Array.isArray(old.weeks)||!old.ratings)throw Error('this save has no schedule');
+  const seed=newSeed(),rng={seed,state:seed},r=rngFor(rng);
+  const rosters=old.rosters??generateRosters(r,old.ratings);
+  for(const p of Object.values(rosters).flat())if(p&&p.out===0)delete p.out;
+  const office=old.office??{};
+  const S={schemaVersion:2,saveId:typeof old.saveId==='string'&&old.saveId?old.saveId:randomId(r),rng,
+    club:office.club??null,seasonIndex:0,
+    seasons:[{number:1,weeks:old.weeks,completed:old.completed,ratings:old.ratings}],
+    rosters,picks:Array.isArray(office.picks)?office.picks:defaultPicks(),offer:null,events:[],nextEventId:1,
+    migrations:[{from:1,to:2,at:new Date().toISOString()}]};
+  const players=Object.values(rosters).flat();
+  const findPlayer=name=>players.find(p=>p.name===name);
+  for(const note of Array.isArray(office.notes)?[...office.notes].reverse():[]){
+    S.events.push({id:S.nextEventId++,season:1,week:isInt(note?.week,0)?note.week:0,...parseV1Note(String(note?.text??''),findPlayer)});
+  }
+  const q=office.offer;
+  if(q&&byId.has(q.seller)&&typeof q.targetId==='string'){
+    const m=String(q.message??'');
+    const status=/accepts your proposal/.test(m)?'accepted':/turned down/.test(m)?'countered':/declined/.test(m)?'declined':
+      /Select a player/.test(m)?'incomplete':q.firm===false?'needMore':'opening';
+    S.offer={seller:q.seller,targetId:q.targetId,outId:q.outId??null,origin:q.origin??null,round:q.round??0,
+      week:isInt(q.week,0)?q.week:old.completed,firm:q.firm!==false,status};
+    if(q.draftOut!==undefined)S.offer.draftOut=q.draftOut;
+    if(q.draftPick!==undefined)S.offer.draftPick=q.draftPick;
+  }
+  return S;
+}
+// Turn a v1 staff sentence back into a structured event. Unknown sentences are kept verbatim.
+function parseV1Note(text,findPlayer){
+  const posPattern=[...positionNames].join('|');
+  const person=(name,pos,rating)=>{const p=findPlayer(name);return {id:p?.id??null,name,pos:pos??p?.pos??null,rating:rating??null};};
+  const labelled=s=>{const m=new RegExp('^('+posPattern+') (.+)$').exec(s);return m?person(m[2],m[1]):person(s);};
+  let m;
+  if((m=/^Acquired (.+?) from (.+?) for (.+?)(?: straight up)?\.$/.exec(text))&&byName.has(m[2])){
+    let outgoing=null,pick=null,ok=true;
+    for(const part of m[3].split(' and ')){
+      const pk=/^([A-Z]+) round ([1-7])$/.exec(part);
+      if(pk&&byAbbr.has(pk[1])&&!pick)pick={origin:byAbbr.get(pk[1]).id,round:Number(pk[2])};
+      else if(!pk&&!outgoing)outgoing=labelled(part);
+      else ok=false;
+    }
+    if(ok)return {type:'trade',seller:byName.get(m[2]),incoming:labelled(m[1]),outgoing,pick};
+  }
+  if((m=/^(.+) \(([A-Z]+), (\d+)\) is out (\d+) weeks?\. (.+) \((\d+)\) moves into the starting group\.$/.exec(text)))
+    return {type:'injury',player:person(m[1],m[2],Number(m[3])),weeks:Number(m[4]),backup:person(m[5],m[2],Number(m[6]))};
+  if((m=/^(.+) \(([A-Z]+)\) is cleared to play\./.exec(text)))return {type:'cleared',player:person(m[1],m[2])};
+  if(text==='The trade quote expired when the week advanced.')return {type:'quoteExpired',seller:null};
+  if((m=/^Ended trade talks with (.+)\.$/.exec(text))&&byName.has(m[1]))return {type:'talksEnded',seller:byName.get(m[1])};
+  if(text==='The terms are no longer available.')return {type:'termsGone'};
+  return {type:'legacy',text};
+}
+
+// Rejects prototype-polluting keys in files from outside the game.
+const safeReviver=(key,value)=>{
+  if(key==='__proto__'||key==='constructor'||key==='prototype')throw Error('the file contains invalid season data');
+  return value;
+};
+function readSaveFile(source){
+  const text=String(source).trim();
+  if(text.startsWith('{'))return upgrade(JSON.parse(text,safeReviver)).save;
+  const block=source.match(/<script\b[^>]*\bid=["']initialSeason["'][^>]*>([\s\S]*?)<\/script\s*>/i);
+  if(!block)throw Error('choose a season file saved with Save a copy, or a cgl-week file from an older build');
+  const candidate=JSON.parse(block[1],safeReviver);
+  if(!candidate)throw Error('this is the game file, not a season copy. Choose your downloaded cgl-week file');
+  return upgrade(candidate).save;
+}
+// JSON safe to place inside <script>: no "<" can close the element early.
+const embeddableJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');
+
+// ---------------------------------------------------------------------------
+// Browser storage
+// ---------------------------------------------------------------------------
+const storage={
+  get(k){try{return localStorage.getItem(k);}catch{return null;}},
+  set(k,v){try{localStorage.setItem(k,v);return true;}catch{return false;}},
+};
+const embedded=(()=>{try{return JSON.parse($('#initialSeason').textContent,safeReviver);}catch{return null;}})();
+const embeddedVersion=(()=>{try{return embedded?detectVersion(embedded):0;}catch{return 0;}})();
+// Each season copy opens in its own slot so two copies never overwrite each other.
+const slot=!embedded?'default':embeddedVersion>=2?embedded.saveId+'.s'+cur(embedded)?.number+'w'+cur(embedded)?.completed:(embedded.saveId??'copy')+'.'+embedded.completed;
+const storageKey='cgl.save.'+slot;
+const legacyKey=embeddedVersion>=2?null:'cgl.regular-season.v1.'+(embedded?.saveId??'default')+(embedded?'.'+embedded.completed:'');
+const urlSeed=(()=>{try{const v=Number(new URLSearchParams(location.search).get('seed'));return isInt(v,1,4294967295)?v:undefined;}catch{return undefined;}})();
+
+const LOCAL_OK='Saved in this browser.';
+let save,saveMessage='';
+function boot(){
+  const stored=storage.get(storageKey);
+  const raw=stored??(legacyKey?storage.get(legacyKey):null);
+  if(raw){
+    try{
+      const {save:S,from}=upgrade(JSON.parse(raw));
+      if(from<SCHEMA_VERSION){
+        const backup=storageKey+'.before-v'+SCHEMA_VERSION;
+        if(storage.get(backup)===null)storage.set(backup,raw);
+        saveMessage='Upgraded this browser save from format v'+from+' to v'+SCHEMA_VERSION+'. The original is kept in browser storage.';
+      }else saveMessage=LOCAL_OK;
+      return S;
+    }catch(error){
+      storage.set(storageKey+'.unreadable-'+Date.now(),raw);
+      saveMessage='The browser save could not be opened because '+sentence(error.message)+' It was set aside in browser storage. ';
+    }
+  }
+  if(embedded){
+    try{return upgrade(embedded).save;}
+    catch(error){saveMessage+='The season in this file could not be opened because '+sentence(error.message)+' ';}
+  }
+  if(saveMessage)saveMessage+='A new season has started.';
+  return newSave(urlSeed);
+}
+function persist(){
+  if(!storage.set(storageKey,JSON.stringify(save)))saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';
+  else if(!saveMessage)saveMessage=LOCAL_OK;
+}
+function commit(){save.revision=(save.revision??0)+1;saveMessage='';persist();draw();}
+
+
+// ---------------------------------------------------------------------------
+// Season files through Claude's downloads capability (Save a copy).
+// ---------------------------------------------------------------------------
+const use=name=>{
+  try{return window.claude?.use?Promise.resolve(window.claude.use(name)).catch(()=>null):Promise.resolve(null);}
+  catch{return Promise.resolve(null);}
+};
+const downloadsReady=use('downloads');
+downloadsReady.then(d=>{for(const id of ['#copy','#save'])$(id).hidden=!d;});
+async function offerFile(filename,data){
+  const d=await downloadsReady;
+  if(!d){saveMessage='Saving files is not available in this view.';draw();return;}
+  try{await d.save({filename,data});saveMessage='Saved '+filename+'.';}
+  catch(e){
+    if(e?.code==='declined')return;
+    saveMessage=e?.code==='rate_limited'?'A save prompt is already open. Finish that one first.':'The file could not be saved here.';
+  }
+  draw();
+}
+
+function drawStatus(){$('#status').textContent=saveMessage;}
+
+// ---------------------------------------------------------------------------
+// Standings
+// ---------------------------------------------------------------------------
+function standings(S){
+  const s=cur(S);
+  const rows=Object.fromEntries(clubs.map(t=>[t.id,{id:t.id,w:0,l:0,t:0,pf:0,pa:0,dw:0,dl:0,dt:0}]));
+  const played=s.weeks.slice(0,s.completed).flat();
+  for(const g of played){
+    const [h,a]=g.score;
+    for(const [id,opp,p,q] of [[g.home,g.away,h,a],[g.away,g.home,a,h]]){
+      const r=rows[id],mine=byId.get(id),other=byId.get(opp);
+      const result=p>q?'w':p<q?'l':'t';
+      r[result]++;r.pf+=p;r.pa+=q;
+      if(mine.division===other.division&&mine.conference===other.conference)r['d'+result]++;
+    }
+  }
+  const pct=(w,l,t)=>(w+.5*t)/(w+l+t||1);
+  const overall=r=>pct(r.w,r.l,r.t);
+  return groups.map(group=>{
+    const members=group.map(t=>rows[t.id]);
+    for(const r of members){
+      const tied=new Set(members.filter(other=>overall(other)===overall(r)).map(t=>t.id));
+      const meetings=played.filter(g=>tied.has(g.home)&&tied.has(g.away));
+      const mine=meetings.filter(g=>g.home===r.id||g.away===r.id);
+      const allMet=[...tied].every(id=>id===r.id||mine.some(g=>g.home===id||g.away===id));
+      r.h2h=allMet&&mine.length?mine.reduce((sum,g)=>{const [a,b]=g.score;return sum+(a===b?.5:(a>b)===(g.home===r.id)?1:0);},0)/mine.length:null;
+    }
+    return members.sort((a,b)=>overall(b)-overall(a)||
+      (members.filter(r=>overall(r)===overall(a)).every(r=>r.h2h!==null)?b.h2h-a.h2h:0)||
+      pct(b.dw,b.dl,b.dt)-pct(a.dw,a.dl,a.dt)||(b.pf-b.pa)-(a.pf-a.pa)||teamName(a.id).localeCompare(teamName(b.id)));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Views
+// ---------------------------------------------------------------------------
+const badge=id=>{const t=byId.get(id);return '<i style="background:'+color(t.primary)+';border-color:'+color(t.secondary)+'"></i>';};
+const club=id=>'<button class="club" data-id="'+esc(id)+'">'+badge(id)+esc(teamName(id))+'</button>';
+const heading=(small,big)=>'<small>'+esc(small)+'</small><h2>'+esc(big)+'</h2>';
+const option=(value,label,selected)=>'<option value="'+esc(value)+'"'+(selected?' selected':'')+'>'+esc(label)+'</option>';
+const clubSelect=(id,current)=>'<select id="'+id+'">'+clubs.map(c=>option(c.id,teamName(c.id),c.id===current)).join('')+'</select>';
+function resultText(g,id){
+  if(!g.score)return '';
+  const sc=g.home===id?g.score:[...g.score].reverse();
+  return (sc[0]>sc[1]?'W':sc[0]<sc[1]?'L':'T')+' '+sc.join('–')+(g.ot?' (OT)':'');
+}
+
+function negotiationView(S){
+  const q=S.offer,ours=S.rosters[S.club];
+  const target=S.rosters[q.seller].find(p=>p.id===q.targetId),out=ours.find(p=>p.id===q.outId);
+  if(!target)return '<p>'+esc(teamName(q.seller))+' no longer has that player.</p><button id="decline">End talks</button>';
+  const options=ours.filter(p=>!p.out).sort((a,b)=>b.rating-a.rating);
+  const draftOut=q.draftOut==='none'?null:options.find(p=>p.id===q.draftOut)??out;
+  const picks=ownedPicks(S),quoted=picks.find(p=>p.origin===q.origin&&p.round===q.round);
+  const key=q.draftPick??pickKey(quoted),proposed=picks.find(p=>pickKey(p)===key);
+  const needed=termsNeeded(target,draftOut);
+  const fair=[7,6,5,4,3,2,1].find(round=>pickValues[round]>=needed);
+  const value=proposed?pickValues[proposed.round]:0;
+  let advice=sellerShort(S,q.seller,target,draftOut)?'They will not move their last healthy '+target.pos+' unless one comes back. ':
+    value-needed>=20?'That pick is an overpay. ':value<needed?'Expect them to ask for more. ':'That price is defensible. ';
+  if(buyerShort(S,target,draftOut))advice+='That would leave us without a healthy '+draftOut.pos+'. ';
+  let estimate=needed===0?'I would try a straight swap.':fair?'I value the gap at a round '+fair+' pick'+(draftOut?' with '+draftOut.name:' alone')+'.':'We probably need a stronger player in the deal.';
+  if(sellerShort(S,q.seller,target,draftOut)){
+    const swap=options.filter(p=>p.pos===target.pos).sort((a,b)=>a.rating-b.rating)[0];
+    const gap=swap&&termsNeeded(target,swap),round=swap&&[7,6,5,4,3,2,1].find(rd=>pickValues[rd]>=gap);
+    estimate=!swap?'We have no healthy '+target.pos+' to send back.':gap===0?'Sending '+swap.name+' straight up should do it.':round?'If we send '+swap.name+', I value the gap at a round '+round+' pick.':'Even with '+swap.name+' going back, our picks cannot cover the gap.';
+  }
+  const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="4">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>';
+  const deal=[out?.name,quoted&&pickLabel(quoted)].filter(Boolean).join(' and ');
+  return '<p>'+esc(offerMessage(S,q))+'</p>'+
+    '<div class="wide"><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table></div>'+
+    '<div class="controls"><label>Send player <select id="tradePlayer">'+option('none','No player',!draftOut)+options.map(p=>option(p.id,p.name+' · '+p.pos+' · '+p.rating,p.id===draftOut?.id)).join('')+'</select></label>'+
+    '<label>Add pick <select id="tradePick">'+option('none','No pick',key==='none')+picks.map(p=>option(pickKey(p),pickLabel(p),key===pickKey(p))).join('')+'</select></label>'+
+    '<button id="counter">Send proposal</button></div>'+
+    '<p><b>Your GM</b> · '+esc(advice+estimate)+'</p>'+
+    (q.firm!==false?'<p><b>Available deal</b> · '+esc('Receive '+target.name+' for '+deal+'. Expires upon advancing.')+'</p><button id="accept" '+(draftOut?.id!==out?.id||key!==pickKey(quoted)?'disabled':'')+'>Authorize this deal</button> ':'')+
+    '<button id="decline">End talks</button>';
+}
+// The nearest stadium deadline, preferring sites the owner has already touched.
+function comingDue(S){
+  const v=plannedVisit(S);
+  if(v){const site=siteById(S,v.siteId);return '<div><small>Stadium</small>'+esc('Visit to '+marketById(S,site.marketId).name+' this week')+'</div>';}
+  const tracked=new Set(S.stadium.knowledge.map(f=>f.siteId));
+  const open=S.world.sites.filter(x=>x.status==='open').sort((a,b)=>Number(tracked.has(b.id))-Number(tracked.has(a.id))||a.expiresWeek-b.expiresWeek);
+  if(!open.length)return '';
+  const site=open[0];
+  return '<div><small>Coming due</small>'+esc(marketById(S,site.marketId).name+' '+site.name.toLowerCase()+' offer expires after week '+site.expiresWeek)+'</div>';
+}
+function leagueCard(S){
+  const C=S.league.contest,V=S.league.meeting;
+  if(C?.status==='open')return '<div><small>Broadcast rights</small>'+esc(openMarket(C.marketId).name+': station decides after week '+C.deadlineWeek)+' <button data-tab="League">Bid</button></div>';
+  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after week '+V.week)+' <button data-tab="League">Lobby</button></div>';
+  const n=S.league.news.at(-1);
+  return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
+}
+function moneyCard(S){
+  if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="Finances">Review</button></div>';
+  const season=S.finance.ledger.filter(x=>x.season===cur(S).number);
+  if(!season.length)return '';
+  return '<div><small>Operating result</small>'+m1(round2(season.reduce((a,x)=>a+x.result,0)))+' this season <button data-tab="Finances">Books</button></div>';
+}
+function ownershipDesk(){
+  const S=save,s=cur(),id=S.club;
+  if(!id)return heading('FRANCHISE OWNERSHIP','Choose your club')+'<p>Take over a franchise in this season. Your staff runs the depth chart and brings personnel decisions here.</p><div class="controls"><label>Franchise '+clubSelect('claimTeam',null)+'</label><button id="claim">Take ownership</button></div>';
+  const ranking=standings(S).find(group=>group.some(r=>r.id===id)),place=ranking.findIndex(r=>r.id===id),r=ranking[place];
+  const games=s.weeks.flatMap((week,i)=>week.filter(g=>g.home===id||g.away===id).map(g=>({g,w:i+1})));
+  const fixture=entry=>{
+    if(!entry)return '—';
+    const {g,w}=entry,home=g.home===id;
+    return esc('Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(g.score?' · '+resultText(g,id):''));
+  };
+  const week=s.completed+1,injuries=S.rosters[id].filter(p=>p.out);
+  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=s.weeks.length&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>'+comingDue(S)+moneyCard(S)+leagueCard(S)+'</div>';
+  const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
+  let gm;
+  if(S.offer)gm=negotiationView(S);
+  else if(week<=s.weeks.length){
+    const candidates=clubs.filter(t=>t.id!==id).flatMap(t=>S.rosters[t.id].filter(p=>p.pos===scoutPos&&!p.out).map(p=>({p,t}))).sort((a,b)=>b.p.rating-a.p.rating);
+    gm='<div class="controls"><label>Position <select id="scout">'+positions.map(([pos])=>option(pos,pos,pos===scoutPos)).join('')+'</select></label>'+
+      '<label>Trade target <select id="target">'+candidates.map(({p,t})=>option(t.id+'/'+p.id,p.name+' · '+t.abbr+' · '+p.rating,false)).join('')+'</select></label><button id="quote">Ask for a price</button></div>';
+  }else gm='<p>The regular season has ended.</p>';
+  const reports=[...S.events].reverse().map(e=>'<li><strong>'+(e.week?'After W'+e.week:'Preseason')+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no pending reports.</li>';
+  return heading('OWNER’S DESK',teamName(id))+schedule+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+
+    '<small>Available draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', '))+'</small>'+
+    '<h2>Staff messages</h2><ul>'+reports+'</ul>';
+}
+function scoreboard(){
+  const s=cur(),games=s.weeks[viewed-1],used=new Set(games.flatMap(g=>[g.home,g.away]));
+  const bye=clubs.filter(t=>!used.has(t.id));
+  return heading('REGULAR SEASON','Week '+viewed)+
+    '<div class="controls"><label>Browse week <select id="week">'+s.weeks.map((_,i)=>option(i+1,i+1,i+1===viewed)).join('')+'</select></label><span>'+games.length+' games · '+(viewed<=s.completed?'Final scores':'Scheduled')+'</span></div>'+
+    '<div class="games">'+games.map(g=>'<article>'+[g.away,g.home].map((id,i)=>'<div class="line">'+club(id)+'<strong>'+(g.score?g.score[1-i]:(i?'HOME':'AWAY'))+'</strong></div>').join('')+(g.ot?'<div class="line"><small>Final · overtime</small></div>':'')+'</article>').join('')+'</div>'+
+    (bye.length?'<p>On bye · '+esc(bye.map(t=>teamName(t.id)).join(', '))+'</p>':'');
+}
+function standingsView(){
+  return heading('DIVISION RACES','Standings')+'<p>Ranked by win percentage, head-to-head among tied clubs when all have met, division record, then point differential. Alphabetical order breaks remaining ties.</p><div class="tables">'+
+    standings(save).map((rows,i)=>'<section><h3>'+esc(groups[i][0].conference+' '+groups[i][0].division)+'</h3><table><thead><tr><th>Club</th><th>W–L–T</th><th>Div.</th><th>+/−</th></tr></thead><tbody>'+
+      rows.map(r=>'<tr><td>'+club(r.id)+'</td><td>'+[r.w,r.l,r.t].join('–')+'</td><td>'+[r.dw,r.dl,r.dt].join('–')+'</td><td>'+(r.pf-r.pa)+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
+}
+function scheduleView(){
+  const t=byId.get(selected),rating=personnel(save.rosters[selected]);
+  return heading(t.conference+' '+t.division,teamName(selected))+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="Rosters">View roster</button></div>'+
+    '<div class="wide"><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
+      const g=games.find(g=>[g.home,g.away].includes(selected));
+      if(!g)return '<tr><td>'+(i+1)+'</td><td></td><td>Bye</td><td>—</td></tr>';
+      const home=g.home===selected;
+      return '<tr><td>'+(i+1)+'</td><td>'+(home?'Home':'Away')+'</td><td>'+club(home?g.away:g.home)+'</td><td>'+(g.score?esc(resultText(g,selected)):'—')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function rosterView(){
+  const team=byId.get(selected),units=personnel(save.rosters[selected]);
+  const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
+  return heading(team.conference+' '+team.division,teamName(selected))+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+save.rosters[selected].length+' players · Depth chart</span></div>'+
+    '<div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div>'+
+    '<p>An uncovered starting spot uses an emergency rating of '+EMERGENCY_RATING+'. Starters lead each position group. The first reserve also contributes at running back, receiver, defensive end, defensive tackle, linebacker and cornerback.</p>'+
+    '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
+      const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
+      return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>')).join('')+'</tbody></table></section>';
+    }).join('')+'</div>';
+}
+const TABS=['Owner desk','Stadium','Finances','League','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).completed?'after week '+cur(S).completed:'preseason');
+function draw(){
+  const s=cur();
+  $('#tabs').innerHTML=TABS.map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
+  drawStatus();
+  const prompt=$('#importPrompt');
+  prompt.hidden=!pendingImport;
+  prompt.innerHTML=pendingImport?'<span>'+esc('Replace your current season ('+describeSave(save)+') with the one you loaded ('+describeSave(pendingImport)+')?')+'</span><button id="importYes">Replace season</button><button id="importNo">Keep current season</button>':'';
+  const next=$('#advance');
+  next.disabled=s.completed===s.weeks.length||!save.club;
+  next.textContent=!save.club?'Choose a club':s.completed===s.weeks.length?'Regular season complete':'Advance week '+(s.completed+1)+' →';
+  $('#directoryPane').hidden=tab!=='Club directory';
+  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='League'?leagueView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
+}
+
+// ---------------------------------------------------------------------------
+// Start up and wire events
+// ---------------------------------------------------------------------------
+save=boot();
+persist();
+let scoutPos='DE';
+let viewed,tab,selected,pendingImport=null;
+function resetView(){viewed=Math.max(1,cur().completed);tab='Owner desk';selected=save.club??clubs[0].id;}
+resetView();
+const app=$('#app');
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest?.('button');if(!b)return;
+  if(b.dataset.tab){tab=b.dataset.tab;draw();}
+  if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
+  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;ensureContest(save);commit();}}
+  if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
+  if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
+  if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
+  if(b.id==='accept'||b.id==='decline'){resolveOffer(save,b.id==='accept');commit();}
+  if(b.id==='importYes'&&pendingImport)applyImport(pendingImport);
+  if(b.id==='authorizeVisit'){
+    const result=authorizeVisit(save,stadiumUi.plan.site,stadiumUi.plan);
+    stadiumUi.notice={busy:'A visit is already scheduled this week.',unavailable:'That offer is no longer open.',closed:'The season has ended.',invalid:'Choose every visit option first.'}[result]??'';
+    if(result==='ok')commit();else draw();
+  }
+  if(b.id==='cancelVisit'){cancelVisit(save);commit();}
+  if(b.dataset.study){commissionStudy(save,b.dataset.study);commit();}
+  if(b.dataset.fund){
+    const [project,funding]=b.dataset.fund.split(':'),result=fundProject(save,project,funding);
+    financeUi.notice={clubShort:'The club account cannot cover that.',ownerShort:'You do not have that much cash on hand.',debtLimit:'That would put the club over the league debt limit.'}[result]??'';
+    if(result==='ok')commit();else draw();
+  }
+  if(b.dataset.decline){declineProject(save,b.dataset.decline);financeUi.notice='';commit();}
+  if(b.dataset.reopen){reopenProject(save,b.dataset.reopen);financeUi.notice='';commit();}
+  if(b.id==='delegateNaming'){const result=startNaming(save,financeUi.mandate);financeUi.notice='';if(result==='ok')commit();else draw();}
+  if(b.id==='endNaming'||b.id==='declineNaming'){declineNaming(save);commit();}
+  if(b.id==='signNaming'){approveNaming(save);commit();}
+  if(b.id==='submitBid'&&leagueUi.bid){
+    const result=submitBid(save,leagueUi.bid.annual,leagueUi.bid.years,leagueUi.lobby);
+    leagueUi.notice=result==='ok'?'':result==='closed'?'The station has already decided.':'Choose an amount and term.';
+    if(result==='ok'){leagueUi.lobby=false;commit();}else draw();
+  }
+  if(b.id==='withdrawBid'){withdrawBid(save);commit();}
+  if(b.dataset.call||b.dataset.promise){callOwner(save,b.dataset.call??b.dataset.promise,!!b.dataset.promise);commit();}
+  if(b.id==='importNo'){pendingImport=null;draw();}
+  if(b.id==='advance'&&save.club&&cur().completed<cur().weeks.length){playWeek(save);viewed=cur().completed;tab='Owner desk';commit();}
+});
+app.onchange=e=>{
+  if(e.target.id==='tradePlayer'||e.target.id==='tradePick'){
+    const q=save.offer;
+    if(q){q[e.target.id==='tradePlayer'?'draftOut':'draftPick']=e.target.value;commit();}
+    return;
+  }
+  const planKeys={visitSite:'site',visitWho:'who',visitDiscretion:'discretion',visitAsk:'ask',visitSignal:'signal'};
+  if(planKeys[e.target.id]){stadiumUi.plan[planKeys[e.target.id]]=e.target.value;stadiumUi.notice='';return;}
+  if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
+  if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
+  if(leagueUi.bid&&e.target.id==='bidAnnual'){leagueUi.bid.annual=Number(e.target.value);return;}
+  if(leagueUi.bid&&e.target.id==='bidYears'){leagueUi.bid.years=Number(e.target.value);return;}
+  if(e.target.id==='bidLobby'){leagueUi.lobby=e.target.checked;return;}
+  if(financeUi.mandate&&['nameMin','nameYears','nameAuthority'].includes(e.target.id)){
+    const m=financeUi.mandate;
+    if(e.target.id==='nameMin')m.minAnnual=Number(e.target.value);
+    if(e.target.id==='nameYears')m.maxYears=Number(e.target.value);
+    if(e.target.id==='nameAuthority')m.authority=e.target.value;
+    return;
+  }
+  if(financeUi.mandate&&e.target.id?.startsWith('excl-')){
+    const c=e.target.id.slice(5),m=financeUi.mandate;
+    m.exclude=e.target.checked?[...new Set([...m.exclude,c])]:m.exclude.filter(x=>x!==c);
+    return;
+  }
+  if(e.target.id==='compareA')stadiumUi.a=e.target.value;
+  if(e.target.id==='compareB')stadiumUi.b=e.target.value;
+  if(e.target.id==='claimTeam'||e.target.id==='target')return;
+  if(e.target.id==='scout')scoutPos=e.target.value;
+  if(e.target.id==='week')viewed=Number(e.target.value);
+  if(e.target.id==='team')selected=e.target.value;
+  draw();
+};
+const filePicker=$('#seasonFile');
+$('#loadSeason').onclick=()=>filePicker.click();
+filePicker.onchange=async()=>{
+  const file=filePicker.files[0];if(!file)return;
+  try{
+    const incoming=readSaveFile(await file.text());
+    if(save.club){pendingImport=incoming;saveMessage='';draw();}
+    else applyImport(incoming);
+  }catch(error){
+    saveMessage='Could not load save: '+sentence(error.message);draw();
+  }finally{filePicker.value='';}
+};
+function applyImport(S){save=S;pendingImport=null;resetView();commit();}
+$('#copy').onclick=()=>offerFile('cgl-season-'+cur().number+'-week-'+cur().completed+'.json',JSON.stringify(save));
+
+// Keep the open tab and selections when a new version of the page arrives.
+function start(data){
+  if(data&&typeof data==='object'){
+    if(TABS.includes(data.tab))tab=data.tab;
+    if(isInt(data.viewed,1,cur().weeks.length))viewed=data.viewed;
+    if(byId.has(data.selected))selected=data.selected;
+    if(positionNames.has(data.scoutPos))scoutPos=data.scoutPos;
+    if(data.stadiumUi&&typeof data.stadiumUi==='object'){
+      for(const k of ['a','b'])if(typeof data.stadiumUi[k]==='string')stadiumUi[k]=data.stadiumUi[k];
+      for(const k of Object.keys(stadiumUi.plan))if(typeof data.stadiumUi.plan?.[k]==='string')stadiumUi.plan[k]=data.stadiumUi.plan[k];
+    }
+  }
+  draw();
+}
+const hot=window.claude?.hot;
+try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}
+try{hot?.ready?hot.ready(start):start(hot?.data??{});}catch{start({});}
+</script>

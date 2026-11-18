@@ -90,6 +90,8 @@ figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
 .owners td{vertical-align:top}
 .calls{white-space:nowrap}
 .calls button{padding:4px 8px;font-size:.85rem;margin:0 4px 4px 0}
+.confirm{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;margin:12px 0;background:var(--surface);border:1px solid var(--rule-strong);border-radius:6px}
+.capsheet td:nth-child(n+2):not(:last-child),.capsheet th:nth-child(n+2):not(:last-child){text-align:right;font-variant-numeric:tabular-nums}
 fieldset.exclude label{display:flex;gap:6px;align-items:center;color:var(--fg)}
 optgroup{font-style:normal}
 footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
@@ -460,7 +462,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=6;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=7;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
@@ -683,10 +685,12 @@ const defaultPicks=()=>clubs.flatMap(t=>Array.from({length:7},(_,i)=>({origin:t.
 function newSave(seed=newSeed()){
   const rng={seed,state:seed},r=rngFor(rng);
   const season=makeSeason(r,1);
-  return {schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,seasonIndex:0,seasons:[season],
+  const S={schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,seasonIndex:0,seasons:[season],
     rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0,
     world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r),league:makeLeague(r),
     draft:makeDraft(r,1),history:[],draftHistory:[]};
+  makeCap(S,r);
+  return S;
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
 function record(S,type,data){
@@ -762,6 +766,9 @@ function healthyAfter(roster,pos,leaving,arriving){
 const sellerShort=(S,seller,target,out)=>healthyAfter(S.rosters[seller],target.pos,target,out)<startersAt(target.pos);
 const buyerShort=(S,target,out)=>!!out&&healthyAfter(S.rosters[S.club],out.pos,out,target)<startersAt(out.pos);
 
+function tradeCap(S,seller,target,out){
+  return {buyer:round2(capRoom(S,S.club)-capHit(target)+(out?capHit(out):0)),seller:round2(capRoom(S,seller)+capHit(target)-(out?capHit(out):0))};
+}
 function tradeQuote(S,seller,targetId){
   const s=cur(S);
   if(!S.club||seller===S.club||S.offer)return;
@@ -769,6 +776,7 @@ function tradeQuote(S,seller,targetId){
   if(!target)return;
   const base={seller,targetId,outId:null,origin:null,round:0,week:s.tick};
   if(sellerShort(S,seller,target,null)){S.offer={...base,firm:false,status:'needsDepth'};return;}
+  if(tradeCap(S,seller,target,null).buyer<0){S.offer={...base,firm:false,status:'capShort'};return;}
   const gap=termsNeeded(target,null);
   const pick=ownedPicks(S).find(p=>pickValues[p.round]>=gap*1.3+3);
   S.offer={...base,origin:pick?.origin??null,round:pick?.round??0,firm:!!pick||gap===0,status:pick||gap===0?'opening':'needMore'};
@@ -784,6 +792,8 @@ function counterTrade(S,outId,key){
     Object.assign(q,{outId:out?.id??null,round:0,origin:null,firm:false,status:'needsDepth'});
     return;
   }
+  const cap=tradeCap(S,q.seller,target,out);
+  if(cap.buyer<0||cap.seller<0){Object.assign(q,{outId:out?.id??null,round:0,origin:null,firm:false,status:cap.buyer<0?'capShort':'sellerCap'});return;}
   const needed=termsNeeded(target,out);
   const value=pick?pickValues[pick.round]:0;
   let terms=pick;
@@ -803,7 +813,7 @@ function resolveOffer(S,accept){
   const i=theirs.findIndex(p=>p.id===q.targetId&&!p.out),j=ours.findIndex(p=>p.id===q.outId&&!p.out);
   const target=theirs[i],out=j>=0?ours[j]:null;
   const pick=ownedPicks(S).find(p=>p.origin===q.origin&&p.round===q.round);
-  if(i<0||(q.outId&&!out)||(!q.outId&&!pick)||(q.round&&!pick)||q.week!==cur(S).tick||sellerShort(S,q.seller,target,out)){
+  if(i<0||(q.outId&&!out)||(!q.outId&&!pick)||(q.round&&!pick)||q.week!==cur(S).tick||sellerShort(S,q.seller,target,out)||tradeCap(S,q.seller,target,out).buyer<0||tradeCap(S,q.seller,target,out).seller<0){
     S.offer=null;record(S,'termsGone',{seller:q.seller});return;
   }
   if(out){theirs[i]=out;ours[j]=target;}else{theirs.splice(i,1);ours.push(target);}
@@ -1129,10 +1139,10 @@ const NAMING_ROUNDS=3;
 const LINE_LABELS={
   nationalTV:'National TV share',localMedia:'Local media',marketRights:'Out-of-market broadcast rights (net)',sponsorship:'Sponsorship',namingRights:'Naming rights',
   tickets:'Tickets',premium:'Suites and club seats',concessions:'Concessions and parking',visitorShare:'Gate sharing (34% goes to the visitor)',
-  payroll:'Player payroll',footballOps:'Coaches, scouting and medical',businessOps:'Business operations',travel:'Team travel',
+  payroll:'Player salaries',signingBonuses:'Signing bonuses',footballOps:'Coaches, scouting and medical',businessOps:'Business operations',travel:'Team travel',
   stadiumRent:'Stadium rent',gameDay:'Game-day operations',projects:'Project running costs',debtService:'Debt payments'};
 const RECEIPT_LINES=['nationalTV','localMedia','marketRights','sponsorship','namingRights','tickets','premium','concessions','visitorShare'];
-const EXPENSE_LINES=['payroll','footballOps','businessOps','travel','stadiumRent','gameDay','projects','debtService'];
+const EXPENSE_LINES=['payroll','signingBonuses','footballOps','businessOps','travel','stadiumRent','gameDay','projects','debtService'];
 
 function makeFinance(r){
   return {ownerCash:350+randInt(r,401),distributionAnnual:90+randInt(r,71),clubCash:25+randInt(r,41),debt:150+randInt(r,151),rate:.06,
@@ -1170,10 +1180,9 @@ function gate(S,clubId){
     concessions:attendance*32/1e6*(upgraded?1.12:1)};
 }
 const salaryRaw=p=>.9+playerValue(p)*.06;
+// Cash salaries for a season. Signing bonuses were paid in cash when signed.
 function payroll(S,id){
-  const raw=c=>S.rosters[c].reduce((sum,p)=>sum+salaryRaw(p),0);
-  const avg=clubs.reduce((sum,t)=>sum+raw(t.id),0)/clubs.length;
-  return 255*raw(id)/avg;
+  return S.rosters[id].reduce((sum,p)=>sum+(p.contract?.salary??0),0);
 }
 function weekLines(S,g){
   const id=S.club,team=byId.get(id),lease=S.world.leases[id],F=S.finance,metro=localMetro(team);
@@ -1883,7 +1892,7 @@ function developPlayers(S,r){
       p.age++;
       const grace=lateBloomers.has(p.pos)?3:0,age=p.age-grace;
       const quits=age>=36||(age>=34&&r()<.45)||(age>=31&&p.rating<55&&r()<.4);
-      if(quits){if(t.id===S.club)retired.push(snap(p));return false;}
+      if(quits){if(t.id===S.club)retired.push(snap(p));S.cap.dead[t.id]=round2((S.cap.dead[t.id]??0)+deadIfCut(p));return false;}
       const before=p.rating;
       if(age<=26)p.rating+=Math.max(0,Math.round(((p.potential??p.rating)-p.rating)*(.14+r()*.28)));
       else if(age<=29)p.rating+=randInt(r,3)-1;
@@ -1909,7 +1918,7 @@ function finalCuts(S){
     roster.filter(p=>!keep.has(p)).sort((a,b)=>b.rating-a.rating).slice(0,Math.max(0,53-keep.size)).forEach(p=>keep.add(p));
     const cut=roster.filter(p=>!keep.has(p));
     if(t.id===S.club)mine=cut.map(snap);
-    S.rosters[t.id]=roster.filter(p=>keep.has(p));
+    for(const p of cut)releasePlayer(S,t.id,p.id);
   }
   return mine;
 }
@@ -1968,8 +1977,10 @@ function makePick(S,prospectId,by){
   const p=draftAvailable(D).find(x=>x.id===prospectId);
   if(!p)return false;
   D.picks.push({overall:slot.overall,round:slot.round,club:slot.owner,origin:slot.origin,prospectId:p.id,name:p.name,pos:p.pos,college:p.college,by});
+  const terms=rookieTerms(S,slot.overall);
   S.rosters[slot.owner].push({id:'r'+D.season+'-'+slot.overall,name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,
-    drafted:{season:D.season,round:slot.round,overall:slot.overall,college:p.college}});
+    drafted:{season:D.season,round:slot.round,overall:slot.overall,college:p.college},contract:makeContract(S,terms,'rookie')});
+  if(slot.owner===S.club)payBonus(S,terms.bonus,'club');
   D.pick++;
   if(D.pick>=D.order.length)completeDraft(S);
   return true;
@@ -2004,7 +2015,7 @@ function completeDraft(S){
     const need=positions.map(([pos])=>pos).find(pos=>needAt(S,id,pos)>0);
     const i=need?pool.findIndex(p=>p.pos===need):0;
     const p=pool.splice(i<0?0:i,1)[0];
-    S.rosters[id].push({id:'u'+D.season+'-'+p.id.split('-')[1],name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,undrafted:{season:D.season,college:p.college}});
+    S.rosters[id].push({id:'u'+D.season+'-'+p.id.split('-')[1],name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,undrafted:{season:D.season,college:p.college},contract:makeContract(S,minimumTerms(S,3),'minimum')});
   }
   S.draftHistory.push({season:D.season,picks:D.picks.map(x=>({overall:x.overall,round:x.round,club:x.club,name:x.name,pos:x.pos,college:x.college}))});
   S.picks=defaultPicks();
@@ -2021,6 +2032,7 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
   if(S.offer){record(S,'quoteExpired',{seller:S.offer.seller});S.offer=null;}
   processStadium(S,r);
   processLeague(S,r,regularIndex);
+  processFreeAgency(S,r);
   if(regularIndex!==null)processFinance(S);
   processProjects(S);
   distributeToOwner(S);
@@ -2046,7 +2058,9 @@ function offseasonWeek(S,r){
   if(t===MILESTONES.otas){campWork(S,r);record(S,'calendarNote',{text:'OTAs are underway. The rookies are on the field with the veterans for the first time.'});}
   if(t===MILESTONES.minicamp){campWork(S,r);record(S,'calendarNote',{text:'Mandatory minicamp wrapped up. The coaches liked what they saw from the young players.'});}
   if(t===MILESTONES.camp){campWork(S,r);campWork(S,r);record(S,'calendarNote',{text:'Training camp is open. Position battles start now.'});}
+  if(t===RESIGN_TICK)resignExpiring(S,r);
   if(t===MILESTONES.cuts){
+    fillRosters(S,r);
     const cut=finalCuts(S);
     record(S,'finalCuts',{count:cut.length,names:cut.sort((a,b)=>b.rating-a.rating).slice(0,3)});
   }
@@ -2060,7 +2074,9 @@ function seasonReview(S){
   if(S.club)record(S,'seasonReview',entry);
 }
 function newLeagueYear(S,r){
+  turnCapYear(S);
   const {retired,risers}=developPlayers(S,r);
+  for(const p of S.fa.pool)p.age++;
   for(const lease of Object.values(S.world.leases))lease.yearsLeft=Math.max(0,lease.yearsLeft-1);
   if(S.finance.naming.status==='signed')S.finance.naming.deal.years=Math.max(0,S.finance.naming.deal.years-1);
   // Lapsed stadium offers come back with fresh terms.
@@ -2085,6 +2101,9 @@ function rollover(S,r){
   if(S.league.contest?.status==='open')S.league.contest.deadlineWeek=shift(S.league.contest.deadlineWeek);
   if(S.league.meeting?.status==='scheduled')S.league.meeting.week=shift(S.league.meeting.week);
   S.offer=null;
+  for(const t of clubs)comply(S,t.id,true);
+  fillRosters(S,r);
+  prunePool(S);
   S.draft=makeDraft(r,next.number);
   news(S,'Season '+next.number+' kicks off');
   afterTick(S,r);
@@ -2175,6 +2194,360 @@ function draftView(){
   return html;
 }
 
+
+// ---------------------------------------------------------------------------
+// Contracts and the salary cap (placeholder rules; the bible leaves them open)
+//
+// player.contract = {salary, prorated, yearsLeft, length, kind, signedSeason}
+//   salary     cash and cap charge each season, paid across the regular season
+//   prorated   the yearly cap share of signing bonuses, which were paid in cash
+//              when signed. Releasing a player accelerates what is left
+//              (prorated × yearsLeft) onto this year's cap as dead money.
+// cap = {limit, scale, minSalary, dead:{club:$M}, gmHandles}
+//   The cap year turns over at the new league year (March Week 2): contracts
+//   lose a year, expired players become free agents, the cap grows 4%.
+// fa = {pool:[players with ask], offers:{playerId: owner's offer}}
+// ---------------------------------------------------------------------------
+const CAP_START=255,CAP_GROWTH=.04,MIN_SALARY_START=.9,RESIGN_TICK=27;
+const capHit=p=>round2((p.contract?.salary??0)+(p.contract?.prorated??0));
+const deadIfCut=p=>round2((p.contract?.prorated??0)*(p.contract?.yearsLeft??0));
+const committed=(S,id)=>round2(S.rosters[id].reduce((a,p)=>a+capHit(p),0)+(S.cap.dead[id]??0));
+const capRoom=(S,id)=>round2(S.cap.limit-committed(S,id));
+const nextYearCommitted=(S,id)=>round2(S.rosters[id].filter(p=>p.contract.yearsLeft>=2).reduce((a,p)=>a+capHit(p),0));
+const salaryRaw2=p=>.9+playerValue(p)*.06;
+const ageFactor=age=>age>=33?.55:age>=31?.75:age>=29?.9:1;
+// What a player is worth on the open market this league year: annual value, before the bonus split.
+const marketValue=(S,p)=>round2(Math.max(S.cap.minSalary,S.cap.scale*salaryRaw2(p)*ageFactor(p.age)));
+function askFor(S,p){
+  const annual=marketValue(S,p),years=p.age<=26?4:p.age<=29?3:p.age<=31?2:1;
+  const bonus=annual>S.cap.minSalary*2?round2(annual*years*.25):0;
+  return {salary:round2(annual-bonus/years),years,bonus};
+}
+const termsHit=t=>round2(t.salary+t.bonus/t.years);
+function makeContract(S,terms,kind){
+  return {salary:round2(terms.salary),prorated:round2(terms.bonus/terms.years),yearsLeft:terms.years,length:terms.years,kind,signedSeason:cur(S).number};
+}
+// League-wide calibration: contracts fill about 94% of the cap on average.
+function makeCap(S,r){
+  const raw=Object.values(S.rosters).flat().reduce((a,p)=>a+salaryRaw2(p)*ageFactor(p.age),0);
+  S.cap={limit:CAP_START,scale:round2(.94*CAP_START*clubs.length/raw*100)/100,minSalary:MIN_SALARY_START,dead:{},gmHandles:true};
+  for(const p of Object.values(S.rosters).flat()){
+    const annual=marketValue(S,p),years=1+randInt(r,p.age>=30?2:4);
+    p.contract={salary:round2(annual*.9),prorated:round2(annual*.1),yearsLeft:years,length:years+randInt(r,2),kind:'veteran',signedSeason:cur(S).number};
+  }
+  // Every club starts close to the cap, as real clubs do.
+  for(const t of clubs){
+    const total=S.rosters[t.id].reduce((a,p)=>a+capHit(p),0),k=S.cap.limit*(.86+r()*.12)/total;
+    for(const p of S.rosters[t.id]){p.contract.salary=round2(Math.max(S.cap.minSalary*.8,p.contract.salary*k));p.contract.prorated=round2(p.contract.prorated*k);}
+  }
+  S.fa={pool:[],offers:{}};
+}
+// Rookie deals: four years, priced by draft slot.
+function rookieTerms(S,overall){
+  const scale=S.cap.limit/CAP_START,annual=Math.max(S.cap.minSalary,round2(9.5*Math.exp(-(overall-1)/30)*scale));
+  const bonus=round2(annual*4*(overall<=64?.35:.1));
+  return {salary:round2(Math.max(S.cap.minSalary,annual-bonus/4)),years:4,bonus};
+}
+const minimumTerms=(S,years=1)=>({salary:S.cap.minSalary,years,bonus:0});
+
+// Cash for the owner's club. Lands in the ledger entry for the current week.
+function postCash(S,line,amount){
+  const s=cur(S),F=S.finance;
+  let entry=F.ledger.find(x=>x.season===s.number&&x.week===s.tick);
+  if(!entry){entry={season:s.number,week:s.tick,lines:Object.fromEntries(Object.keys(LINE_LABELS).map(k=>[k,0])),result:0,ownerIncome:0,ownerOperating:0,borrowed:0,offweek:true};F.ledger.push(entry);}
+  entry.lines[line]=round2((entry.lines[line]??0)+amount);
+  entry.result=round2(entry.result+amount);
+  F.clubCash=round2(F.clubCash+amount);
+  if(F.clubCash<0){
+    const need=-F.clubCash;
+    if(F.lossPolicy==='owner'&&F.ownerCash>=need){F.ownerCash=round2(F.ownerCash-need);F.contributions.operating=round2(F.contributions.operating+need);entry.ownerOperating=round2(entry.ownerOperating+need);}
+    else{F.debt=round2(F.debt+need);entry.borrowed=round2(entry.borrowed+need);}
+    F.clubCash=0;
+  }
+}
+// Bonus cash: the club pays, or the owner covers it personally.
+function payBonus(S,amount,funding){
+  if(!(amount>0))return;
+  const F=S.finance;
+  if(funding==='owner'&&F.ownerCash>=amount){
+    F.ownerCash=round2(F.ownerCash-amount);
+    F.contributions.bonuses=round2((F.contributions.bonuses??0)+amount);
+    F.capitalLog.push({season:cur(S).number,week:now(S),project:'bonus',amount,funding:'owner'});
+  }else postCash(S,'signingBonuses',-amount);
+}
+
+function releasePlayer(S,clubId,playerId,{toPool=true}={}){
+  const roster=S.rosters[clubId],i=roster.findIndex(p=>p.id===playerId);
+  if(i<0)return null;
+  const p=roster[i],dead=deadIfCut(p);
+  roster.splice(i,1);
+  S.cap.dead[clubId]=round2((S.cap.dead[clubId]??0)+dead);
+  delete p.out;
+  if(toPool&&p.rating>=52)addToPool(S,p);
+  return {player:p,dead};
+}
+function addToPool(S,p){
+  delete p.contract;delete p.out;
+  p.ask=askFor(S,p);
+  S.fa.pool.push(p);
+}
+function signPlayer(S,clubId,p,terms,kind,funding){
+  S.fa.pool=S.fa.pool.filter(x=>x.id!==p.id);
+  delete S.fa.offers[p.id];
+  delete p.ask;
+  p.contract=makeContract(S,terms,kind);
+  S.rosters[clubId].push(p);
+  if(clubId===S.club)payBonus(S,terms.bonus,funding);
+}
+
+// ---- Owner actions -----------------------------------------------------------
+function ownerRelease(S,playerId){
+  const p=S.rosters[S.club]?.find(x=>x.id===playerId);
+  if(!p)return 'unavailable';
+  const {dead}=releasePlayer(S,S.club,playerId);
+  record(S,'playerReleased',{player:snap(p),dead});
+  return 'ok';
+}
+// Turn salary above the minimum into bonus spread over the remaining years.
+function restructureSavings(S,p){
+  const c=p.contract;
+  if(!c||c.yearsLeft<2||c.salary<S.cap.minSalary*1.5)return null;
+  const amount=round2(c.salary-S.cap.minSalary);
+  return {amount,savings:round2(amount-amount/c.yearsLeft)};
+}
+function restructure(S,playerId,funding){
+  const p=S.rosters[S.club]?.find(x=>x.id===playerId),r=p&&restructureSavings(S,p);
+  if(!r)return 'unavailable';
+  if(funding==='owner'&&S.finance.ownerCash<r.amount)return 'ownerShort';
+  p.contract.salary=round2(p.contract.salary-r.amount);
+  p.contract.prorated=round2(p.contract.prorated+r.amount/p.contract.yearsLeft);
+  payBonus(S,r.amount,funding);
+  if(funding==='owner')learn(S,{kind:'ownerFunding',project:'bonus'},['owner','president','league']);
+  record(S,'contractRestructured',{player:snap(p),amount:r.amount,savings:r.savings,funding});
+  return 'ok';
+}
+function extensionTerms(S,p){
+  const ask=askFor(S,p);
+  return {...ask,years:Math.max(2,ask.years)};
+}
+function extendPlayer(S,playerId,funding){
+  const p=S.rosters[S.club]?.find(x=>x.id===playerId);
+  if(!p||p.contract.yearsLeft!==1)return 'unavailable';
+  const t=extensionTerms(S,p),oldLeft=p.contract.prorated;
+  const hitChange=termsHit(t)+oldLeft/t.years-capHit(p);
+  if(hitChange>capRoom(S,S.club))return 'capShort';
+  if(funding==='owner'&&S.finance.ownerCash<t.bonus)return 'ownerShort';
+  p.contract={salary:t.salary,prorated:round2(t.bonus/t.years+oldLeft/t.years),yearsLeft:t.years+1,length:t.years+1,kind:'extension',signedSeason:cur(S).number};
+  payBonus(S,t.bonus,funding);
+  record(S,'contractExtended',{player:snap(p),terms:t,funding});
+  return 'ok';
+}
+function pendingOfferHits(S){return Object.values(S.fa.offers).reduce((a,o)=>a+termsHit(o),0);}
+function makeOffer(S,playerId,funding){
+  const p=S.fa.pool.find(x=>x.id===playerId);
+  if(!S.club||!p)return 'unavailable';
+  const terms={...p.ask};
+  if(termsHit(terms)+pendingOfferHits(S)-(S.fa.offers[playerId]?termsHit(S.fa.offers[playerId]):0)>capRoom(S,S.club))return 'capShort';
+  if(funding==='owner'&&S.finance.ownerCash<terms.bonus)return 'ownerShort';
+  S.fa.offers[playerId]={...terms,funding,week:now(S)};
+  return 'ok';
+}
+function withdrawOffer(S,playerId){delete S.fa.offers[playerId];}
+function setGmHandles(S,on){S.cap.gmHandles=!!on;}
+
+// ---- Clubs run by staff (every AI club, and the owner's when the GM handles it) ----
+// Open roster slots at a position (all ages count; the draft looks further ahead with needAt).
+const slotsOpen=(S,id,pos)=>positions.find(x=>x[0]===pos)[1]-S.rosters[id].filter(p=>p.pos===pos).length;
+const handledByStaff=(S,id)=>id!==S.club||S.cap.gmHandles;
+const starterSet=roster=>{const set=new Set(),u=personnel(roster);for(const [pos,,n] of positions)u.chart[pos].slice(0,n).forEach(p=>set.add(p.id));return set;};
+// March Week 1: keep the players worth keeping before their deals run out.
+function resignExpiring(S,r){
+  const mine={kept:[],leaving:[]};
+  for(const t of clubs){
+    if(!handledByStaff(S,t.id)){
+      if(t.id===S.club)mine.leaving=S.rosters[t.id].filter(p=>p.contract.yearsLeft===1).map(snap);
+      continue;
+    }
+    const starters=starterSet(S.rosters[t.id]);
+    let budget=S.cap.limit*(1+CAP_GROWTH)-nextYearCommitted(S,t.id)-12;
+    const flush=budget>S.cap.limit*.15;
+    const expiring=S.rosters[t.id].filter(p=>p.contract.yearsLeft===1).sort((a,b)=>b.rating-a.rating);
+    for(const p of expiring){
+      const worth=(starters.has(p.id)||p.rating>=72||(flush&&p.rating>=64))&&p.age<=(flush?32:31)&&r()<(flush?.92:.8);
+      const raise=flush?1+Math.min(.25,budget/S.cap.limit*.5):1,base=extensionTerms(S,p);
+      const t2={salary:round2(base.salary*raise),years:base.years,bonus:round2(base.bonus*raise)},hit=termsHit(t2);
+      if(worth&&hit<=budget){
+        budget-=hit;
+        p.contract={salary:t2.salary,prorated:round2(t2.bonus/t2.years+p.contract.prorated/t2.years),yearsLeft:t2.years+1,length:t2.years+1,kind:'extension',signedSeason:cur(S).number};
+        if(t.id===S.club){payBonus(S,t2.bonus,'club');mine.kept.push(snap(p));}
+      }else if(t.id===S.club)mine.leaving.push(snap(p));
+    }
+  }
+  if(S.club)record(S,'resignings',{...mine,byGm:S.cap.gmHandles});
+}
+// New league year: contracts lose a year and expired players hit the market.
+function turnCapYear(S){
+  S.cap.limit=round2(S.cap.limit*(1+CAP_GROWTH));
+  S.cap.scale=round2(S.cap.scale*(1+CAP_GROWTH)*100)/100;
+  S.cap.minSalary=round2(S.cap.minSalary*(1+CAP_GROWTH));
+  S.cap.dead={};
+  const departed=[];
+  for(const t of clubs){
+    S.rosters[t.id]=S.rosters[t.id].filter(p=>{
+      if(--p.contract.yearsLeft>0)return true;
+      if(t.id===S.club)departed.push(snap(p));
+      addToPool(S,p);
+      return false;
+    });
+  }
+  for(const p of S.fa.pool)p.ask=askFor(S,p);
+  for(const t of clubs)if(t.id!==S.club)comply(S,t.id);
+  const room=capRoom(S,S.club);
+  if(S.club){
+    record(S,'capYear',{limit:S.cap.limit,departed,room});
+    if(room<0)record(S,'capWarning',{over:round2(-room)});
+  }
+}
+// Release until under the cap, cheapest football loss per dollar first. Each cut
+// is replaced on a minimum deal, so the savings that count are net of that.
+function comply(S,id,forced){
+  const cuts=[],r=rngFor(S.rng),saves=x=>capHit(x)-deadIfCut(x)-S.cap.minSalary;
+  for(let guard=0;guard<30&&capRoom(S,id)<0;guard++){
+    const starters=starterSet(S.rosters[id]);
+    const p=S.rosters[id].filter(x=>saves(x)>.5).sort((a,b)=>(Number(starters.has(a.id))-Number(starters.has(b.id)))||((a.rating-1.2*saves(a))-(b.rating-1.2*saves(b))))[0];
+    if(!p)break;
+    cuts.push({...snap(p),dead:releasePlayer(S,id,p.id).dead});
+    if(S.rosters[id].length<53)signMinimum(S,id,p.pos,r);
+  }
+  if(forced&&id===S.club&&cuts.length)record(S,'capCompliance',{cuts});
+  return cuts;
+}
+// Each week of the market: staff-run clubs bid for needs they can afford, and players sign with the best offer.
+function processFreeAgency(S,r){
+  const t=now(S),FA=S.fa;
+  if(!FA.pool.length)return;
+  // Camp rosters run large between the league year and final cuts; otherwise the limit is 53.
+  const offseason=t>=MILESTONES.leagueYear&&t<MILESTONES.cuts,opening=t>=MILESTONES.leagueYear&&t<=MILESTONES.leagueYear+2;
+  const bids={};
+  for(const club of shuffled(r,clubs)){
+    const id=club.id;
+    if(!handledByStaff(S,id))continue;
+    const size=S.rosters[id].length,cap=offseason?60:53,hardMax=offseason?75:53;
+    if(size>=hardMax)continue;
+    for(let n=0;n<(opening?2:0)+(capRoom(S,id)>S.cap.limit*.2?2:1);n++){
+      let room=capRoom(S,id)-(offseason&&t<MILESTONES.draft?8:0)-Object.values(bids).flat().filter(b=>b.club===id).reduce((a,b)=>a+termsHit(b.terms),0);
+      const needs=positions.map(([pos])=>pos).filter(pos=>slotsOpen(S,id,pos)>0);
+      if(size>=cap&&!needs.length)break;
+      const target=FA.pool.filter(p=>(needs.includes(p.pos)||size<cap)&&termsHit(p.ask)<=room&&!(bids[p.id]??[]).some(b=>b.club===id))
+        .sort((a,b)=>b.rating-a.rating)[0];
+      if(!target)break;
+      const k=.95+r()*.2;
+      (bids[target.id]??=[]).push({club:id,terms:{salary:round2(target.ask.salary*k),years:target.ask.years,bonus:round2(target.ask.bonus*k)}});
+    }
+  }
+  for(const [pid,o] of Object.entries(FA.offers))(bids[pid]??=[]).push({club:S.club,terms:{salary:o.salary,years:o.years,bonus:o.bonus},funding:o.funding,owner:true});
+  const value=b=>termsHit(b.terms)+.3*b.terms.bonus/b.terms.years+2*winPct(S,b.club);
+  for(const [pid,list] of Object.entries(bids)){
+    const p=FA.pool.find(x=>x.id===pid);if(!p)continue;
+    const best=list.filter(b=>termsHit(b.terms)<=capRoom(S,b.club)).sort((a,b)=>value(b)-value(a))[0];
+    const owner=list.find(b=>b.owner);
+    if(!best||termsHit(best.terms)<termsHit(p.ask)*.9)continue;
+    signPlayer(S,best.club,p,best.terms,'veteran',best.funding??'club');
+    if(best.owner)record(S,'faSigned',{player:snap(p),terms:best.terms,funding:best.funding});
+    else if(best.club===S.club)record(S,'faSigned',{player:snap(p),terms:best.terms,byGm:true});
+    else if(owner)record(S,'faLost',{player:snap(p),club:best.club,terms:best.terms});
+    if(p.rating>=80)news(S,p.pos+' '+p.name+' signs with '+teamName(best.club)+': '+best.terms.years+' years, $'+round1(termsHit(best.terms)*best.terms.years)+'M');
+  }
+  // Players nobody wanted ask for less as the market cools.
+  if(t>MILESTONES.leagueYear+2||t<MILESTONES.leagueYear)for(const p of FA.pool){
+    p.ask={...p.ask,salary:round2(Math.max(S.cap.minSalary,p.ask.salary*.92)),bonus:round2(p.ask.bonus*.85)};
+  }
+}
+function signMinimum(S,id,pos,r){
+  let p=S.fa.pool.filter(x=>x.pos===pos).sort((a,b)=>b.rating-a.rating)[0];
+  if(!p){p={id:'m'+cur(S).number+'-'+id+'-'+randInt(r,1e9),name:personName(r),pos,rating:48+randInt(r,8),age:23+randInt(r,6)};p.potential=p.rating+randInt(r,4);}
+  signPlayer(S,id,p,minimumTerms(S),'minimum','club');
+}
+// Before final cuts, staff-run clubs fill holes with minimum deals.
+function fillRosters(S,r){
+  for(const t of clubs){
+    if(!handledByStaff(S,t.id)&&S.rosters[t.id].length>=53)continue;
+    for(let guard=0;guard<20;guard++){
+      const need=positions.map(([pos])=>pos).find(pos=>slotsOpen(S,t.id,pos)>0);
+      if(S.rosters[t.id].length>=53&&!need)break;
+      let p=S.fa.pool.filter(x=>!need||x.pos===need).sort((a,b)=>b.rating-a.rating)[0];
+      if(!p){
+        const pos=need??positionWeights[randInt(r,positionWeights.length)];
+        p={id:'m'+cur(S).number+'-'+t.id+'-'+guard+'-'+randInt(r,1e6),name:personName(r),pos,rating:48+randInt(r,8),age:23+randInt(r,6)};
+        p.potential=p.rating+randInt(r,4);
+      }
+      signPlayer(S,t.id,p,minimumTerms(S),'minimum','club');
+    }
+  }
+}
+// The pool keeps only players someone might still sign.
+function prunePool(S){
+  S.fa.pool=S.fa.pool.filter(p=>p.age<=33).sort((a,b)=>b.rating-a.rating).slice(0,80);
+  for(const id of Object.keys(S.fa.offers))if(!S.fa.pool.some(p=>p.id===id))delete S.fa.offers[id];
+}
+
+// Words for contract events.
+const money1=n=>'$'+round1(n)+'M';
+function contractEventText(S,e){
+  const who=p=>p.pos+' '+p.name,terms=t=>t.years+' year'+(t.years===1?'':'s')+', '+money1(t.salary)+' salary'+(t.bonus?' and a '+money1(t.bonus)+' signing bonus':'');
+  switch(e.type){
+    case 'playerReleased':return 'We released '+who(e.player)+'.'+(e.dead?' That puts '+money1(e.dead)+' of dead money on this year’s cap.':' No dead money.');
+    case 'contractRestructured':return 'Restructured '+who(e.player)+': '+money1(e.amount)+' of salary became bonus'+(e.funding==='owner'?', paid out of your pocket':'')+'. That clears '+money1(e.savings)+' of cap room this year and pushes the rest into later years.';
+    case 'contractExtended':return 'Extended '+who(e.player)+': '+terms(e.terms)+(e.funding==='owner'&&e.terms.bonus?', bonus paid personally':'')+'.';
+    case 'resignings':return (e.byGm?'I handled the re-signings. ':'Re-signing window closed. ')+(e.kept.length?'Kept: '+e.kept.map(who).join(', ')+'. ':'')+(e.leaving.length?'Heading to free agency unless you act: '+e.leaving.map(who).join(', ')+'.':'Nobody else is leaving.');
+    case 'capYear':return 'New cap year: the limit is '+money1(e.limit)+'. '+(e.departed.length?'Expired and now free agents: '+e.departed.map(who).join(', ')+'. ':'')+'We have '+money1(e.room)+' of room.';
+    case 'capWarning':return 'We are '+money1(e.over)+' over the cap. We have to be compliant by the season opener, or I will make the cuts.';
+    case 'capCompliance':return 'We were still over the cap at the opener, so I released '+e.cuts.map(p=>who(p)+(p.dead?' ('+money1(p.dead)+' dead)':'')).join(', ')+'.';
+    case 'faSigned':return (e.byGm?'I signed ':'Signed ')+who(e.player)+': '+terms(e.terms)+(e.funding==='owner'&&e.terms.bonus?', bonus paid personally':'')+'.';
+    case 'faLost':return who(e.player)+' signed with '+teamName(e.club)+' instead: '+terms(e.terms)+'.';
+  }
+  return '';
+}
+
+// ---- Contracts view ------------------------------------------------------------
+const contractsUi={notice:'',confirm:null,funding:'club'};
+function contractsView(){
+  const S=save,id=S.club;
+  if(!id)return heading('CONTRACTS','Choose a club first')+'<p>Take ownership on the Owner desk to open the cap sheet.</p>';
+  const roster=S.rosters[id],room=capRoom(S,id),dead=S.cap.dead[id]??0;
+  let html=heading('CONTRACTS AND THE CAP',teamName(id))+'<div class="units">'+
+    '<div><small>Salary cap</small><b>'+m1(S.cap.limit)+'</b>Cap year runs to March Week 2</div>'+
+    '<div><small>Committed</small><b>'+m1(committed(S,id))+'</b>'+roster.length+' contracts'+(dead?' · '+m1(dead)+' dead':'')+'</div>'+
+    '<div><small>Cap room</small><b>'+m1(room)+'</b>'+(room<0?'Over the cap':'Available now')+'</div>'+
+    '<div><small>Next year</small><b>'+m1(nextYearCommitted(S,id))+'</b>Already committed</div></div>';
+  html+='<p>Salary is paid in cash during the season. Signing bonuses are paid in cash up front but count against the cap a little each year, so you can cover one personally and still need cap room for it.</p>'+
+    '<div class="controls"><label>Re-signings and free agency <select id="gmHandles">'+option('gm','The GM handles them',S.cap.gmHandles)+option('owner','I decide',!S.cap.gmHandles)+'</select></label>'+
+    '<label>Signing bonuses <select id="bonusFunding">'+option('club','Club pays',contractsUi.funding==='club')+option('owner','I pay personally',contractsUi.funding==='owner')+'</select></label></div>'+
+    (contractsUi.notice?'<p><b>'+esc(contractsUi.notice)+'</b></p>':'');
+  const c=contractsUi.confirm;
+  if(c){
+    const p=roster.find(x=>x.id===c.playerId);
+    if(p)html+='<div class="confirm"><span>'+esc('Release '+p.pos+' '+p.name+'? His '+m1(p.contract.salary)+' salary comes off the books, and '+m1(deadIfCut(p))+' of dead money lands on this year’s cap.')+'</span><button id="confirmRelease">Release him</button><button id="cancelRelease">Keep him</button></div>';
+  }
+  const expiring=roster.filter(p=>p.contract.yearsLeft===1).sort((a,b)=>b.rating-a.rating);
+  const starters=starterSet(roster);
+  html+='<h2>Expiring contracts</h2>'+(expiring.length?'<p>'+esc('These deals end at the new league year. '+(S.cap.gmHandles?'The GM will re-sign the ones worth keeping in '+weekLabel(RESIGN_TICK)+'.':'Extend anyone you want to keep before then.'))+'</p><div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th><th>Extension ask</th><th></th></tr></thead><tbody>'+
+    expiring.map(p=>{const t=extensionTerms(S,p),gm=(starters.has(p.id)||p.rating>=72)&&p.age<=31?'GM: keep':'GM: let walk';
+      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>'+gm+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td><button data-extend="'+esc(p.id)+'">Extend</button></td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
+  html+='<h2>Cap sheet</h2><div class="wide"><table class="capsheet"><thead><tr><th>Player</th><th>Rating</th><th>Cap hit</th><th>Salary</th><th>Years</th><th>Dead if cut</th><th></th></tr></thead><tbody>'+
+    [...roster].sort((a,b)=>capHit(b)-capHit(a)).map(p=>{const rs=restructureSavings(S,p);
+      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Age '+p.age+(p.contract.kind==='rookie'?' · rookie deal':'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+m1(deadIfCut(p))+'</td><td class="calls">'+
+        (rs?'<button data-restructure="'+esc(p.id)+'" title="Clears '+m1(rs.savings)+' this year">Restructure</button>':'')+'<button data-release="'+esc(p.id)+'">Release</button></td></tr>';}).join('')+'</tbody></table></div>';
+  const pool=[...S.fa.pool].sort((a,b)=>b.rating-a.rating).slice(0,30);
+  html+='<h2>Free agents</h2>'+(pool.length?'<p>'+esc('Players sign with the best offer when the week advances. Other clubs bid too, and a player waits if every offer is well under his ask.'+(S.cap.gmHandles?' The GM also signs free agents to fill holes; switch to “I decide” to run it yourself.':''))+'</p>'+
+    '<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Asking</th><th>Cap hit</th><th></th></tr></thead><tbody>'+
+    pool.map(p=>{const o=S.fa.offers[p.id];
+      return '<tr><td>'+esc(p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td>'+
+        (o?'<small>Offer in</small><button data-withdraw="'+esc(p.id)+'">Withdraw</button>':'<button data-offer="'+esc(p.id)+'">Offer asking terms</button>')+'</td></tr>';}).join('')+'</tbody></table></div>':
+    '<p>'+esc('Free agency opens at the new league year, '+weekLabel(MILESTONES.leagueYear)+', when expired contracts hit the market.')+'</p>');
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // Words. Everything returned here is already escaped HTML.
 // ---------------------------------------------------------------------------
@@ -2193,6 +2566,7 @@ function describeEvent(e,S=save){
     case 'projectDone':case 'namingSigned':case 'namingAwaiting':case 'namingLapsed':case 'namingDeclined':return esc(financeEventText(e));
     case 'rightsWon':case 'rightsLost':case 'rightsRenewed':case 'meetingCalled':case 'voteResult':return esc(leagueEventText(e));
     case 'playoffResult':case 'seasonReview':case 'leagueYear':case 'draftOpen':case 'draftUnattended':case 'draftDone':case 'calendarNote':case 'finalCuts':return esc(calendarEventText(S,e));
+    case 'playerReleased':case 'contractRestructured':case 'contractExtended':case 'resignings':case 'capYear':case 'capWarning':case 'capCompliance':case 'faSigned':case 'faLost':return esc(contractEventText(S,e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');
@@ -2208,6 +2582,8 @@ function offerMessage(S,q){
     case 'countered':return seller+' turned down your price. Their counter is below.';
     case 'declined':return seller+' declined. Your available picks cannot bridge the gap for this player.';
     case 'needsDepth':return seller+' will not leave itself without a healthy '+(target?.pos??'starter')+'. They would need one back in the deal.';
+    case 'capShort':return 'That deal does not fit under our cap. Clear room first, or send back more salary.';
+    case 'sellerCap':return seller+' cannot take that much salary back under their cap.';
     default:return 'Existing offer from '+seller+'.';
   }
 }
@@ -2226,7 +2602,15 @@ const migrations={
   3:migrateV3,
   4:migrateV4,
   5:migrateV5,
+  6:migrateV6,
 };
+// v6 -> v7: contracts for every player, the salary cap, and the free-agent pool.
+function migrateV6(old){
+  makeCap(old,rngFor(old.rng));
+  old.schemaVersion=7;
+  (old.migrations??=[]).push({from:6,to:7,at:new Date().toISOString()});
+  return old;
+}
 // v5 -> v6: the calendar. Seasons get a clock, players get potential, and the
 // first draft class is generated.
 function migrateV5(old){
@@ -2372,6 +2756,8 @@ function validateSave(S){
     if(F.naming.status==='signed'&&!(F.naming.deal&&Number.isFinite(F.naming.deal.annual)))fail('The naming-rights deal is invalid.');
     if(F.ledger.some(x=>!x||!x.lines||!Number.isFinite(x.result)))fail('An operating report is invalid.');
   }
+  if(!S.cap||![S.cap.limit,S.cap.scale,S.cap.minSalary].every(Number.isFinite)||!S.cap.dead||!S.fa||!Array.isArray(S.fa.pool)||!S.fa.offers)fail('Salary cap records are missing.');
+  else if(Object.values(S.rosters??{}).flat().some(p=>!p?.contract||![p.contract.salary,p.contract.prorated].every(Number.isFinite)||!isInt(p.contract.yearsLeft,1,10)))fail('A player contract is invalid.');
   if(!S.draft||!Array.isArray(S.draft.prospects)||!['scouting','live','done'].includes(S.draft.status)||!isInt(S.draft.pick,0))fail('The draft class is missing.');
   if(!Array.isArray(S.history)||!Array.isArray(S.draftHistory))fail('Season history is missing.');
   const Lg=S.league;
@@ -2587,16 +2973,18 @@ function negotiationView(S){
   let advice=sellerShort(S,q.seller,target,draftOut)?'They will not move their last healthy '+target.pos+' unless one comes back. ':
     value-needed>=20?'That pick is an overpay. ':value<needed?'Expect them to ask for more. ':'That price is defensible. ';
   if(buyerShort(S,target,draftOut))advice+='That would leave us without a healthy '+draftOut.pos+'. ';
+  const cap=tradeCap(S,q.seller,target,draftOut);
+  advice+=cap.buyer<0?'We would be '+m1(-cap.buyer)+' over the cap: restructure or release someone first, or send back more salary. ':'This leaves us '+m1(cap.buyer)+' of cap room. ';
   let estimate=needed===0?'I would try a straight swap.':fair?'I value the gap at a round '+fair+' pick'+(draftOut?' with '+draftOut.name:' alone')+'.':'We probably need a stronger player in the deal.';
   if(sellerShort(S,q.seller,target,draftOut)){
     const swap=options.filter(p=>p.pos===target.pos).sort((a,b)=>a.rating-b.rating)[0];
     const gap=swap&&termsNeeded(target,swap),round=swap&&[7,6,5,4,3,2,1].find(rd=>pickValues[rd]>=gap);
     estimate=!swap?'We have no healthy '+target.pos+' to send back.':gap===0?'Sending '+swap.name+' straight up should do it.':round?'If we send '+swap.name+', I value the gap at a round '+round+' pick.':'Even with '+swap.name+' going back, our picks cannot cover the gap.';
   }
-  const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="4">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>';
+  const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="5">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+' · '+p.contract.yearsLeft+' yr</td></tr>';
   const deal=[out?.name,quoted&&pickLabel(quoted)].filter(Boolean).join(' and ');
   return '<p>'+esc(offerMessage(S,q))+'</p>'+
-    '<div class="wide"><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table></div>'+
+    '<div class="wide"><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th><th>Contract</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table></div>'+
     '<div class="controls"><label>Send player <select id="tradePlayer">'+option('none','No player',!draftOut)+options.map(p=>option(p.id,p.name+' · '+p.pos+' · '+p.rating,p.id===draftOut?.id)).join('')+'</select></label>'+
     '<label>Add pick <select id="tradePick">'+option('none','No pick',key==='none')+picks.map(p=>option(pickKey(p),pickLabel(p),key===pickKey(p))).join('')+'</select></label>'+
     '<button id="counter">Send proposal</button></div>'+
@@ -2620,6 +3008,10 @@ function leagueCard(S){
   if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="League">Lobby</button></div>';
   const n=S.league.news.at(-1);
   return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
+}
+function capCard(S){
+  const room=capRoom(S,S.club);
+  return '<div><small>Cap room</small>'+(room<0?'Over by '+m1(-room):m1(room))+' <button data-tab="Contracts">Cap sheet</button></div>';
 }
 function moneyCard(S){
   if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="Finances">Review</button></div>';
@@ -2655,7 +3047,7 @@ function ownershipDesk(){
   const last=lastPlayoff?esc(lastPlayoff.name+' · '+(lastPlayoff.g.home===id||lastPlayoff.g.neutral?'vs. ':'at ')+teamName(lastPlayoff.g.home===id?lastPlayoff.g.away:lastPlayoff.g.home)+' · '+resultText(lastPlayoff.g,id)):fixture(games.filter(x=>x.g.score).pop());
   const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
-    comingDue(S)+moneyCard(S)+leagueCard(S)+'</div>';
+    comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
   let gm;
   if(S.offer)gm=negotiationView(S);
@@ -2702,16 +3094,16 @@ function rosterView(){
   const team=byId.get(selected),units=personnel(save.rosters[selected]);
   const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
   return heading(team.conference+' '+team.division,teamName(selected))+
-    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+save.rosters[selected].length+' players · Depth chart</span></div>'+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+save.rosters[selected].length+' players · Depth chart · cap room '+m1(capRoom(save,selected))+'</span></div>'+
     '<div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div>'+
     '<p>An uncovered starting spot uses an emergency rating of '+EMERGENCY_RATING+'. Starters lead each position group. The first reserve also contributes at running back, receiver, defensive end, defensive tackle, linebacker and cornerback.</p>'+
     '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
       const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
-      return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+
-        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>')).join('')+'</tbody></table></section>';
+      return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th></tr></thead><tbody>'+
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>';
 }
-const TABS=['Owner desk','Stadium','Finances','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+const TABS=['Owner desk','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
 function draw(){
   const s=cur();
@@ -2727,7 +3119,7 @@ function draw(){
   $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
   $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
   $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
   if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
@@ -2783,6 +3175,14 @@ document.addEventListener('click',e=>{
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
   if(b.id==='gmPick'&&save.draft.order[save.draft.pick]?.owner===save.club){aiPick(save);commit();}
   if(b.id==='simToMine'){simToMyPick(save);commit();}
+  const contractNotice={capShort:'That does not fit under the cap. Clear room first.',ownerShort:'You do not have that much cash on hand.',unavailable:'That move is no longer available.'};
+  if(b.dataset.extend){const res=extendPlayer(save,b.dataset.extend,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.restructure){const res=restructure(save,b.dataset.restructure,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.release){contractsUi.confirm={playerId:b.dataset.release};contractsUi.notice='';draw();}
+  if(b.id==='confirmRelease'&&contractsUi.confirm){ownerRelease(save,contractsUi.confirm.playerId);contractsUi.confirm=null;commit();}
+  if(b.id==='cancelRelease'){contractsUi.confirm=null;draw();}
+  if(b.dataset.offer){const res=makeOffer(save,b.dataset.offer,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.withdraw){withdrawOffer(save,b.dataset.withdraw);commit();}
   if(b.id==='gmFinish'){gmFinishDraft(save,false);commit();}
 });
 app.onchange=e=>{
@@ -2795,6 +3195,8 @@ app.onchange=e=>{
   if(planKeys[e.target.id]){stadiumUi.plan[planKeys[e.target.id]]=e.target.value;stadiumUi.notice='';return;}
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
   if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
+  if(e.target.id==='gmHandles'){setGmHandles(save,e.target.value==='gm');commit();return;}
+  if(e.target.id==='bonusFunding'){contractsUi.funding=e.target.value;return;}
   if(leagueUi.bid&&e.target.id==='bidAnnual'){leagueUi.bid.annual=Number(e.target.value);return;}
   if(leagueUi.bid&&e.target.id==='bidYears'){leagueUi.bid.years=Number(e.target.value);return;}
   if(e.target.id==='bidLobby'){leagueUi.lobby=e.target.checked;return;}

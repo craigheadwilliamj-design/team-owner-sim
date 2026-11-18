@@ -13,6 +13,7 @@ const v2Save = fs.readFileSync(path.join(FIX, 'v2-save.json'), 'utf8');
 const v3Save = fs.readFileSync(path.join(FIX, 'v3-save.json'), 'utf8');
 const v4Save = fs.readFileSync(path.join(FIX, 'v4-save.json'), 'utf8');
 const v5Save = fs.readFileSync(path.join(FIX, 'v5-save.json'), 'utf8');
+const v6Save = fs.readFileSync(path.join(FIX, 'v6-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -20,6 +21,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
+  'restructure', 'restructureSavings', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -231,7 +233,7 @@ test('v2 save upgrades with markets, sites and leases, and nothing else changes'
   const without = (v, keys) => JSON.parse(JSON.stringify(v, (k, x) => (keys.includes(k) ? undefined : x)));
   for (const k of ['saveId', 'club', 'picks', 'events', 'revision']) assert.deepEqual(S[k], old[k], k);
   assert.deepEqual(without(S.seasons, ['tick']), old.seasons, 'seasons, apart from the new clock');
-  assert.deepEqual(without(S.rosters, ['potential']), old.rosters, 'rosters, apart from new potential ratings');
+  assert.deepEqual(without(S.rosters, ['potential', 'contract']), old.rosters, 'rosters, apart from new potential ratings and contracts');
 });
 
 test('v2 browser save upgrades on boot and keeps a backup', () => {
@@ -405,9 +407,11 @@ test('loss policy: borrow by default, or the owner covers the shortfall', () => 
   for (const policy of ['borrow', 'owner']) {
     const { api, S } = owned(34);
     api.setLossPolicy(S, policy);
-    let week; for (week = 0; week < 18; week++) { S.finance.clubCash = 0; api.playWeek(S); if (S.finance.ledger.at(-1).result < 0) break; }
+    S.finance.clubCash = 0;
+    const p = S.rosters['club-06'].find(x => api.restructureSavings(S, x));
+    assert.equal(api.restructure(S, p.id, 'club'), 'ok'); // a cash bonus the club cannot cover
     const x = S.finance.ledger.at(-1);
-    assert(x.result < 0, 'found a losing week');
+    assert(x.result < 0 && x.lines.signingBonuses < 0);
     if (policy === 'borrow') assert(x.borrowed > 0 && x.ownerOperating === 0);
     else assert(x.ownerOperating > 0 && S.finance.contributions.operating > 0);
   }
@@ -835,6 +839,134 @@ test('draft and playoff views render', () => {
   assert.match(api.draftView(), /On the clock/);
   api.simToMyPick(S);
   assert.match(api.draftView(), /Your pick/);
+});
+
+
+// ---- Contracts and the salary cap ------------------------------------------
+test('v6 save upgrades to v7: every player under contract, every club near the cap', () => {
+  const { api } = load();
+  const old = JSON.parse(v6Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  const all = Object.values(S.rosters).flat();
+  assert(all.every(p => p.contract && p.contract.yearsLeft >= 1 && p.contract.salary > 0));
+  for (const t of api.clubs) { const room = api.capRoom(S, t.id); assert(room >= 0 && room <= S.cap.limit * 0.15, t.id + ' room ' + room); }
+  assert.deepEqual(S.fa.pool, []);
+  assert.equal(api.cur(S).completed, old.seasons.at(-1).completed);
+});
+
+test('release: salary comes off, remaining bonus money lands on this year as dead money', () => {
+  const { api, S } = owned(201);
+  const p = S.rosters['club-06'].filter(x => x.contract.yearsLeft >= 2).sort((a, b) => b.contract.prorated - a.contract.prorated)[0];
+  const before = api.committed(S, 'club-06'), dead = api.deadIfCut(p), hit = api.capHit(p);
+  assert.equal(dead, Math.round(p.contract.prorated * p.contract.yearsLeft * 100) / 100);
+  api.ownerRelease(S, p.id);
+  assert(!S.rosters['club-06'].includes(p));
+  assert(Math.abs(api.committed(S, 'club-06') - (before - hit + dead)) < 0.02);
+  assert.equal(S.cap.dead['club-06'], dead);
+  assert.match(api.describeEvent(S.events.at(-1), S), /dead money/);
+});
+
+test('restructure: cap room now, cash now, more cap later; the owner can pay it', () => {
+  const { api, S } = owned(202);
+  const p = S.rosters['club-06'].find(x => api.restructureSavings(S, x));
+  const r = api.restructureSavings(S, p), room = api.capRoom(S, 'club-06'), owner = S.finance.ownerCash, later = p.contract.prorated;
+  assert.equal(api.restructure(S, p.id, 'owner'), 'ok');
+  assert(Math.abs(api.capRoom(S, 'club-06') - (room + r.savings)) < 0.02, 'clears cap this year');
+  assert(Math.abs(S.finance.ownerCash - (owner - r.amount)) < 0.02, 'the owner pays the bonus');
+  assert(p.contract.prorated > later, 'later years carry more');
+  assert(S.stadium.knowledge.some(f => f.kind === 'ownerFunding' && f.project === 'bonus' && f.knownBy.includes('league')));
+});
+
+test('extension: a final-year player signs on, the bonus is paid, and the cap is checked', () => {
+  const { api, S } = owned(203);
+  const p = S.rosters['club-06'].find(x => x.contract.yearsLeft === 1 && x.rating >= 65);
+  const t = api.extensionTerms(S, p);
+  assert.equal(api.extendPlayer(S, p.id, 'club'), 'ok');
+  assert.equal(p.contract.yearsLeft, t.years + 1);
+  if (t.bonus) assert(S.finance.ledger.at(-1).lines.signingBonuses <= -t.bonus + 0.01);
+  const q = S.rosters['club-06'].find(x => x.contract.yearsLeft === 1 && x.id !== p.id);
+  S.cap.dead['club-06'] = S.cap.limit; // no room at all
+  assert.equal(api.extendPlayer(S, q.id, 'club'), 'capShort');
+});
+
+test('rookie deals follow the draft slot', () => {
+  const { api } = load();
+  const S = api.newSave(204);
+  assert(api.termsHit(api.rookieTerms(S, 1)) > api.termsHit(api.rookieTerms(S, 32)));
+  assert(api.termsHit(api.rookieTerms(S, 32)) > api.termsHit(api.rookieTerms(S, 200)));
+  assert.equal(api.rookieTerms(S, 200).salary, S.cap.minSalary);
+  S.club = 'club-06';
+  api.jumpTo(S, 36);
+  const rookies = S.rosters['club-06'].filter(p => p.drafted?.season === 1);
+  assert(rookies.length > 0 && rookies.every(p => p.contract.kind === 'rookie' && p.contract.yearsLeft === 4));
+  assert(S.finance.ledger.some(x => x.week === 34 && x.lines.signingBonuses < 0), 'rookie bonuses paid in draft week');
+});
+
+test('the cap year turns at March Week 2: cap grows, deals lose a year, expired players hit the market', () => {
+  const { api, S } = owned(205);
+  api.jumpTo(S, 27);
+  const limit = S.cap.limit, expiring = new Map(Object.values(S.rosters).flat().filter(p => p.contract.yearsLeft === 1).map(p => [p.id, p.contract]));
+  api.advance(S); // March Week 2
+  assert.equal(S.cap.limit, Math.round(limit * 1.04 * 100) / 100);
+  const now = new Map(Object.values(S.rosters).flat().map(p => [p.id, p.contract]));
+  assert([...expiring].every(([id, c]) => now.get(id) !== c), 'no expired deal is still in force; some players re-signed on the open market');
+  assert(S.fa.pool.length > 0 && S.fa.pool.every(p => p.ask && !p.contract));
+  assert(S.events.some(e => e.type === 'capYear'));
+});
+
+test('the GM re-signs keepers by default; with the owner in charge, nobody is kept automatically', () => {
+  const on = owned(206); on.api.jumpTo(on.S, 27);
+  const e1 = on.S.events.find(e => e.type === 'resignings');
+  assert(e1.byGm && e1.kept.length > 0);
+  const off = owned(206); off.api.setGmHandles(off.S, false); off.api.jumpTo(off.S, 27);
+  const e2 = off.S.events.find(e => e.type === 'resignings');
+  assert(!e2.byGm && e2.kept.length === 0 && e2.leaving.length > 0);
+});
+
+test('free agency: the owner makes an offer and the player decides when the week advances', () => {
+  const { api, S } = owned(207);
+  api.setGmHandles(S, false);
+  api.jumpTo(S, 28);
+  const p = S.fa.pool.filter(x => api.termsHit(x.ask) < api.capRoom(S, 'club-06')).sort((a, b) => b.rating - a.rating)[0];
+  assert.equal(api.makeOffer(S, p.id, 'club'), 'ok');
+  api.advance(S);
+  const e = S.events.find(x => (x.type === 'faSigned' || x.type === 'faLost') && x.player.id === p.id);
+  assert(e, 'the player made a decision');
+  if (e.type === 'faSigned') assert(S.rosters['club-06'].some(x => x.id === p.id));
+  assert(!S.fa.pool.some(x => x.id === p.id));
+});
+
+test('trades respect the cap', () => {
+  const { api, S } = owned(208);
+  S.cap.dead['club-06'] = api.capRoom(S, 'club-06') - 1; // about $1M of room left
+  const star = S.rosters['club-17'].sort((a, b) => api.capHit(b) - api.capHit(a)).find(p => !p.out && S.rosters['club-17'].filter(x => x.pos === p.pos).length > 2);
+  api.tradeQuote(S, 'club-17', star.id);
+  assert.equal(S.offer.status, 'capShort');
+});
+
+test('every club opens each season at 53 and under the cap; the owner is forced into compliance if needed', () => {
+  const { api, S } = owned(209);
+  for (let n = 0; n < 4; n++) {
+    api.jumpTo(S, 51);
+    for (const t of api.clubs) { assert.equal(S.rosters[t.id].length >= 53, true, t.id); assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id)); }
+  }
+  api.jumpTo(S, 45);
+  S.cap.dead['club-06'] = api.capRoom(S, 'club-06') + 20; // $20M over
+  api.jumpTo(S, 51);
+  assert(api.capRoom(S, 'club-06') >= -0.01);
+  assert(S.events.some(e => e.type === 'capCompliance'));
+});
+
+test('contracts page renders the cap sheet, expiring deals, free agents and the release check', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  let html = api.contractsView();
+  assert(html.includes('Cap sheet') && html.includes('Expiring contracts') && html.includes('Free agency opens'));
+  api.jumpTo(S, 29);
+  html = api.contractsView();
+  assert(html.includes('Offer asking terms'));
+  assert(!/<script|onerror/i.test(html));
 });
 
 // ---- Save files ------------------------------------------------------------

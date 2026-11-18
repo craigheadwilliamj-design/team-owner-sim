@@ -1017,15 +1017,11 @@ function persist(){
   if(!storage.set(storageKey,JSON.stringify(save)))saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';
   else if(!saveMessage)saveMessage=LOCAL_OK;
 }
-function commit(){save.revision=(save.revision??0)+1;saveMessage='';persist();scheduleCloud();draw();}
+function commit(){save.revision=(save.revision??0)+1;saveMessage='';persist();draw();}
 
 
 // ---------------------------------------------------------------------------
-// Claude capabilities. The season is kept in this browser and, for a signed-in
-// viewer, in their private account storage (db under data/users/<id>/), split
-// into parts because one document holds at most 256 KiB. Parts are written
-// first and the pointer document last, so an interrupted save never replaces
-// a good one. Each save carries a revision; the newer copy wins.
+// Season files through Claude's downloads capability (Save a copy).
 // ---------------------------------------------------------------------------
 const use=name=>{
   try{return window.claude?.use?Promise.resolve(window.claude.use(name)).catch(()=>null):Promise.resolve(null);}
@@ -1044,87 +1040,7 @@ async function offerFile(filename,data){
   draw();
 }
 
-const CLOUD_CHUNK=80000; // characters per document; stays under 256 KiB even when escaped
-const cloudDoc='save-'+slot.replace(/[^A-Za-z0-9_.~:@+-]/g,'_');
-let cloud=null,cloudMeta=null,cloudState='off',cloudTimer=0,cloudWriting=false,cloudDirty=false;
-function cloudText(){
-  return {connecting:'Checking your Claude account for a saved season…',
-    synced:'Saved to your Claude account.',saving:'Saving to your Claude account…',
-    retry:'Your Claude account did not answer. Progress is in this browser and will sync after your next move.',
-    unreachable:'Your Claude account save could not be reached, so this visit saves in this browser only.',
-    readonly:'Your access to this page does not include account saves, so progress stays in this browser.',
-    full:'Your account save is full, so progress stays in this browser.'}[cloudState]??'';
-}
-function setCloud(state){cloudState=state;drawStatus();}
-const withTimeout=(promise,ms)=>{
-  let timer;
-  return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject({code:'timeout'}),ms);})]).finally(()=>clearTimeout(timer));
-};
-async function cloudRead(){
-  const meta=await cloud.col.doc(cloudDoc).get();
-  if(!meta.exists)return null;
-  const m=meta.data(),parts=[m.d];
-  for(let i=1;i<m.parts;i++){
-    const part=await cloud.col.doc(cloudDoc+'.'+m.gen+'.'+i).get();
-    if(!part.exists)throw {code:'incomplete'};
-    parts.push(part.data().d);
-  }
-  cloudMeta={gen:m.gen,parts:m.parts};
-  return {saveId:m.saveId,revision:isInt(m.revision,0)?m.revision:0,raw:parts.join('')};
-}
-async function cloudWrite(){
-  const json=JSON.stringify(save),chunks=[];
-  for(let i=0;i<json.length;i+=CLOUD_CHUNK)chunks.push(json.slice(i,i+CLOUD_CHUNK));
-  const gen=Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36);
-  for(let i=1;i<chunks.length;i++)await cloud.col.doc(cloudDoc+'.'+gen+'.'+i).set({d:chunks[i]});
-  await cloud.col.doc(cloudDoc).set({d:chunks[0],parts:chunks.length,gen,saveId:save.saveId,revision:save.revision??0,schemaVersion:SCHEMA_VERSION,savedAt:new Date().toISOString()});
-  const old=cloudMeta;
-  cloudMeta={gen,parts:chunks.length};
-  if(old&&old.gen!==gen)for(let i=1;i<old.parts;i++)cloud.col.doc(cloudDoc+'.'+old.gen+'.'+i).delete().catch(()=>{});
-}
-function scheduleCloud(){
-  if(!cloud||cloudState==='readonly')return;
-  cloudDirty=true;
-  clearTimeout(cloudTimer);
-  cloudTimer=setTimeout(flushCloud,500);
-}
-async function flushCloud(){
-  if(!cloud||cloudWriting||!cloudDirty)return;
-  cloudWriting=true;cloudDirty=false;setCloud('saving');
-  try{await cloudWrite();if(!cloudDirty)setCloud('synced');}
-  catch(e){cloudDirty=true;setCloud(e?.code==='invalid_argument'?'readonly':e?.code==='quota_exceeded'?'full':'retry');}
-  finally{cloudWriting=false;if(cloudDirty&&cloudState==='saving')flushCloud();}
-}
-async function connectCloud(){
-  const [db,user]=await Promise.all([use('db'),use('user')]);
-  let id=null;
-  try{id=user?await user.id():null;}catch{id=null;}
-  if(!db||!id)return;
-  try{cloud={col:db.collection('data/users/'+id)};}catch{cloud=null;return;}
-  setCloud('connecting');
-  let remote;
-  try{remote=await withTimeout(cloudRead(),10000);}
-  catch{cloud=null;setCloud('unreachable');return;} // never write over an account save we could not read
-  if(!remote||(remote.saveId===save.saveId&&remote.revision<(save.revision??0))){cloudDirty=true;return flushCloud();}
-  if(remote.saveId===save.saveId&&remote.revision===(save.revision??0))return setCloud('synced');
-  let incoming;
-  try{incoming=upgrade(JSON.parse(remote.raw)).save;}
-  catch(error){
-    storage.set(storageKey+'.account-unreadable-'+Date.now(),remote.raw);
-    saveMessage='Your account save could not be opened because '+sentence(error.message)+' A copy is in browser storage, and this browser’s season replaces it.';
-    cloudDirty=true;return flushCloud();
-  }
-  if(incoming.saveId!==save.saveId&&save.club&&(save.revision??0)>0){
-    storage.set(storageKey+'.set-aside-'+Date.now(),JSON.stringify(save));
-    saveMessage='Opened the season saved to your Claude account. The different season that was in this browser is kept in browser storage.';
-  }else saveMessage='';
-  save=incoming;
-  resetView();persist();setCloud('synced');draw();
-}
-function drawStatus(){
-  const quiet=saveMessage===LOCAL_OK&&cloud&&(cloudState==='synced'||cloudState==='saving');
-  $('#status').textContent=[quiet?'':saveMessage,cloudText()].filter(Boolean).join(' ');
-}
+function drawStatus(){$('#status').textContent=saveMessage;}
 
 // ---------------------------------------------------------------------------
 // Standings
@@ -1345,5 +1261,4 @@ function start(data){
 const hot=window.claude?.hot;
 try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos}));}catch{}
 try{hot?.ready?hot.ready(start):start(hot?.data??{});}catch{start({});}
-const cloudReady=connectCloud();
 </script>

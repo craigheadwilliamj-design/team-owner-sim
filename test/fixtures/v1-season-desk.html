@@ -1,0 +1,810 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Continental Gridiron League · Season desk</title><style>*{box-sizing:border-box}body{background:#f5f3eb;color:#192d36;margin:0;font:16px 'Barlow',system-ui,sans-serif}main{max-width:1150px;margin:auto;padding:36px 5%}header{border-top:6px solid #1c4247;border-bottom:1px solid #a7afa7;padding:24px 0}h1{font: bold clamp(2rem,6vw,4.5rem)/1 Georgia,serif;letter-spacing:-.05em;margin:8px 0 18px}header p{margin:0;color:#466066}nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}select,button{font:inherit;padding:8px 12px;background:#fffefa;color:inherit;border:1px solid #a5afaa;border-radius:5px}button{margin-left:auto;cursor:pointer}h2{font: bold 1.85rem Georgia,serif;margin:22px 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}article{background:#fffefa;border:1px solid #c4ccc5;border-radius:6px;overflow:hidden}h3{background:#213e43;color:white;padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}ul{padding:0;margin:0;list-style:none}li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid #edece5}li:last-child{border:0}.chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}small{display:block;color:#53666b}strong{font-size:1.05rem}</style><style>
+main{max-width:1240px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font-size:clamp(2.3rem,6vw,4.8rem)}#advance{background:#174b46;color:white;border:0;font-weight:700;padding:14px 20px}#advance:disabled{background:#526662}#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid #c4ccc5}button{margin:0}#tabs button{border:0;background:transparent}#tabs [aria-pressed=true]{background:#214740;color:white}#app{padding:25px 0}#app>small{letter-spacing:.11em;font-weight:bold}#app h2{margin:5px 0 14px}.controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:#465e5a}.games,.tables{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}.line{display:flex;align-items:center;justify-content:space-between;padding:9px 12px}.line+.line{border-top:1px solid #ebe9e0}.line strong{font:700 .95rem system-ui}.club{border:0;background:transparent;text-align:left;font-weight:600;padding:3px;color:#163e40}.club:hover{text-decoration:underline}.club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}.tables{grid-template-columns:repeat(auto-fit,minmax(min(100%,365px),1fr))}table{width:100%;border-collapse:collapse;background:#fffefa;font-size:.9rem}th,td{border-bottom:1px solid #d7dace;padding:7px;text-align:left}#app p{max-width:75ch}footer{border-top:1px solid #c4ccc5;padding-top:16px;font-size:.85rem}.tables h3{border-radius:5px 5px 0 0}button:focus-visible,select:focus-visible{outline:3px solid #db8742}
+.units{display:flex;flex-wrap:wrap;gap:12px}.units>div{background:#fffefa;padding:12px 18px;border-top:3px solid #24534a;min-width:115px}.units b{font: bold 1.5rem Georgia,serif}</style><main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><button id="advance"></button></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save">Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status"></span><button id="loadSeason">Load save</button><input id="seasonFile" type="file" accept=".html,.htm" hidden><button id="copy">Download season copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+  "version": 1,
+  "name": "Continental Gridiron League",
+  "teams": [
+    {
+      "id": "club-01",
+      "marketId": "buffalo",
+      "market": "Buffalo",
+      "nickname": "Bulls",
+      "abbr": "BUF",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#193C56",
+      "secondary": "#E69E48"
+    },
+    {
+      "id": "club-02",
+      "marketId": "miami",
+      "market": "Miami",
+      "nickname": "Barracuda",
+      "abbr": "MIA",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#16534F",
+      "secondary": "#FFA4A1"
+    },
+    {
+      "id": "club-03",
+      "marketId": "new-england",
+      "market": "New England",
+      "nickname": "Rebels",
+      "abbr": "NEN",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#47374C",
+      "secondary": "#F8C65C"
+    },
+    {
+      "id": "club-04",
+      "marketId": "new-york",
+      "market": "New York",
+      "nickname": "Knights",
+      "abbr": "NYK",
+      "conference": "Charter",
+      "division": "East",
+      "primary": "#505B66",
+      "secondary": "#D8C085"
+    },
+    {
+      "id": "club-05",
+      "marketId": "baltimore",
+      "market": "Baltimore",
+      "nickname": "Blue Crabs",
+      "abbr": "BAL",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#254B70",
+      "secondary": "#E8BB65"
+    },
+    {
+      "id": "club-06",
+      "marketId": "cincinnati",
+      "market": "Cincinnati",
+      "nickname": "Rivermen",
+      "abbr": "CIN",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#B4452F",
+      "secondary": "#FFE2A3"
+    },
+    {
+      "id": "club-07",
+      "marketId": "cleveland",
+      "market": "Cleveland",
+      "nickname": "Bulldogs",
+      "abbr": "CLE",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#553B48",
+      "secondary": "#FF9265"
+    },
+    {
+      "id": "club-08",
+      "marketId": "pittsburgh",
+      "market": "Pittsburgh",
+      "nickname": "Riveters",
+      "abbr": "PIT",
+      "conference": "Charter",
+      "division": "North",
+      "primary": "#35475A",
+      "secondary": "#DC8857"
+    },
+    {
+      "id": "club-09",
+      "marketId": "houston",
+      "market": "Houston",
+      "nickname": "Apollos",
+      "abbr": "HOU",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#272F54",
+      "secondary": "#FF9560"
+    },
+    {
+      "id": "club-10",
+      "marketId": "indianapolis",
+      "market": "Indianapolis",
+      "nickname": "Mustangs",
+      "abbr": "IND",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#39404D",
+      "secondary": "#EAC54F"
+    },
+    {
+      "id": "club-11",
+      "marketId": "jacksonville",
+      "market": "Jacksonville",
+      "nickname": "Prowlers",
+      "abbr": "JAX",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#165C71",
+      "secondary": "#DBDF94"
+    },
+    {
+      "id": "club-12",
+      "marketId": "tennessee",
+      "market": "Tennessee",
+      "nickname": "Copperheads",
+      "abbr": "TEN",
+      "conference": "Charter",
+      "division": "South",
+      "primary": "#694539",
+      "secondary": "#91D6AE"
+    },
+    {
+      "id": "club-13",
+      "marketId": "denver",
+      "market": "Denver",
+      "nickname": "Blizzard",
+      "abbr": "DEN",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#355549",
+      "secondary": "#F9AF82"
+    },
+    {
+      "id": "club-14",
+      "marketId": "kansas-city",
+      "market": "Kansas City",
+      "nickname": "Twisters",
+      "abbr": "KC",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#683C49",
+      "secondary": "#E9C086"
+    },
+    {
+      "id": "club-15",
+      "marketId": "las-vegas",
+      "market": "Las Vegas",
+      "nickname": "Outlaws",
+      "abbr": "LV",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#392944",
+      "secondary": "#E19EAF"
+    },
+    {
+      "id": "club-16",
+      "marketId": "los-angeles",
+      "market": "LA",
+      "nickname": "Aftershocks",
+      "abbr": "LAA",
+      "conference": "Charter",
+      "division": "West",
+      "primary": "#593866",
+      "secondary": "#FBD589"
+    },
+    {
+      "id": "club-17",
+      "marketId": "dallas",
+      "market": "Dallas",
+      "nickname": "Stallions",
+      "abbr": "DAL",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#244B51",
+      "secondary": "#C6A573"
+    },
+    {
+      "id": "club-18",
+      "marketId": "new-york",
+      "market": "New York",
+      "nickname": "Titans",
+      "abbr": "NYT",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#273F5C",
+      "secondary": "#FB876B"
+    },
+    {
+      "id": "club-19",
+      "marketId": "philadelphia",
+      "market": "Philadelphia",
+      "nickname": "Liberty",
+      "abbr": "PHI",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#49446B",
+      "secondary": "#ECC578"
+    },
+    {
+      "id": "club-20",
+      "marketId": "washington",
+      "market": "Washington",
+      "nickname": "Warthogs",
+      "abbr": "WAS",
+      "conference": "Union",
+      "division": "East",
+      "primary": "#293B60",
+      "secondary": "#AEC8D2"
+    },
+    {
+      "id": "club-23",
+      "marketId": "green-bay",
+      "market": "Green Bay",
+      "nickname": "Icebreakers",
+      "abbr": "GB",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#24455D",
+      "secondary": "#9BDAD9"
+    },
+    {
+      "id": "club-21",
+      "marketId": "chicago",
+      "market": "Chicago",
+      "nickname": "Cyclones",
+      "abbr": "CHI",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#215467",
+      "secondary": "#F58C60"
+    },
+    {
+      "id": "club-22",
+      "marketId": "detroit",
+      "market": "Detroit",
+      "nickname": "Timber Wolves",
+      "abbr": "DET",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#363E52",
+      "secondary": "#A8D17C"
+    },
+    {
+      "id": "club-24",
+      "marketId": "minnesota",
+      "market": "Minnesota",
+      "nickname": "Bruins",
+      "abbr": "MIN",
+      "conference": "Union",
+      "division": "North",
+      "primary": "#3B544B",
+      "secondary": "#E9B777"
+    },
+    {
+      "id": "club-25",
+      "marketId": "atlanta",
+      "market": "Atlanta",
+      "nickname": "Phoenix",
+      "abbr": "ATL",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#702F46",
+      "secondary": "#FCB974"
+    },
+    {
+      "id": "club-26",
+      "marketId": "carolina",
+      "market": "Carolina",
+      "nickname": "Cobras",
+      "abbr": "CAR",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#2B5143",
+      "secondary": "#F1CE91"
+    },
+    {
+      "id": "club-27",
+      "marketId": "new-orleans",
+      "market": "New Orleans",
+      "nickname": "Kings",
+      "abbr": "NO",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#493D67",
+      "secondary": "#F3A781"
+    },
+    {
+      "id": "club-28",
+      "marketId": "tampa-bay",
+      "market": "Tampa Bay",
+      "nickname": "Tarpons",
+      "abbr": "TB",
+      "conference": "Union",
+      "division": "South",
+      "primary": "#285E66",
+      "secondary": "#E5C882"
+    },
+    {
+      "id": "club-29",
+      "marketId": "arizona",
+      "market": "Arizona",
+      "nickname": "Dust Devils",
+      "abbr": "ARI",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#823F36",
+      "secondary": "#ECCA85"
+    },
+    {
+      "id": "club-30",
+      "marketId": "los-angeles",
+      "market": "LA",
+      "nickname": "Crusaders",
+      "abbr": "LAC",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#373E67",
+      "secondary": "#F1A573"
+    },
+    {
+      "id": "club-31",
+      "marketId": "san-francisco",
+      "market": "San Francisco",
+      "nickname": "Spartans",
+      "abbr": "SF",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#294D58",
+      "secondary": "#F9987F"
+    },
+    {
+      "id": "club-32",
+      "marketId": "seattle",
+      "market": "Seattle",
+      "nickname": "Sockeye",
+      "abbr": "SEA",
+      "conference": "Union",
+      "division": "West",
+      "primary": "#294361",
+      "secondary": "#89D3B2"
+    }
+  ]
+}</script><script>
+const league=JSON.parse(document.querySelector('#seed').textContent);
+const filter=document.querySelector('#conf');
+function render(){
+  const directory=document.querySelector('#directory');
+  directory.replaceChildren();
+  for(const conference of ['Charter','Union']){
+    if(filter.value!=='All' && filter.value!==conference) continue;
+    const heading=document.createElement('h2');
+    heading.textContent=conference+' Conference';
+    const grid=document.createElement('div');
+    grid.className='grid';
+    directory.append(heading,grid);
+    for(const division of ['East','North','South','West']){
+      const card=document.createElement('article');
+      const title=document.createElement('h3');
+      title.textContent=division;
+      const list=document.createElement('ul');
+      for(const team of league.teams.filter(t=>t.conference===conference && t.division===division)){
+        const row=document.createElement('li');
+        const chip=document.createElement('span');
+        chip.className='chip';
+        chip.style.backgroundColor=team.primary;
+        chip.style.borderColor=team.secondary;
+        const label=document.createElement('button'); label.className='club'; label.dataset.id=team.id;
+        const market=document.createElement('small');
+        market.textContent=team.market;
+        const name=document.createElement('strong');
+        name.textContent=team.nickname;
+        label.append(market,name);
+        row.append(chip,label);
+        list.append(row);
+      }
+      card.append(title,list);
+      grid.append(card);
+    }
+  }
+}
+filter.addEventListener('change',render);
+document.querySelector('#save').onclick=()=>{
+ const link=document.createElement('a');
+ const url=URL.createObjectURL(new Blob([JSON.stringify(league,null,2)],{type:'application/json'}));
+ link.href=url;
+ link.download='continental-gridiron-league.json';
+ link.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+render();
+const clubs = league.teams;
+const byId = new Map(clubs.map(t => [t.id,t]));
+const divisions = ['East','North','South','West'];
+const groups = ['Charter','Union'].flatMap(c => divisions.map(d => clubs.filter(t => t.conference===c && t.division===d)));
+
+const teamName = id => { const t=byId.get(id); return t.market+' '+t.nickname; };
+const randomInt = n => Math.floor(Math.random()*n);
+function shuffled(items){
+  const copy=[...items];
+  for(let i=copy.length-1;i>0;i--){const j=randomInt(i+1); [copy[i],copy[j]]=[copy[j],copy[i]];}
+  return copy;
+}
+function makeSeason(){
+  const teams=groups.flatMap(shuffled);
+  const game=(home,away)=>({home:teams[home].id,away:teams[away].id,score:null});
+  const rounds=[];
+  const divisionRounds=[];
+  function pairs(mask){
+    return teams.map((_,i)=>[i,i^mask]).filter(([i,j])=>i<j);
+  }
+  for(const mask of [1,2,3]){
+    const first=pairs(mask).map(([i,j])=>randomInt(2)?[i,j]:[j,i]);
+    divisionRounds.push(first.map(([i,j])=>game(i,j)));
+    rounds.push(first.map(([i,j])=>game(j,i)));
+  }
+  // Two perfect matchings form cycles. Orient each cycle to give every club
+  // exactly one home game across its two rounds.
+  const conferenceBlock=shuffled([4,8,12]);
+  const interBlock=shuffled([16,20,24,28]);
+  const masks=shuffled([0,1,2,3].flatMap(k=>[conferenceBlock[0]+k,interBlock[0]+k]).concat(conferenceBlock.slice(1).map(k=>k+randomInt(4))));
+  for(let p=0;p<masks.length;p+=2){
+    const visited=new Set(), matches=[[],[]];
+    for(let start=0;start<32;start++){
+      if(visited.has(start)) continue;
+      let i=start, side=randomInt(2);
+      do{
+        visited.add(i);
+        const j=i^masks[p+side];
+        matches[side].push(game(i,j));
+        i=j;side=1-side;
+      }while(i!==start);
+    }
+    rounds.push(...matches);
+  }
+  rounds.push(pairs(interBlock[1]+randomInt(4)).map(([i,j])=>randomInt(2)?game(i,j):game(j,i)));
+  const weeks=shuffled(rounds);
+  const mid=[[],[],[],[]];
+  shuffled(groups).forEach((group,index)=>{
+    const ids=new Set(group.map(t=>t.id));
+    const bye=index%4;
+    const active=[0,1,2,3].filter(w=>w!==bye);
+    shuffled(divisionRounds).forEach((round,i)=>mid[active[i]].push(...round.filter(g=>ids.has(g.home))));
+  });
+  weeks.splice(6+randomInt(3),0,...mid);
+  const ratings=Object.fromEntries(clubs.map(t=>[t.id,{offense:64+randomInt(30),defense:64+randomInt(30)}]));
+  return {version:1,completed:0,weeks,ratings};
+}
+// Position, roster places, starters per formation.
+const positions=[
+ ['QB',3,1],['RB',3,1],['WR',6,3],['TE',3,1],['OT',4,2],['OG',4,2],['C',2,1],
+ ['DE',4,2],['DT',5,2],['LB',6,3],['CB',6,2],['S',4,2],['K',1,1],['P',1,1],['LS',1,1]
+];
+const givenNames='Andre Anton Austin Beau Blake Bryce Caleb Cameron Carson Cedric Chase Cole Curtis Darius Darnell Dawson Dean Devin Devon Diego Dominic Dylan Eli Ellis Everett Ezra Felix Gabriel Garrett Grant Hayden Isaiah Jalen Jamal Jasper Javier Jaylen Jonah Jordan Julian Kai Kendrick Kieran Lamar Leon Levi Lionel Logan Lorenzo Luca Malcolm Marcus Mason Mateo Micah Miles Nathan Nico Nolan Omar Owen Quincy Rafael Reed Rhett Roman Sam Shane Silas Terrence Theo Thomas Trent Tyrell Victor Wade Wesley Xavier Zane'.split(' ');
+const surnames='Abbott Acosta Adair Ames Archer Banks Barrett Bell Bishop Boone Boyd Briggs Brooks Burke Calder Callahan Campbell Carter Castillo Chambers Clay Cobb Cole Collins Conley Cooper Cortez Crawford Cross Dalton Daniels Dawson Delaney Dixon Douglas Drake Ellis Fields Finch Fletcher Ford Foster Franklin Gaines Galvez Gardner Gibson Grant Gray Greene Griffin Hale Hall Hampton Harper Harris Hart Hayes Hill Holland Holt Howard Ingram Jackson James Jensen Jordan Keller King Knox Lane Lawson Lewis Long Lyons Malone Marsh Mason May Mercer Miles Mills Mitchell Monroe Morgan Neal Nelson Ortiz Owens Palmer Park Perry Porter Powell Quinn Ramirez Reed Reeves Reyes Rhodes Rivers Robinson Ross Rowe Sanders Shaw Silva Simon Sloan Steele Stone Sutton Tate Thomas Torres Turner Vega Wallace Walsh Ward Weaver Wells West Wilder Williams Willis Woods Wright Young'.split(' ');
+function generateRosters(s){
+ const bag=shuffled(givenNames.flatMap(first=>surnames.map(last=>first+' '+last)));
+ const rosters={};
+ for(const team of clubs){
+   const players=[];
+   for(const [index,[pos,count]] of positions.entries()){
+     const base=index<7?s.ratings[team.id].offense:s.ratings[team.id].defense;
+     const unitBase=67+(base-78)*.65+randomInt(17)-8;
+     for(let n=0;n<count;n++){
+       players.push({id:team.id+'-p'+(players.length+1),name:bag.pop(),pos,
+         rating:Math.max(45,Math.min(99,Math.round(unitBase+randomInt(26)-9))),age:21+randomInt(13)});
+     }
+   }
+   rosters[team.id]=players;
+ }
+ return rosters;
+}
+function personnel(players){
+ const chart={},quality={};
+ for(const [pos,,starters] of positions){
+   const depth=players.filter(p=>p.pos===pos).sort((a,b)=>Number(!!a.out)-Number(!!b.out)||b.rating-a.rating||a.id.localeCompare(b.id));
+   chart[pos]=depth;
+   const healthy=depth.filter(p=>!p.out);
+   const startersAvailable=healthy.slice(0,starters);
+   const starting=(startersAvailable.reduce((sum,p)=>sum+p.rating,0)+45*(starters-startersAvailable.length))/starters;
+   const rotates=['RB','WR','DE','DT','LB','CB'].includes(pos);
+   quality[pos]=rotates ? .85*starting+.15*(healthy[starters]?.rating??starting):starting;
+ }
+ const q=quality;
+ const line=(2*q.OT+2*q.OG+q.C)/5;
+ const passing=.46*q.QB+.24*q.WR+.08*q.TE+.22*line;
+ const rushing=.42*q.RB+.50*line+.08*q.TE;
+ const coverage=.52*q.CB+.30*q.S+.18*q.LB;
+ const pressure=.58*q.DE+.32*q.DT+.10*q.LB;
+ const runDefense=.40*q.DT+.35*q.LB+.25*q.DE;
+ return {chart,passing,rushing,coverage,pressure,runDefense,kick:q.K,punt:q.P,snap:q.LS,
+ offense:Math.round(.62*passing+.38*rushing),defense:Math.round(.62*(.58*coverage+.42*pressure)+.38*runDefense)};
+}
+function simulate(attack,defense,home){
+ let points=0;
+ for(let drive=0;drive<11;drive++){
+   const pass=Math.random()<.62;
+   const matchup=pass?attack.passing-(.58*defense.coverage+.42*defense.pressure):attack.rushing-defense.runDefense;
+   const advantage=matchup*.009+(home ? .014 : 0)+(75-defense.punt)*.0006;
+   const td=Math.min(.55,Math.max(.035,.225+advantage));
+   const kickSkill=.93*attack.kick+.07*attack.snap;
+   if(Math.random()<td) points+=Math.random()<Math.min(.995,.945+(kickSkill-75)*.002)?7:6;
+   else if(Math.random()<.23 && Math.random()<Math.max(.5,Math.min(.97,.83+(kickSkill-75)*.009))) points+=3;
+ }
+ return points;
+}
+function playWeek(s){
+ if(s.completed>=18)return;
+ const units=Object.fromEntries(clubs.map(t=>[t.id,personnel(s.rosters[t.id])]));
+ for(const g of s.weeks[s.completed]){
+   const h=units[g.home],a=units[g.away];
+   g.score=[simulate(h,a,true),simulate(a,h,false)];
+ }
+ s.completed++;
+ finishMedicalWeek(s,units);
+}
+function initFrontOffice(s){
+ if(s.office)return;
+ s.office={club:null,offer:null,notes:[],picks:clubs.flatMap(t=>Array.from({length:7},(_,i)=>({origin:t.id,round:i+1,owner:t.id})))};
+}
+function report(s,text){
+ s.office.notes.unshift({week:s.completed,text});
+}
+function finishMedicalWeek(s,units){
+ const played=new Set(s.weeks[s.completed-1].flatMap(g=>[g.home,g.away]));
+ for(const t of clubs){
+   const active=Object.values(units[t.id].chart).flat().filter(p=>!p.out);
+   for(const p of s.rosters[t.id]){
+     if(p.out && --p.out===0 && t.id===s.office.club)report(s,p.name+' ('+p.pos+') is cleared to play. The staff has updated the depth chart.');
+   }
+   if(!played.has(t.id))continue;
+   for(const p of shuffled(active)){
+     const depth=units[t.id].chart[p.pos], starters=positions.find(group=>group[0]===p.pos)[2];
+     const starter=depth.indexOf(p)<starters;
+     if(Math.random()>(starter ? .024 : .006))continue;
+     const healthy=s.rosters[t.id].filter(other=>other.pos===p.pos&&!other.out);
+     if(healthy.length<=starters)continue;
+     p.out=1+randomInt(5);
+     if(t.id===s.office.club && starter){
+       const backup=personnel(s.rosters[t.id]).chart[p.pos][starters-1];
+       report(s,p.name+' ('+p.pos+', '+p.rating+') is out '+p.out+' week'+(p.out===1?'':'s')+'. '+backup.name+' ('+backup.rating+') moves into the starting group.');
+     }
+   }
+ }
+ if(s.office.offer){report(s,'The trade quote expired when the week advanced.');s.office.offer=null;}
+}
+const pickValues=[0,100,55,34,21,13,8,5];
+const pickKey=p=>p?p.origin+'/'+p.round:'none';
+function playerValue(p){
+ const weight={QB:1.9,DE:1.25,OT:1.2,WR:1.1,CB:1.1,K:.085,P:.065,LS:.04}[p.pos]??.85;
+ return weight*(Math.pow(Math.max(3,p.rating-49),1.55)/4)*Math.max(.7,1-(p.age-25)*.022);
+}
+function termsNeeded(target,out){
+ return Math.max(0,Math.ceil(playerValue(target)*1.04-(out?playerValue(out):0)));
+}
+function ownedPicks(s){
+ return s.office.picks.filter(p=>p.owner===s.office.club).sort((a,b)=>b.round-a.round);
+}
+function pickLabel(p){
+ return p?byId.get(p.origin).abbr+' round '+p.round:'no draft pick';
+}
+function tradeQuote(s,seller,targetId){
+ const o=s.office;
+ if(!o.club||seller===o.club||s.completed>=18||o.offer)return;
+ const target=s.rosters[seller]?.find(p=>p.id===targetId&&!p.out);
+ if(!target)return;
+ const gap=termsNeeded(target,null);
+ const pick=ownedPicks(s).find(p=>pickValues[p.round]>=gap*1.3+3);
+ o.offer={seller,targetId,outId:null,origin:pick?.origin??null,round:pick?.round??0,week:s.completed,
+ firm:!!pick||gap===0,message:pick||gap===0?'Opening terms from '+teamName(seller)+'.':'They want more than your available picks cover. Try offering a stronger player.'};
+}
+function counterTrade(s,outId,key){
+ const q=s.office.offer;if(!q||q.week!==s.completed)return;
+ const target=s.rosters[q.seller].find(p=>p.id===q.targetId&&!p.out);
+ const out=outId==='none'?null:s.rosters[s.office.club].find(p=>p.id===outId&&!p.out);
+ const picks=ownedPicks(s),pick=picks.find(p=>pickKey(p)===key);
+ if(!target||(outId!=='none'&&!out)||(!pick&&key!=='none'))return;
+ if(!out&&!pick){q.message='Select a player or a draft pick before sending a proposal.';return;}
+ const needed=termsNeeded(target,out);
+ const value=pick?pickValues[pick.round]:0;
+ let terms=pick;
+ if(value>=needed){
+   q.firm=true;
+   q.message=teamName(q.seller)+' accepts your proposal, pending your authorization.';
+ }else{
+   terms=picks.find(p=>pickValues[p.round]>=needed);
+   q.firm=!!terms;
+   q.message=terms?teamName(q.seller)+' turned down your price. Their counter is below.':teamName(q.seller)+' declined. Your available picks cannot bridge the gap for this player.';
+ }
+ Object.assign(q,{outId:out?.id??null,round:terms?.round??0,origin:terms?.origin??null});
+}
+function tradePlayerName(player){
+ return player.pos+' '+player.name;
+}
+function labelPastTrades(s){
+ const players=new Map(Object.values(s.rosters).flat().map(p=>[p.name,p]));
+ let changed=false;
+ for(const note of s.office.notes){
+   const match=/^Acquired (.+?) from (.+?) for (.+?)( and .+| straight up)?\.$/.exec(note.text);
+   if(!match)continue;
+   const [,incoming,club,outgoing,rest='']=match;
+   const label=name=>players.has(name)?tradePlayerName(players.get(name)):name;
+   const text='Acquired '+label(incoming)+' from '+club+' for '+label(outgoing)+rest+'.';
+   if(text!==note.text){note.text=text;changed=true;}
+ }
+ return changed;
+}
+function resolveOffer(s,accept){
+ const o=s.office,q=o.offer;if(!q)return;
+ const theirs=s.rosters[q.seller],ours=s.rosters[o.club];
+ const i=theirs.findIndex(p=>p.id===q.targetId&&!p.out),j=ours.findIndex(p=>p.id===q.outId&&!p.out);
+ if(!accept){o.offer=null;report(s,'Ended trade talks with '+teamName(q.seller)+'.');return;}
+ if(q.firm===false)return;
+ const pick=ownedPicks(s).find(p=>p.origin===q.origin&&p.round===q.round);
+ if(i<0||(q.outId&&j<0)||(!q.outId&&!pick)||(q.round&&!pick)||q.week!==s.completed){o.offer=null;report(s,'The terms are no longer available.');return;}
+ const target=theirs[i],out=ours[j];
+ if(out){theirs[i]=out;ours[j]=target;}else{theirs.splice(i,1);ours.push(target);}
+ if(pick)pick.owner=q.seller;o.offer=null;
+ report(s,'Acquired '+tradePlayerName(target)+' from '+teamName(q.seller)+' for '+[out&&tradePlayerName(out),pick&&pickLabel(pick)].filter(Boolean).join(' and ')+'.');
+}
+function negotiationView(s){
+ const q=s.office.offer,ours=s.rosters[s.office.club];
+ const target=s.rosters[q.seller].find(p=>p.id===q.targetId),out=ours.find(p=>p.id===q.outId);
+ const options=ours.filter(p=>!p.out).sort((a,b)=>b.rating-a.rating);
+ const draftOut=q.draftOut==='none'?null:options.find(p=>p.id===q.draftOut)??out;
+ const picks=ownedPicks(s),quoted=picks.find(p=>p.origin===q.origin&&p.round===q.round);
+ const key=q.draftPick??pickKey(quoted),proposed=picks.find(p=>pickKey(p)===key);
+ const needed=termsNeeded(target,draftOut);
+ const fair=[7,6,5,4,3,2,1].find(round=>pickValues[round]>=needed);
+ const value=proposed?pickValues[proposed.round]:0;
+ const excess=value-needed;
+ const advice=excess>=20?'That pick is an overpay. ':value<needed?'Expect them to ask for more. ':'That price is defensible. ';
+ const estimate=needed===0?'I would try a straight swap.':fair?'I value the gap at a round '+fair+' pick'+(draftOut?' with '+draftOut.name:' alone')+'.':'We probably need a stronger player in the deal.';
+ const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="4">No player</td></tr>':'<tr><th>'+label+'</th><td>'+p.name+'</td><td>'+p.pos+'</td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>';
+ return '<p>'+ (q.message??'Existing offer from '+teamName(q.seller)+'.')+'</p><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table><div class="controls"><label>Send player <select id="tradePlayer"><option value="none" '+(!draftOut?'selected':'')+'>No player</option>'+options.map(p=>'<option value="'+p.id+'" '+(p.id===draftOut?.id?'selected':'')+'>'+p.name+' · '+p.pos+' · '+p.rating+'</option>').join('')+'</select></label><label>Add pick <select id="tradePick"><option value="none" '+(key==='none'?'selected':'')+'>No pick</option>'+picks.map(p=>'<option value="'+pickKey(p)+'" '+(key===pickKey(p)?'selected':'')+'>'+pickLabel(p)+'</option>').join('')+'</select></label><button id="counter">Send proposal</button></div><p><b>Your GM</b> · '+advice+estimate+'</p>'+
+ (q.firm!==false?'<p><b>Available deal</b> · Receive '+target.name+' for '+[out?.name,quoted&&pickLabel(quoted)].filter(Boolean).join(' and ')+'. Expires upon advancing.</p><button id="accept" '+(draftOut?.id!==out?.id||key!==pickKey(quoted)?'disabled':'')+'>Authorize this deal</button> ':'')+'<button id="decline">End talks</button>';
+}
+function ownershipDesk(){
+ const o=season.office,id=o.club;
+ if(!id)return heading('FRANCHISE OWNERSHIP','Choose your club')+'<p>Take over a franchise in this season. Your staff runs the depth chart and brings personnel decisions here.</p><div class="controls"><label>Franchise <select id="claimTeam">'+clubs.map(t=>'<option value="'+t.id+'">'+teamName(t.id)+'</option>').join('')+'</select></label><button id="claim">Take ownership</button></div>';
+ const ranking=standings(season).find(group=>group.some(r=>r.id===id)), place=ranking.findIndex(r=>r.id===id),r=ranking[place];
+ const games=season.weeks.flatMap((week,i)=>week.filter(g=>g.home===id||g.away===id).map(g=>({g,w:i+1})));
+ function fixture(entry){
+   if(!entry)return '—';
+   const {g,w}=entry,home=g.home===id,score=g.score&&(home?g.score:[...g.score].reverse());
+   return 'Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(score?' · '+(score[0]>score[1]?'W':score[0]<score[1]?'L':'T')+' '+score.join('–'):'');
+ }
+ const week=season.completed+1,injuries=season.rosters[id].filter(p=>p.out);
+ const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b>'+byId.get(id).division+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=18&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div></div>';
+ const medical=injuries.length?injuries.map(p=>'<li><strong>'+p.pos+'</strong> '+p.name+' · out '+p.out+' wk <button data-scout="'+p.pos+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
+ let gm='';
+ if(o.offer){gm=negotiationView(season);}else if(week<=18){
+   const candidates=clubs.filter(t=>t.id!==id).flatMap(t=>season.rosters[t.id].filter(p=>p.pos===scoutPos&&!p.out).map(p=>({p,t}))).sort((a,b)=>b.p.rating-a.p.rating);
+   gm='<div class="controls"><label>Position <select id="scout">'+positions.map(([pos])=>'<option '+(pos===scoutPos?'selected':'')+'>'+pos+'</option>').join('')+'</select></label><label>Trade target <select id="target">'+candidates.map(({p,t})=>'<option value="'+t.id+'/'+p.id+'">'+p.name+' · '+t.abbr+' · '+p.rating+'</option>').join('')+'</select></label><button id="quote">Ask for a price</button></div>';
+ }else gm='<p>The regular season has ended.</p>';
+ return heading('OWNER’S DESK',teamName(id))+schedule+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+'<small>Available draft picks · '+o.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', ')+'</small><h2>Staff messages</h2><ul>'+(o.notes.map(n=>'<li><strong>'+(n.week?'After W'+n.week:'Preseason')+'</strong> '+n.text+'</li>').join('')||'<li>Your staff has no pending reports.</li>')+'</ul>';
+}
+function standings(s){
+  const rows=Object.fromEntries(clubs.map(t=>[t.id,{id:t.id,w:0,l:0,t:0,pf:0,pa:0,dw:0,dl:0,dt:0}]));
+  const played=s.weeks.slice(0,s.completed).flat();
+  for(const g of played){
+    const [h,a]=g.score;
+    for(const [id,opp,p,q] of [[g.home,g.away,h,a],[g.away,g.home,a,h]]){
+      const r=rows[id], mine=byId.get(id),other=byId.get(opp);
+      const result=p>q?'w':p<q?'l':'t';
+      r[result]++;r.pf+=p;r.pa+=q;
+      if(mine.division===other.division && mine.conference===other.conference)r['d'+result]++;
+    }
+  }
+  const pct=(w,l,t)=>(w+.5*t)/(w+l+t||1);
+  const overall=r=>pct(r.w,r.l,r.t);
+  return groups.map(group=>{
+    const members=group.map(t=>rows[t.id]);
+    for(const r of members){
+      const tied=new Set(members.filter(other=>overall(other)===overall(r)).map(t=>t.id));
+      const meetings=played.filter(g=>tied.has(g.home)&&tied.has(g.away));
+      const mine=meetings.filter(g=>g.home===r.id||g.away===r.id);
+      const allMet=[...tied].every(id=>id===r.id||mine.some(g=>g.home===id||g.away===id));
+      r.h2h=allMet&&mine.length?mine.reduce((sum,g)=>{const [a,b]=g.score;return sum+(a===b ? .5 : (a>b)===(g.home===r.id)?1:0);},0)/mine.length:null;
+    }
+    return members.sort((a,b)=>overall(b)-overall(a)||
+      (members.filter(r=>overall(r)===overall(a)).every(r=>r.h2h!==null)?b.h2h-a.h2h:0)||
+      pct(b.dw,b.dl,b.dt)-pct(a.dw,a.dl,a.dt)||(b.pf-b.pa)-(a.pf-a.pa)||teamName(a.id).localeCompare(teamName(b.id)));
+  });
+}
+
+const embedded=JSON.parse(document.querySelector('#initialSeason').textContent);
+const storageKey='cgl.regular-season.v1.'+(embedded?.saveId??'default')+(embedded?'.'+embedded.completed:'');
+let season, saveMessage='';
+try{const saved=localStorage.getItem(storageKey); if(saved){season=JSON.parse(saved);saveMessage='Season saved on this browser';}}
+catch{saveMessage='Browser storage unavailable.';}
+function persist(){
+  try{localStorage.setItem(storageKey,JSON.stringify(season));saveMessage='Season saved on this browser';}
+  catch{saveMessage='Browser saving unavailable. Download a season copy to keep playing later.';}
+}
+if(!season){season=embedded??makeSeason(); season.saveId??=Math.random().toString(36).slice(2);persist();}
+if(!season.rosters){season.rosters=generateRosters(season);persist();}
+if(!season.office){initFrontOffice(season);persist();}
+if(labelPastTrades(season))persist();
+let scoutPos='DE';
+let viewed=Math.max(1,season.completed),tab='Owner desk',selected=season.office.club??clubs[0].id;
+const app=document.querySelector('#app');
+const badge=id=>{const t=byId.get(id);return '<i style="background:'+t.primary+';border-color:'+t.secondary+'"></i>';};
+const club=id=>'<button class="club" data-id="'+id+'">'+badge(id)+teamName(id)+'</button>';
+const heading=(small,big)=>'<small>'+small+'</small><h2>'+big+'</h2>';
+function scoreboard(){
+  const games=season.weeks[viewed-1],used=new Set(games.flatMap(g=>[g.home,g.away]));
+  const bye=clubs.filter(t=>!used.has(t.id));
+  return heading('REGULAR SEASON','Week '+viewed)+'<div class="controls"><label>Browse week <select id="week">'+season.weeks.map((_,i)=>'<option '+(i+1===viewed?'selected':'')+'>'+ (i+1)+'</option>').join('')+'</select></label><span>'+games.length+' games · '+(viewed<=season.completed?'Final scores':'Scheduled')+'</span></div><div class="games">'+games.map(g=>'<article>'+[g.away,g.home].map((id,i)=>'<div class="line">'+club(id)+'<strong>'+(g.score?g.score[1-i]:(i?'HOME':'AWAY'))+'</strong></div>').join('')+'</article>').join('')+'</div>'+(bye.length?'<p>On bye · '+bye.map(t=>teamName(t.id)).join(', ')+'</p>':'');
+}
+function standingsView(){
+  return heading('DIVISION RACES','Standings')+'<p>Ranked by win percentage, head-to-head among tied clubs when all have met, division record, then point differential. Alphabetical order breaks remaining ties.</p><div class="tables">'+standings(season).map((rows,i)=>'<section><h3>'+groups[i][0].conference+' '+groups[i][0].division+'</h3><table><thead><tr><th>Club</th><th>W–L–T</th><th>Div.</th><th>+/−</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+club(r.id)+'</td><td>'+[r.w,r.l,r.t].join('–')+'</td><td>'+[r.dw,r.dl,r.dt].join('–')+'</td><td>'+(r.pf-r.pa)+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
+}
+function scheduleView(){
+ const t=byId.get(selected),rating=personnel(season.rosters[selected]);
+ return heading(t.conference+' '+t.division,teamName(selected))+'<div class="controls"><label>Club <select id="team">'+clubs.map(c=>'<option value="'+c.id+'" '+(c.id===selected?'selected':'')+'>'+teamName(c.id)+'</option>').join('')+'</select></label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="Rosters">View roster</button></div><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+season.weeks.map((games,i)=>{
+ const g=games.find(g=>[g.home,g.away].includes(selected));
+ if(!g)return '<tr><td>'+ (i+1)+'</td><td></td><td>Bye</td><td>—</td></tr>';
+ const home=g.home===selected,score=g.score&&(home?g.score:[...g.score].reverse());
+ return '<tr><td>'+(i+1)+'</td><td>'+(home?'Home':'Away')+'</td><td>'+club(home?g.away:g.home)+'</td><td>'+(score?(score[0]>score[1]?'W':score[0]<score[1]?'L':'T')+' '+score.join('–'):'—')+'</td></tr>';
+ }).join('')+'</tbody></table>';
+}
+function rosterView(){
+ const team=byId.get(selected), units=personnel(season.rosters[selected]);
+ const select='<label>Club <select id="team">'+clubs.map(c=>'<option value="'+c.id+'" '+(c.id===selected?'selected':'')+'>'+teamName(c.id)+'</option>').join('')+'</select></label>';
+ const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
+ return heading(team.conference+' '+team.division,teamName(selected))+'<div class="controls">'+select+'<span>' + season.rosters[selected].length + ' players · Depth chart</span></div><div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div><p>An uncovered starting spot uses an emergency rating of 45. Starters lead each position group. The first reserve also contributes at running back, receiver, defensive end, defensive tackle, linebacker and cornerback.</p><div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
+ const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
+ return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+p.name+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>')).join('')+'</tbody></table></section>';
+ }).join('')+'</div>';
+}
+function draw(){
+ document.querySelector('#tabs').innerHTML=['Owner desk','Scoreboard','Standings','Team schedule','Rosters','Club directory'].map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
+ document.querySelector('#status').textContent=saveMessage;
+ const next=document.querySelector('#advance');
+ next.disabled=season.completed===18||!season.office.club;
+ next.textContent=!season.office.club?'Choose a club':season.completed===18?'Regular season complete':'Advance week '+(season.completed+1)+' →';
+ document.querySelector('#directoryPane').hidden=tab!=='Club directory';
+ app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.tab){tab=b.dataset.tab;draw();}
+ if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
+ if(b.id==='claim'&&!season.office.club){const id=document.querySelector('#claimTeam').value;if(byId.has(id)){season.office.club=id;selected=id;persist();draw();}}
+ if(b.dataset.scout){scoutPos=b.dataset.scout;draw();document.querySelector('#scout')?.focus();}
+ if(b.id==='quote'){const [seller,target]=document.querySelector('#target').value.split('/');tradeQuote(season,seller,target);persist();draw();}
+ if(b.id==='counter'){const q=season.office.offer;if(q){counterTrade(season,document.querySelector('#tradePlayer').value,document.querySelector('#tradePick').value);delete q.draftPick;delete q.draftOut;persist();draw();}}
+ if(b.id==='accept'||b.id==='decline'){resolveOffer(season,b.id==='accept');persist();draw();}
+ if(b.id==='advance'&&season.office.club&&season.completed<18){playWeek(season);persist();viewed=season.completed;tab='Owner desk';draw();}
+});
+app.onchange=e=>{if(e.target.id==='tradePlayer'||e.target.id==='tradePick'){const q=season.office.offer;if(q){q[e.target.id==='tradePlayer'?'draftOut':'draftPick']=e.target.value;persist();draw();}return;}if(e.target.id==='claimTeam'||e.target.id==='target')return;if(e.target.id==='scout')scoutPos=e.target.value;if(e.target.id==='week')viewed=Number(e.target.value);if(e.target.id==='team')selected=e.target.value;draw();};
+function readSeasonCopy(source){
+ const block=source.match(/<script\b[^>]*\bid=["']initialSeason["'][^>]*>([\s\S]*?)<\/script\s*>/i);
+ if(!block)throw Error('Choose a cgl-week file made with Download season copy.');
+ const candidate=JSON.parse(block[1],(key,value)=>{
+   if(['__proto__','constructor','prototype'].includes(key)||typeof value==='string'&&/[<>"&]/.test(value))throw Error('Invalid season data.');
+   return value;
+ });
+ if(!candidate)throw Error('This is the game file. Choose your downloaded cgl-week season copy.');
+ const valid=Number.isInteger(candidate.completed)&&candidate.completed>=0&&candidate.completed<=18&&candidate.weeks?.length===18&&
+ candidate.weeks.every((games,index)=>Array.isArray(games)&&games.every(g=>byId.has(g.home)&&byId.has(g.away)&&(index<candidate.completed?Array.isArray(g.score)&&g.score.length===2&&g.score.every(Number.isInteger):g.score===null)))&&
+ clubs.every(t=>candidate.ratings?.[t.id]&&(!candidate.rosters||Array.isArray(candidate.rosters[t.id])&&candidate.rosters[t.id].every(p=>typeof p.name==='string'&&Number.isFinite(p.rating)&&positions.some(([pos])=>p.pos===pos))))&&
+ (!candidate.office||((!candidate.office.club||byId.has(candidate.office.club))&&Array.isArray(candidate.office.notes)&&Array.isArray(candidate.office.picks)));
+ if(!valid)throw Error('This file does not contain a valid league season.');
+ if(!candidate.rosters)candidate.rosters=generateRosters(candidate);
+ if(!candidate.office)initFrontOffice(candidate);
+ labelPastTrades(candidate);
+ return candidate;
+}
+const filePicker=document.querySelector('#seasonFile');
+document.querySelector('#loadSeason').onclick=()=>filePicker.click();
+filePicker.onchange=async()=>{
+ const file=filePicker.files[0];if(!file)return;
+ const previous={season,tab,viewed,selected};
+ try{
+   const incoming=readSeasonCopy(await file.text());
+   if(season.office.club&&!confirm('Load this season in place of the current browser save? Download a season copy first if you want to keep both.'))return;
+   season=incoming;tab='Owner desk';viewed=Math.max(1,season.completed);selected=season.office.club??clubs[0].id;
+   draw();persist();draw();
+ }catch(error){
+   season=previous.season;tab=previous.tab;viewed=previous.viewed;selected=previous.selected;
+   saveMessage='Could not load save. '+error.message;draw();
+ }finally{filePicker.value='';}
+};
+document.querySelector('#copy').onclick=()=>{
+ const clone=document.documentElement.cloneNode(true);
+ clone.querySelector('#initialSeason').textContent=JSON.stringify(season);
+ const url=URL.createObjectURL(new Blob(['<!doctype html>'+clone.outerHTML],{type:'text/html'}));
+ const a=document.createElement('a');a.href=url;a.download='cgl-week-'+season.completed+'.html';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+draw();
+
+</script></html>

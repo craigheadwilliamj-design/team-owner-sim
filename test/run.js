@@ -15,6 +15,7 @@ const v4Save = fs.readFileSync(path.join(FIX, 'v4-save.json'), 'utf8');
 const v5Save = fs.readFileSync(path.join(FIX, 'v5-save.json'), 'utf8');
 const v6Save = fs.readFileSync(path.join(FIX, 'v6-save.json'), 'utf8');
 const v7Save = fs.readFileSync(path.join(FIX, 'v7-save.json'), 'utf8');
+const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -22,7 +23,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -987,8 +988,8 @@ test('v7 save upgrades to v8: guarantees, rookie options, carryover and tag book
 test('negotiation: the asking terms work, a lowball does not, and priorities change the read', () => {
   const { api, S } = owned(301);
   api.jumpTo(S, 29);
-  const p = S.fa.pool.filter(x => x.ask.years >= 2).sort((a, b) => b.rating - a.rating)[0];
-  assert(api.agentRead(S, p, p.ask, 'club-06', p.ask).u >= 0.95);
+  const p = S.fa.pool.filter(x => x.ask.years >= 2 && api.priorityFor(x) !== 'winning').sort((a, b) => b.rating - a.rating)[0];
+  assert(api.agentRead(S, p, p.ask, 'club-06', p.ask).u >= 0.95); // winners-first players mark down weak teams, so test a different priority
   assert.equal(api.agentRead(S, p, { ...p.ask, salary: p.ask.salary * 0.6, bonus: 0 }, 'club-06', p.ask).verdict, 'no');
   const roster = Object.values(S.rosters).flat();
   const sec = hasPriority(api, roster, 'security'), mon = hasPriority(api, roster, 'money');
@@ -1121,6 +1122,171 @@ test('contracts page shows negotiation, tag and option controls', () => {
   api.jumpTo(S, 24);
   const html = api.contractsView();
   assert(html.includes('Franchise tag') && html.includes('data-negotiate') && html.includes('Salary floor'));
+  assert(!/<script|onerror/i.test(html));
+});
+
+
+// ---- Coaches and front office ----------------------------------------------
+test('v8 save upgrades to v9: every club has a head coach and a GM', () => {
+  const { api } = load();
+  const old = JSON.parse(v8Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  for (const t of api.clubs) { assert(S.staff.clubs[t.id].hc.ratings.offense); assert(S.staff.clubs[t.id].gm.ratings.scouting); }
+  assert.equal(S.staff.president.name, old.staff.president.name);
+  assert.deepEqual(S.staff.directives, { focus: 'none', approach: 'gm', approvalOver: null });
+  assert.equal(api.cur(S).completed, old.seasons.at(-1).completed);
+});
+
+test('the coach shapes the units: scheme sets the pass rate, ratings move the numbers', () => {
+  const { api, S } = owned(401);
+  const hc = api.hcOf(S, 'club-06');
+  Object.assign(hc.style, { offense: 'pass' }); hc.ratings.offense = 90;
+  const pass = api.clubUnits(S, 'club-06');
+  Object.assign(hc.style, { offense: 'run' }); hc.ratings.offense = 40;
+  const run = api.clubUnits(S, 'club-06');
+  assert(pass.passRate > run.passRate);
+  assert(pass.passing > run.passing + 3);
+});
+
+test('lineups: youth coaches start the younger of two close players; a promised QB starts', () => {
+  const { api, S } = owned(402);
+  const hc = api.hcOf(S, 'club-06'), wrs = S.rosters['club-06'].filter(p => p.pos === 'WR').sort((a, b) => b.rating - a.rating);
+  wrs.forEach((p, i) => { p.rating = i < 2 ? 90 : 50; p.age = 27; delete p.out; }); // two clear starters, the rest far behind
+  const [a, b] = [wrs[2], wrs[3]]; // the battle for the third spot
+  a.rating = 75; a.age = 32; b.rating = 74; b.age = 22;
+  hc.style.lineup = 'veteran';
+  assert(api.clubUnits(S, 'club-06').chart.WR.slice(0, 3).includes(a));
+  hc.style.lineup = 'youth';
+  assert(api.clubUnits(S, 'club-06').chart.WR.slice(0, 3).includes(b));
+  const qb3 = S.rosters['club-06'].filter(p => p.pos === 'QB').sort((x, y) => x.rating - y.rating)[0];
+  hc.qbStarter = qb3.id;
+  assert.equal(api.clubUnits(S, 'club-06').chart.QB[0], qb3);
+});
+
+test('development coaches grow young players faster', () => {
+  const grow = dev => { const { api, S } = owned(403); for (const t of api.clubs) api.hcOf(S, t.id).ratings.development = dev;
+    const young = Object.values(S.rosters).flat().filter(p => p.age <= 23); const before = young.reduce((a, p) => a + p.rating, 0);
+    api.developPlayers(S, api.rngFor({ state: 5 })); return young.reduce((a, p) => a + p.rating, 0) - before; };
+  assert(grow(90) > grow(40));
+});
+
+test('better scouting reads the draft board more accurately', () => {
+  const { api, S } = owned(404);
+  const err = scouting => { api.gmOf(S, 'club-06').ratings.scouting = scouting;
+    return S.draft.prospects.slice(0, 80).reduce((a, p) => a + Math.abs(api.perceivedGrade(S, 'club-06', p) - Math.round(.55 * p.potential + .45 * p.rating)), 0); };
+  assert(err(90) < err(45));
+});
+
+test('a better negotiator pays less in trades and contracts', () => {
+  const { api, S } = owned(405);
+  const p = S.rosters['club-17'].sort((a, b) => b.rating - a.rating)[0], mine = S.rosters['club-06'].find(x => x.contract.yearsLeft === 1);
+  api.gmOf(S, 'club-06').ratings.negotiation = 90;
+  const good = [api.termsNeeded(p, null, S), api.extensionTerms(S, mine).salary];
+  api.gmOf(S, 'club-06').ratings.negotiation = 35;
+  const bad = [api.termsNeeded(p, null, S), api.extensionTerms(S, mine).salary];
+  assert(good[0] < bad[0] && good[1] < bad[1]);
+});
+
+test('firing pays out the contract and installs an interim; interviews talk about your roster', () => {
+  const { api, S } = owned(406);
+  const old = api.hcOf(S, 'club-06'), cost = old.contract.salary * old.contract.years;
+  assert.equal(api.fireStaff(S, 'hc'), 'ok');
+  assert(api.hcOf(S, 'club-06').interim);
+  assert(S.finance.ledger.at(-1).lines.staffBuyout <= -cost + 0.01);
+  const c = S.staff.market.hc[0];
+  api.interview(S, 'hc', c.id);
+  const names = S.rosters['club-06'].map(p => p.name);
+  assert(c.interview.statements.some(t => names.some(n => t.includes(n))), 'mentions real players');
+  assert.equal(api.hire(S, 'hc', c.id), 'ok');
+  assert.equal(api.hcOf(S, 'club-06'), c);
+  assert.deepEqual(c.commitments, c.interview.commitments);
+  assert.equal(api.hire(S, 'hc', S.staff.market.hc[0].id), 'filled');
+});
+
+test('the February review checks promises against what happened', () => {
+  const { api, S } = owned(407);
+  api.fireStaff(S, 'hc');
+  const c = S.staff.market.hc.find(x => true);
+  api.interview(S, 'hc', c.id); api.hire(S, 'hc', c.id);
+  c.commitments.push({ type: 'needPosition', pos: 'LS' }); // a request the GM will not fill
+  api.jumpTo(S, 23);
+  const e = S.events.find(x => x.type === 'staffReview');
+  assert(e);
+  const coach = e.report.find(x => x.role === 'hc');
+  assert(coach.results.some(x => /start at QB/.test(x.text)));
+  assert(coach.results.some(x => x.blame === 'gm'), 'an unfilled request is blamed on the GM');
+  assert.match(api.describeEvent(e, S), /blames the GM/);
+});
+
+test('approvals: big GM signings wait for the owner, and approving sends the offer', () => {
+  const { api, S } = owned(408);
+  api.setDirective(S, 'approvalOver', 5);
+  api.jumpTo(S, 27);
+  let P; for (let i = 0; i < 10 && !P; i++) { api.advance(S); P = S.staff.proposals.find(x => x.kind === 'fa' && S.fa.pool.some(p => p.id === x.playerId)); }
+  assert(P, 'the GM asked first');
+  assert(api.termsHit(P.terms) > 5);
+  assert(!S.rosters['club-06'].some(p => p.id === P.playerId));
+  assert.equal(api.approveProposal(S, P.id), 'ok');
+  assert(S.fa.offers[P.playerId]);
+  const Q = S.staff.proposals[0];
+  if (Q) { api.declineProposal(S, Q.id); assert(!S.staff.proposals.includes(Q)); }
+});
+
+test('focus: the owner’s priority shows up on the GM’s draft board', () => {
+  let focused = 0, unfocused = 0;
+  for (let seed = 410; seed < 430; seed++) {
+    const { api, S } = owned(seed);
+    const pool = S.draft.prospects;
+    if (api.bestFor(S, 'club-06', pool).pos === 'QB') unfocused++;
+    api.setDirective(S, 'focus', 'QB');
+    if (api.bestFor(S, 'club-06', pool).pos === 'QB') focused++;
+  }
+  assert(focused > unfocused, `QB first ${focused} vs ${unfocused}`);
+});
+
+test('the coach objects to trading away one of his starters', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const starter = api.clubUnits(S, 'club-06').chart.WR[0];
+  const target = S.rosters['club-17'].filter(p => p.pos === 'CB').sort((a, b) => a.rating - b.rating)[0];
+  api.tradeQuote(S, 'club-17', target.id);
+  S.offer.draftOut = starter.id;
+  assert.match(api.negotiationView(S), /does not want to lose/);
+});
+
+test('the carousel: AI clubs replace staff after bad years and hire from the shared pool', () => {
+  const { api, S } = owned(431);
+  api.jumpTo(S, 22);
+  for (const t of api.clubs) if (t.id !== 'club-06') api.hcOf(S, t.id).hired = { season: 0 };
+  api.advance(S); // February Week 1: review and firings
+  assert(S.staff.openings.length > 0);
+  api.fireStaff(S, 'hc');
+  const fav = S.staff.market.hc[0];
+  api.interview(S, 'hc', fav.id);
+  for (const o of S.staff.openings) o.role = 'hc';
+  let guard = 0; while (S.staff.market.hc.includes(fav) && guard++ < 20) api.fillOpenings(S, api.rngFor({ state: guard }));
+  if (!S.staff.market.hc.includes(fav)) assert(S.events.some(e => e.type === 'candidateLost'));
+  api.jumpTo(S, 31);
+  assert.equal(S.staff.openings.length, 0, 'every opening is filled by April');
+});
+
+test('staff salaries are part of football operations in the books', () => {
+  const { api, S } = owned(432);
+  const g = api.cur(S).weeks[0].find(x => x.home === 'club-06' || x.away === 'club-06');
+  const base = api.weekLines(S, g).footballOps;
+  api.hcOf(S, 'club-06').contract.salary += 9;
+  assert(api.weekLines(S, g).footballOps < base - 0.4);
+});
+
+test('staff page renders cards, instructions and a candidate search', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  let html = api.staffView();
+  assert(html.includes('Head coach') && html.includes('instructions to the GM'));
+  api.fireStaff(S, 'gm');
+  html = api.staffView();
+  assert(html.includes('General manager search') && html.includes('data-interview'));
   assert(!/<script|onerror/i.test(html));
 });
 

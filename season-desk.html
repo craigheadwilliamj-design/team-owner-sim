@@ -1,6 +1,78 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Continental Gridiron League · Season desk</title><style>*{box-sizing:border-box}body{background:#f5f3eb;color:#192d36;margin:0;font:16px 'Barlow',system-ui,sans-serif}main{max-width:1150px;margin:auto;padding:36px 5%}header{border-top:6px solid #1c4247;border-bottom:1px solid #a7afa7;padding:24px 0}h1{font: bold clamp(2rem,6vw,4.5rem)/1 Georgia,serif;letter-spacing:-.05em;margin:8px 0 18px}header p{margin:0;color:#466066}nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}select,button{font:inherit;padding:8px 12px;background:#fffefa;color:inherit;border:1px solid #a5afaa;border-radius:5px}button{margin-left:auto;cursor:pointer}h2{font: bold 1.85rem Georgia,serif;margin:22px 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}article{background:#fffefa;border:1px solid #c4ccc5;border-radius:6px;overflow:hidden}h3{background:#213e43;color:white;padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}ul{padding:0;margin:0;list-style:none}li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid #edece5}li:last-child{border:0}.chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}small{display:block;color:#53666b}strong{font-size:1.05rem}</style><style>
-main{max-width:1240px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font-size:clamp(2.3rem,6vw,4.8rem)}#advance{background:#174b46;color:white;border:0;font-weight:700;padding:14px 20px}#advance:disabled{background:#526662}#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid #c4ccc5}button{margin:0}#tabs button{border:0;background:transparent}#tabs [aria-pressed=true]{background:#214740;color:white}#app{padding:25px 0}#app>small{letter-spacing:.11em;font-weight:bold}#app h2{margin:5px 0 14px}.controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:#465e5a}.games,.tables{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}.line{display:flex;align-items:center;justify-content:space-between;padding:9px 12px}.line+.line{border-top:1px solid #ebe9e0}.line strong{font:700 .95rem system-ui}.club{border:0;background:transparent;text-align:left;font-weight:600;padding:3px;color:#163e40}.club:hover{text-decoration:underline}.club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}.tables{grid-template-columns:repeat(auto-fit,minmax(min(100%,365px),1fr))}table{width:100%;border-collapse:collapse;background:#fffefa;font-size:.9rem}th,td{border-bottom:1px solid #d7dace;padding:7px;text-align:left}#app p{max-width:75ch}footer{border-top:1px solid #c4ccc5;padding-top:16px;font-size:.85rem}.tables h3{border-radius:5px 5px 0 0}button:focus-visible,select:focus-visible{outline:3px solid #db8742}
-.units{display:flex;flex-wrap:wrap;gap:12px}.units>div{background:#fffefa;padding:12px 18px;border-top:3px solid #24534a;min-width:115px}.units b{font: bold 1.5rem Georgia,serif}</style><main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><button id="advance"></button></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save">Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status"></span><button id="loadSeason" title="Open a downloaded season copy in this build. This is also how you carry a save into a newer version of the game.">Load save</button><input id="seasonFile" type="file" accept=".html,.htm" hidden><button id="copy" title="Saves this season, with the current build of the game, as a single file.">Download season copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<title>CGL Season Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;display=swap">
+<style>
+/* Layout: one desk column. Header with the advance button, a tab strip, the working pane, then the save footer. */
+:root{
+  --bg:#f5f3eb;--surface:#fffefa;--fg:#192d36;--muted:#4d6266;
+  --rule:#c4ccc5;--rule-strong:#a7afa7;--rule-soft:#ebe9e0;--rule-table:#d7dace;--control-border:#a5afaa;
+  --band:#213e43;--band-fg:#ffffff;--accent:#174b46;--accent-fg:#ffffff;--accent-muted:#526662;
+  --link:#163e40;--focus:#db8742;
+  --display:Georgia,'Times New Roman',serif;--body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
+  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
+  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
+  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
+  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
+  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
+  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);margin:0;font:16px/1.45 var(--body)}
+main{max-width:1240px;margin:0 auto;padding-block:36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{border-top:6px solid var(--band);border-bottom:1px solid var(--rule-strong);padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font:700 clamp(2.3rem,6vw,4.8rem)/1 var(--display);letter-spacing:-.05em;margin:8px 0 18px;text-wrap:balance}
+header p{margin:0;color:var(--muted)}
+nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}
+select,button{font:inherit;padding:8px 12px;background:var(--surface);color:inherit;border:1px solid var(--control-border);border-radius:5px;margin:0}
+button{cursor:pointer}
+button:disabled{cursor:default;opacity:.6}
+h2{font:700 1.85rem var(--display);margin:22px 0 12px;text-wrap:balance}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
+article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+h3{background:var(--band);color:var(--band-fg);padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}
+ul{padding:0;margin:0;list-style:none}
+li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--rule-soft);flex-wrap:wrap}
+li:last-child{border:0}
+.chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}
+small{display:block;color:var(--muted)}
+strong{font-size:1.05rem}
+#advance{background:var(--accent);color:var(--accent-fg);border:0;font-weight:700;padding:14px 20px}
+#advance:disabled{background:var(--accent-muted);opacity:1}
+#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--rule)}
+#tabs button{border:0;background:transparent}
+#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+#app{padding:25px 0}
+#app>small{letter-spacing:.11em;font-weight:700}
+#app h2{margin:5px 0 14px}
+#app p{max-width:75ch}
+.controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:var(--muted)}
+.games,.tables{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}
+.tables{grid-template-columns:repeat(auto-fit,minmax(min(100%,365px),1fr))}
+.tables>section,.wide{min-width:0;overflow-x:auto}
+.tables h3{border-radius:5px 5px 0 0}
+.line{display:flex;align-items:center;justify-content:space-between;padding:9px 12px}
+.line+.line{border-top:1px solid var(--rule-soft)}
+.line strong{font:700 .95rem system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.club{border:0;background:transparent;text-align:left;font-weight:600;padding:3px;color:var(--link)}
+.club:hover{text-decoration:underline}
+.club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}
+table{width:100%;border-collapse:collapse;background:var(--surface);font-size:.9rem;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
+.units{display:flex;flex-wrap:wrap;gap:12px}
+.units>div{background:var(--surface);padding:12px 18px;border-top:3px solid var(--accent);min-width:115px}
+.units b{font:700 1.5rem var(--display)}
+footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
+#status{flex:1 1 260px;min-width:0}
+#importPrompt{flex-basis:100%;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;color:var(--fg);font-size:1rem}
+#importPrompt[hidden],[hidden]{display:none!important}
+button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+</style>
+<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><button id="advance"></button></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -423,7 +495,7 @@ function renderDirectory(){
   }
 }
 filter.addEventListener('change',renderDirectory);
-$('#save').onclick=()=>download('continental-gridiron-league.json',JSON.stringify(league,null,2),'application/json');
+$('#save').onclick=()=>offerFile('continental-gridiron-league.json',JSON.stringify(league,null,2));
 renderDirectory();
 
 // ---------------------------------------------------------------------------
@@ -585,7 +657,7 @@ function newSave(seed=newSeed()){
   const rng={seed,state:seed},r=rngFor(rng);
   const season=makeSeason(r,1);
   return {schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,seasonIndex:0,seasons:[season],
-    rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1};
+    rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0};
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
 function record(S,type,data){
@@ -770,6 +842,7 @@ function validateSave(S){
   if(typeof S.saveId!=='string'||!S.saveId)fail('The save has no id.');
   if(!S.rng||!isInt(S.rng.seed,0,4294967295)||!isInt(S.rng.state,0,4294967295))fail('The random generator state is missing.');
   if(S.club!==null&&!byId.has(S.club))fail('The owned club is not in the league.');
+  if(S.revision!==undefined&&!isInt(S.revision,0))fail('The save revision is invalid.');
   if(!Array.isArray(S.seasons)||!S.seasons.length)fail('No seasons are recorded.');
   else{
     if(!isInt(S.seasonIndex,0,S.seasons.length-1))fail('The current season is invalid.');
@@ -888,8 +961,10 @@ const safeReviver=(key,value)=>{
   return value;
 };
 function readSaveFile(source){
+  const text=String(source).trim();
+  if(text.startsWith('{'))return upgrade(JSON.parse(text,safeReviver)).save;
   const block=source.match(/<script\b[^>]*\bid=["']initialSeason["'][^>]*>([\s\S]*?)<\/script\s*>/i);
-  if(!block)throw Error('choose a cgl-week file made with Download season copy');
+  if(!block)throw Error('choose a season file saved with Save a copy, or a cgl-week file from an older build');
   const candidate=JSON.parse(block[1],safeReviver);
   if(!candidate)throw Error('this is the game file, not a season copy. Choose your downloaded cgl-week file');
   return upgrade(candidate).save;
@@ -912,6 +987,7 @@ const storageKey='cgl.save.'+slot;
 const legacyKey=embeddedVersion>=2?null:'cgl.regular-season.v1.'+(embedded?.saveId??'default')+(embedded?'.'+embedded.completed:'');
 const urlSeed=(()=>{try{const v=Number(new URLSearchParams(location.search).get('seed'));return isInt(v,1,4294967295)?v:undefined;}catch{return undefined;}})();
 
+const LOCAL_OK='Saved in this browser.';
 let save,saveMessage='';
 function boot(){
   const stored=storage.get(storageKey);
@@ -923,7 +999,7 @@ function boot(){
         const backup=storageKey+'.before-v'+SCHEMA_VERSION;
         if(storage.get(backup)===null)storage.set(backup,raw);
         saveMessage='Upgraded this browser save from format v'+from+' to v'+SCHEMA_VERSION+'. The original is kept in browser storage.';
-      }else saveMessage='Season saved on this browser';
+      }else saveMessage=LOCAL_OK;
       return S;
     }catch(error){
       storage.set(storageKey+'.unreadable-'+Date.now(),raw);
@@ -938,14 +1014,116 @@ function boot(){
   return newSave(urlSeed);
 }
 function persist(){
-  if(!storage.set(storageKey,JSON.stringify(save)))saveMessage='Browser saving unavailable. Download a season copy to keep playing later.';
-  else if(!saveMessage)saveMessage='Season saved on this browser';
+  if(!storage.set(storageKey,JSON.stringify(save)))saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';
+  else if(!saveMessage)saveMessage=LOCAL_OK;
 }
-function commit(){saveMessage='';persist();draw();}
-function download(name,text,type){
-  const url=URL.createObjectURL(new Blob([text],{type}));
-  const a=document.createElement('a');a.href=url;a.download=name;a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
+function commit(){save.revision=(save.revision??0)+1;saveMessage='';persist();scheduleCloud();draw();}
+
+
+// ---------------------------------------------------------------------------
+// Claude capabilities. The season is kept in this browser and, for a signed-in
+// viewer, in their private account storage (db under data/users/<id>/), split
+// into parts because one document holds at most 256 KiB. Parts are written
+// first and the pointer document last, so an interrupted save never replaces
+// a good one. Each save carries a revision; the newer copy wins.
+// ---------------------------------------------------------------------------
+const use=name=>{
+  try{return window.claude?.use?Promise.resolve(window.claude.use(name)).catch(()=>null):Promise.resolve(null);}
+  catch{return Promise.resolve(null);}
+};
+const downloadsReady=use('downloads');
+downloadsReady.then(d=>{for(const id of ['#copy','#save'])$(id).hidden=!d;});
+async function offerFile(filename,data){
+  const d=await downloadsReady;
+  if(!d){saveMessage='Saving files is not available in this view.';draw();return;}
+  try{await d.save({filename,data});saveMessage='Saved '+filename+'.';}
+  catch(e){
+    if(e?.code==='declined')return;
+    saveMessage=e?.code==='rate_limited'?'A save prompt is already open. Finish that one first.':'The file could not be saved here.';
+  }
+  draw();
+}
+
+const CLOUD_CHUNK=80000; // characters per document; stays under 256 KiB even when escaped
+const cloudDoc='save-'+slot.replace(/[^A-Za-z0-9_.~:@+-]/g,'_');
+let cloud=null,cloudMeta=null,cloudState='off',cloudTimer=0,cloudWriting=false,cloudDirty=false;
+function cloudText(){
+  return {connecting:'Checking your Claude account for a saved season…',
+    synced:'Saved to your Claude account.',saving:'Saving to your Claude account…',
+    retry:'Your Claude account did not answer. Progress is in this browser and will sync after your next move.',
+    unreachable:'Your Claude account save could not be reached, so this visit saves in this browser only.',
+    readonly:'Your access to this page does not include account saves, so progress stays in this browser.',
+    full:'Your account save is full, so progress stays in this browser.'}[cloudState]??'';
+}
+function setCloud(state){cloudState=state;drawStatus();}
+const withTimeout=(promise,ms)=>{
+  let timer;
+  return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject({code:'timeout'}),ms);})]).finally(()=>clearTimeout(timer));
+};
+async function cloudRead(){
+  const meta=await cloud.col.doc(cloudDoc).get();
+  if(!meta.exists)return null;
+  const m=meta.data(),parts=[m.d];
+  for(let i=1;i<m.parts;i++){
+    const part=await cloud.col.doc(cloudDoc+'.'+m.gen+'.'+i).get();
+    if(!part.exists)throw {code:'incomplete'};
+    parts.push(part.data().d);
+  }
+  cloudMeta={gen:m.gen,parts:m.parts};
+  return {saveId:m.saveId,revision:isInt(m.revision,0)?m.revision:0,raw:parts.join('')};
+}
+async function cloudWrite(){
+  const json=JSON.stringify(save),chunks=[];
+  for(let i=0;i<json.length;i+=CLOUD_CHUNK)chunks.push(json.slice(i,i+CLOUD_CHUNK));
+  const gen=Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36);
+  for(let i=1;i<chunks.length;i++)await cloud.col.doc(cloudDoc+'.'+gen+'.'+i).set({d:chunks[i]});
+  await cloud.col.doc(cloudDoc).set({d:chunks[0],parts:chunks.length,gen,saveId:save.saveId,revision:save.revision??0,schemaVersion:SCHEMA_VERSION,savedAt:new Date().toISOString()});
+  const old=cloudMeta;
+  cloudMeta={gen,parts:chunks.length};
+  if(old&&old.gen!==gen)for(let i=1;i<old.parts;i++)cloud.col.doc(cloudDoc+'.'+old.gen+'.'+i).delete().catch(()=>{});
+}
+function scheduleCloud(){
+  if(!cloud||cloudState==='readonly')return;
+  cloudDirty=true;
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(flushCloud,500);
+}
+async function flushCloud(){
+  if(!cloud||cloudWriting||!cloudDirty)return;
+  cloudWriting=true;cloudDirty=false;setCloud('saving');
+  try{await cloudWrite();if(!cloudDirty)setCloud('synced');}
+  catch(e){cloudDirty=true;setCloud(e?.code==='invalid_argument'?'readonly':e?.code==='quota_exceeded'?'full':'retry');}
+  finally{cloudWriting=false;if(cloudDirty&&cloudState==='saving')flushCloud();}
+}
+async function connectCloud(){
+  const [db,user]=await Promise.all([use('db'),use('user')]);
+  let id=null;
+  try{id=user?await user.id():null;}catch{id=null;}
+  if(!db||!id)return;
+  try{cloud={col:db.collection('data/users/'+id)};}catch{cloud=null;return;}
+  setCloud('connecting');
+  let remote;
+  try{remote=await withTimeout(cloudRead(),10000);}
+  catch{cloud=null;setCloud('unreachable');return;} // never write over an account save we could not read
+  if(!remote||(remote.saveId===save.saveId&&remote.revision<(save.revision??0))){cloudDirty=true;return flushCloud();}
+  if(remote.saveId===save.saveId&&remote.revision===(save.revision??0))return setCloud('synced');
+  let incoming;
+  try{incoming=upgrade(JSON.parse(remote.raw)).save;}
+  catch(error){
+    storage.set(storageKey+'.account-unreadable-'+Date.now(),remote.raw);
+    saveMessage='Your account save could not be opened because '+sentence(error.message)+' A copy is in browser storage, and this browser’s season replaces it.';
+    cloudDirty=true;return flushCloud();
+  }
+  if(incoming.saveId!==save.saveId&&save.club&&(save.revision??0)>0){
+    storage.set(storageKey+'.set-aside-'+Date.now(),JSON.stringify(save));
+    saveMessage='Opened the season saved to your Claude account. The different season that was in this browser is kept in browser storage.';
+  }else saveMessage='';
+  save=incoming;
+  resetView();persist();setCloud('synced');draw();
+}
+function drawStatus(){
+  const quiet=saveMessage===LOCAL_OK&&cloud&&(cloudState==='synced'||cloudState==='saving');
+  $('#status').textContent=[quiet?'':saveMessage,cloudText()].filter(Boolean).join(' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,7 +1196,7 @@ function negotiationView(S){
   const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="4">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>';
   const deal=[out?.name,quoted&&pickLabel(quoted)].filter(Boolean).join(' and ');
   return '<p>'+esc(offerMessage(S,q))+'</p>'+
-    '<table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table>'+
+    '<div class="wide"><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table></div>'+
     '<div class="controls"><label>Send player <select id="tradePlayer">'+option('none','No player',!draftOut)+options.map(p=>option(p.id,p.name+' · '+p.pos+' · '+p.rating,p.id===draftOut?.id)).join('')+'</select></label>'+
     '<label>Add pick <select id="tradePick">'+option('none','No pick',key==='none')+picks.map(p=>option(pickKey(p),pickLabel(p),key===pickKey(p))).join('')+'</select></label>'+
     '<button id="counter">Send proposal</button></div>'+
@@ -1037,7 +1215,7 @@ function ownershipDesk(){
     return esc('Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(g.score?' · '+resultText(g,id):''));
   };
   const week=s.completed+1,injuries=S.rosters[id].filter(p=>p.out);
-  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b>'+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=s.weeks.length&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div></div>';
+  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=s.weeks.length&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div></div>';
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
   let gm;
   if(S.offer)gm=negotiationView(S);
@@ -1068,12 +1246,12 @@ function scheduleView(){
   const t=byId.get(selected),rating=personnel(save.rosters[selected]);
   return heading(t.conference+' '+t.division,teamName(selected))+
     '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="Rosters">View roster</button></div>'+
-    '<table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
+    '<div class="wide"><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
       const g=games.find(g=>[g.home,g.away].includes(selected));
       if(!g)return '<tr><td>'+(i+1)+'</td><td></td><td>Bye</td><td>—</td></tr>';
       const home=g.home===selected;
       return '<tr><td>'+(i+1)+'</td><td>'+(home?'Home':'Away')+'</td><td>'+club(home?g.away:g.home)+'</td><td>'+(g.score?esc(resultText(g,selected)):'—')+'</td></tr>';
-    }).join('')+'</tbody></table>';
+    }).join('')+'</tbody></table></div>';
 }
 function rosterView(){
   const team=byId.get(selected),units=personnel(save.rosters[selected]);
@@ -1088,10 +1266,14 @@ function rosterView(){
         section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>';
 }
+const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).completed?'after week '+cur(S).completed:'preseason');
 function draw(){
   const s=cur();
   $('#tabs').innerHTML=['Owner desk','Scoreboard','Standings','Team schedule','Rosters','Club directory'].map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
-  $('#status').textContent=saveMessage;
+  drawStatus();
+  const prompt=$('#importPrompt');
+  prompt.hidden=!pendingImport;
+  prompt.innerHTML=pendingImport?'<span>'+esc('Replace your current season ('+describeSave(save)+') with the one you loaded ('+describeSave(pendingImport)+')?')+'</span><button id="importYes">Replace season</button><button id="importNo">Keep current season</button>':'';
   const next=$('#advance');
   next.disabled=s.completed===s.weeks.length||!save.club;
   next.textContent=!save.club?'Choose a club':s.completed===s.weeks.length?'Regular season complete':'Advance week '+(s.completed+1)+' →';
@@ -1105,7 +1287,9 @@ function draw(){
 save=boot();
 persist();
 let scoutPos='DE';
-let viewed=Math.max(1,cur().completed),tab='Owner desk',selected=save.club??clubs[0].id;
+let viewed,tab,selected,pendingImport=null;
+function resetView(){viewed=Math.max(1,cur().completed);tab='Owner desk';selected=save.club??clubs[0].id;}
+resetView();
 const app=$('#app');
 
 document.addEventListener('click',e=>{
@@ -1117,6 +1301,8 @@ document.addEventListener('click',e=>{
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
   if(b.id==='accept'||b.id==='decline'){resolveOffer(save,b.id==='accept');commit();}
+  if(b.id==='importYes'&&pendingImport)applyImport(pendingImport);
+  if(b.id==='importNo'){pendingImport=null;draw();}
   if(b.id==='advance'&&save.club&&cur().completed<cur().weeks.length){playWeek(save);viewed=cur().completed;tab='Owner desk';commit();}
 });
 app.onchange=e=>{
@@ -1137,18 +1323,27 @@ filePicker.onchange=async()=>{
   const file=filePicker.files[0];if(!file)return;
   try{
     const incoming=readSaveFile(await file.text());
-    if(save.club&&!confirm('Load this season in place of the current browser save? Download a season copy first if you want to keep both.'))return;
-    save=incoming;tab='Owner desk';viewed=Math.max(1,cur().completed);selected=save.club??clubs[0].id;
-    commit();
+    if(save.club){pendingImport=incoming;saveMessage='';draw();}
+    else applyImport(incoming);
   }catch(error){
     saveMessage='Could not load save: '+sentence(error.message);draw();
   }finally{filePicker.value='';}
 };
-$('#copy').onclick=()=>{
-  const clone=document.documentElement.cloneNode(true);
-  clone.querySelector('#initialSeason').textContent=embeddableJson(save);
-  clone.querySelector('#app').replaceChildren();
-  download('cgl-week-'+cur().completed+'.html','<!doctype html>'+clone.outerHTML,'text/html');
-};
-draw();
-</script></html>
+function applyImport(S){save=S;pendingImport=null;resetView();commit();}
+$('#copy').onclick=()=>offerFile('cgl-season-'+cur().number+'-week-'+cur().completed+'.json',JSON.stringify(save));
+
+// Keep the open tab and selections when a new version of the page arrives.
+function start(data){
+  if(data&&typeof data==='object'){
+    if(['Owner desk','Scoreboard','Standings','Team schedule','Rosters','Club directory'].includes(data.tab))tab=data.tab;
+    if(isInt(data.viewed,1,cur().weeks.length))viewed=data.viewed;
+    if(byId.has(data.selected))selected=data.selected;
+    if(positionNames.has(data.scoutPos))scoutPos=data.scoutPos;
+  }
+  draw();
+}
+const hot=window.claude?.hot;
+try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos}));}catch{}
+try{hot?.ready?hot.ready(start):start(hot?.data??{});}catch{start({});}
+const cloudReady=connectCloud();
+</script>

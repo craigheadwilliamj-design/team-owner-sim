@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert/strict');
-const { loadGame, memoryStorage } = require('./harness');
+const { loadGame, memoryStorage, fakeClaude } = require('./harness');
 
 const GAME = path.join(__dirname, '..', 'season-desk.html');
 const FIX = path.join(__dirname, 'fixtures');
@@ -11,7 +11,8 @@ const v1Save = fs.readFileSync(path.join(FIX, 'v1-save.json'), 'utf8');
 const v1Copy = fs.readFileSync(path.join(FIX, 'v1-copy.html'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
-  'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION'];
+  'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION', 'cloudReady',
+  'live:()=>({save,saveMessage,cloudState})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -65,7 +66,7 @@ test('second boot reads the migrated save, not the legacy key', () => {
   storage.setItem('cgl.save.default', JSON.stringify(s));
   const second = load({ storage }).api;
   assert.equal(second.cur().completed, JSON.parse(v1Save).completed + 1);
-  assert.equal(second.saveMessage, 'Season saved on this browser');
+  assert.equal(second.saveMessage, 'Saved in this browser.');
 });
 
 test('v1 staff sentences become structured events and read the same', () => {
@@ -204,10 +205,84 @@ test('ordinary depth trades still go through', () => {
   assert(S.rosters['club-06'].some(p => p.id === wr.id));
 });
 
+
+// ---- Account saves (db capability) -----------------------------------------
+const settle = () => new Promise(r => setTimeout(r, 20));
+test('first visit writes the season to the account in parts under 256 KiB', async () => {
+  const { store, claude } = fakeClaude();
+  const { api } = load({ window: { claude } });
+  const S = api.live().save; S.club = 'club-06';
+  for (let i = 0; i < 18; i++) api.playWeek(S);
+  await api.cloudReady; await settle();
+  const keys = [...store.keys()];
+  assert(keys.every(k => k.startsWith('data/users/viewer-1/save-default')));
+  assert(keys.length > 1, 'a full season needs more than one part');
+  const meta = JSON.parse(store.get('data/users/viewer-1/save-default'));
+  const raw = [meta.d, ...Array.from({ length: meta.parts - 1 }, (_, i) => JSON.parse(store.get('data/users/viewer-1/save-default.' + meta.gen + '.' + (i + 1))).d)].join('');
+  assert.equal(raw, JSON.stringify(S));
+  assert.equal(api.live().cloudState, 'synced');
+});
+
+test('a new browser picks up the account season', async () => {
+  const { store, claude } = fakeClaude();
+  const first = load({ window: { claude } }).api;
+  const S = first.live().save; S.club = 'club-21'; first.playWeek(S); first.playWeek(S); S.revision = 5;
+  await first.cloudReady; await settle();
+  const second = load({ window: { claude } }).api; // fresh browser storage
+  await second.cloudReady;
+  assert.equal(second.live().save.saveId, S.saveId);
+  assert.equal(second.live().save.club, 'club-21');
+  assert.equal(second.cur(second.live().save).completed, 2);
+});
+
+test('the newer copy wins, and a different season in the browser is set aside', async () => {
+  const { store, claude } = fakeClaude();
+  const a = load({ window: { claude } }).api;
+  const S = a.live().save; S.club = 'club-01'; S.revision = 3;
+  await a.cloudReady; await settle();
+  // Same season, browser behind: account copy is adopted.
+  const behind = JSON.parse(JSON.stringify(S)); behind.revision = 1;
+  const b = load({ window: { claude }, storage: memoryStorage({ 'cgl.save.default': JSON.stringify(behind) }) }).api;
+  await b.cloudReady;
+  assert.equal(b.live().save.revision, 3);
+  // Different season with progress in the browser: account wins, browser copy kept.
+  const other = load().api.newSave(99); other.club = 'club-32'; other.revision = 7;
+  const storage = memoryStorage({ 'cgl.save.default': JSON.stringify(other) });
+  const c = load({ window: { claude }, storage }).api;
+  await c.cloudReady;
+  assert.equal(c.live().save.saveId, S.saveId);
+  assert.match(c.live().saveMessage, /kept in browser storage/);
+  assert([...storage.data.keys()].some(k => k.includes('.set-aside-')));
+});
+
+test('an unreachable account save is never overwritten', async () => {
+  const store = new Map([['data/users/viewer-1/save-default', JSON.stringify({ d: '{}', parts: 2, gen: 'x', saveId: 'zzz', revision: 9 })]]);
+  const { claude } = fakeClaude(store);
+  const { api } = load({ window: { claude } });
+  await api.cloudReady; await settle();
+  assert.equal(api.live().cloudState, 'unreachable');
+  assert.equal(JSON.parse(store.get('data/users/viewer-1/save-default')).revision, 9);
+});
+
+test('season files load as JSON, and old cgl-week HTML copies still load', () => {
+  const { api } = load();
+  const S = api.newSave(5);
+  assert.equal(api.readSaveFile(JSON.stringify(S)).saveId, S.saveId);
+  assert.equal(api.readSaveFile(v1Copy).schemaVersion, 2);
+});
+
+test('the page never relies on confirm() or a page-started download', () => {
+  const html = fs.readFileSync(GAME, 'utf8');
+  assert(!/\bconfirm\(/.test(html));
+  assert(!/\.download\s*=/.test(html));
+});
+
 let failed = 0;
+(async () => {
 for (const [name, fn] of tests) {
-  try { fn(); console.log('  ok   ' + name); }
+  try { await fn(); console.log('  ok   ' + name); }
   catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + String(e.stack || e).split('\n').slice(0, 3).join('\n       ')); }
 }
 console.log(failed ? `\n${failed} of ${tests.length} failed` : `\nall ${tests.length} passed`);
 process.exit(failed ? 1 : 0);
+})();

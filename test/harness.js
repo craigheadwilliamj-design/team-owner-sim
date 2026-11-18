@@ -29,7 +29,7 @@ function memoryStorage(initial = {}) {
 }
 
 // exportNames: identifiers to expose from the page script's scope.
-function loadGame(htmlPath, { storage = memoryStorage(), embedded = null, exportNames = [] } = {}) {
+function loadGame(htmlPath, { storage = memoryStorage(), embedded = null, exportNames = [], window: windowExtras = {} } = {}) {
   const html = fs.readFileSync(htmlPath, 'utf8');
   const seed = html.match(/<script id="seed"[^>]*>([\s\S]*?)<\/script>/)[1];
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
@@ -46,12 +46,24 @@ function loadGame(htmlPath, { storage = memoryStorage(), embedded = null, export
     addEventListener() {},
     documentElement: stubElement(),
   };
-  const sandbox = { document, localStorage: storage, window: { scrollTo() {} }, confirm: () => true };
-  const exportLine = ';return {' + exportNames.map(n => n + ':typeof ' + n + "==='undefined'?undefined:" + n).join(',') + '};';
+  const sandbox = { document, localStorage: storage, window: { scrollTo() {}, ...windowExtras }, confirm: () => false };
+  // A name exports that binding; "key:expression" exports an expression (use a function for live values).
+  const exportLine = ';return {' + exportNames.map(n => n.includes(':') ? n : n + ':typeof ' + n + "==='undefined'?undefined:" + n).join(',') + '};';
   // eslint-disable-next-line no-new-func
   const run = new Function(...Object.keys(sandbox), code + exportLine);
   const api = run(...Object.values(sandbox));
   return { api, storage, elements, html };
 }
 
-module.exports = { loadGame, memoryStorage };
+// In-memory stand-in for the db and user capabilities, enforcing the 256 KiB document limit.
+function fakeClaude(store = new Map(), userId = 'viewer-1') {
+  const doc = path => ({
+    get: async () => { const d = store.get(path); return { exists: d !== undefined, data: () => (d === undefined ? undefined : JSON.parse(d)) }; },
+    set: async data => { const text = JSON.stringify(data); if (Buffer.byteLength(text) > 262144) throw { code: 'invalid_argument' }; store.set(path, text); },
+    delete: async () => { store.delete(path); },
+  });
+  const db = { collection: p => ({ doc: id => doc(p + '/' + id) }) };
+  return { store, claude: { use: async name => (name === 'db' ? db : name === 'user' ? { id: async () => userId } : null) } };
+}
+
+module.exports = { loadGame, memoryStorage, fakeClaude };

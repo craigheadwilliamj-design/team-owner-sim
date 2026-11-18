@@ -11,11 +11,13 @@ const v1Save = fs.readFileSync(path.join(FIX, 'v1-save.json'), 'utf8');
 const v1Copy = fs.readFileSync(path.join(FIX, 'v1-copy.html'), 'utf8');
 const v2Save = fs.readFileSync(path.join(FIX, 'v2-save.json'), 'utf8');
 const v3Save = fs.readFileSync(path.join(FIX, 'v3-save.json'), 'utf8');
+const v4Save = fs.readFileSync(path.join(FIX, 'v4-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
+  'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -329,11 +331,11 @@ test('stadium pages render, with hostile official names escaped', () => {
 const mandate = (o = {}) => ({ minAnnual: 6, maxYears: 25, exclude: [], authority: 'sign', ...o });
 const playAll = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); };
 
-test('v3 save upgrades to v4 with finances, and stadium talks survive', () => {
+test('v3 save upgrades with finances, and stadium talks survive', () => {
   const { api } = load();
   const old = JSON.parse(v3Save);
   const S = api.upgrade(old).save;
-  assert.equal(S.schemaVersion, 4);
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.stadium, old.stadium);
   assert.deepEqual(S.world, old.world);
   assert.equal(S.finance.ledger.length, 0);
@@ -481,6 +483,148 @@ test('finances page renders every state without raw markup', () => {
   html = api.financesView() + api.ownershipDesk();
   assert(html.includes('Sign the deal') && html.includes('Needs your decision'));
   assert(!/<script|onerror/i.test(html));
+});
+
+
+// ---- Owners, press and markets ---------------------------------------------
+const contested = (seed, bid = { annual: 12, years: 7, lobby: true }) => {
+  const { api, S } = owned(seed);
+  api.ensureContest(S);
+  if (bid) api.submitBid(S, bid.annual, bid.years, bid.lobby);
+  return { api, S };
+};
+const liveContest = () => { const { api } = load(); const S = api.save; S.club = 'club-06'; api.ensureContest(S); api.submitBid(S, 12, 7, true); return { api, S }; };
+const untilMeeting = (api, S) => { while (!S.league.meeting && api.cur(S).completed < 18) api.playWeek(S); };
+const untilVote = (api, S) => { while (S.league.meeting.status !== 'decided') api.playWeek(S); };
+
+test('v4 save upgrades to v5: owners, markets, and the Columbus contest for Cincinnati', () => {
+  const { api } = load();
+  const old = JSON.parse(v4Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, 5);
+  assert.deepEqual(S.finance, old.finance);
+  assert.equal(Object.keys(S.league.owners).length, 32);
+  assert.equal(S.league.contest.marketId, 'columbus');
+  assert.equal(S.league.contest.holder, 'club-07');
+  assert(S.league.contest.deadlineWeek > old.seasons[0].completed);
+});
+
+test('Cincinnati contests Columbus against Cleveland and control changes hands', () => {
+  const { api, S } = contested(51);
+  const C = S.league.contest;
+  assert.equal(C.marketId, 'columbus');
+  const fansBefore = { ...S.league.markets.columbus.fans };
+  while (C.status === 'open') api.playWeek(S);
+  assert.equal(C.winner, 'club-06', 'a max offer with a station visit wins');
+  assert.equal(S.league.markets.columbus.holder, 'club-06');
+  const cell = api.mapPoints(S).find(p => p.id === 'columbus');
+  assert.deepEqual(cell.holders, ['club-06'], 'the map cell now belongs to Cincinnati');
+  assert(S.league.markets.columbus.fans['club-07'] >= fansBefore['club-07'], 'Cleveland keeps its fans: control and preference are separate');
+  const rival = S.league.owners['club-07'];
+  assert.match(rival.memory.at(-1).text, /took the Columbus broadcast rights/);
+  assert.match(api.describeEvent(S.events.find(e => e.type === 'rightsWon')), /Cleveland Bulldogs’ \$/);
+  assert(S.league.news.some(n => /win Columbus TV rights/.test(n.text)));
+});
+
+test('a low offer loses, and no offer means an unopposed renewal', () => {
+  const low = contested(52, { annual: 1, years: 3, lobby: false });
+  while (low.S.league.contest.status === 'open') low.api.playWeek(low.S);
+  assert.equal(low.S.league.contest.winner, 'club-07');
+  assert(low.S.events.some(e => e.type === 'rightsLost'));
+  const none = contested(53, null);
+  while (none.S.league.contest.status === 'open') none.api.playWeek(none.S);
+  assert(none.S.events.some(e => e.type === 'rightsRenewed'));
+});
+
+test('kickoff windows: both Ohio clubs air in Columbus at different times, only the holder on a conflict', () => {
+  const { api, S } = contested(54);
+  let both = 0, conflict = 0;
+  for (let w = 0; w < 18; w++) {
+    const rows = api.coverage(S, 'columbus', w), cin = rows.find(r => r.id === 'club-06'), cle = rows.find(r => r.id === 'club-07');
+    if (!cin.slot || !cle.slot) continue;
+    if (cin.slot === cle.slot) { conflict++; assert(cle.airs && !cin.airs); assert.match(api.coverageText(S, w), /sees Cleveland, not you/); }
+    else { both++; assert(cle.airs && cin.airs); assert.match(api.coverageText(S, w), /Both games air/); }
+  }
+  assert(both > 0 && conflict > 0, `both ${both}, conflict ${conflict}`);
+});
+
+test('the losing owner calls a vote, and it would hand Columbus back', () => {
+  const { api, S } = liveContest();
+  untilMeeting(api, S);
+  const V = S.league.meeting;
+  assert.equal(V.sponsor, 'club-07');
+  assert(V.reversal);
+  assert.match(api.leagueView(), /Columbus would go back to Cleveland/);
+  assert(S.events.some(e => e.type === 'meetingCalled'));
+});
+
+test('lobbying: calls reveal where owners stand, promises move them and are remembered', () => {
+  const { api, S } = contested(56);
+  untilMeeting(api, S);
+  const V = S.league.meeting, target = Object.keys(S.league.owners).find(id => id !== 'club-06' && id !== V.sponsor);
+  const before = api.ownerLean(S, target);
+  assert.equal(api.callOwner(S, target, true), 'ok');
+  assert(api.ownerLean(S, target) < before - 0.5, 'a promise moves them toward your side');
+  assert(target in V.revealed);
+  assert.equal(S.league.promises.length, 1);
+  assert.match(S.league.owners[target].memory.at(-1).text, /promised to back their next proposal/);
+  assert.equal(api.callOwner(S, V.sponsor, false), 'unavailable');
+  while (V.callsLeft > 0) api.callOwner(S, Object.keys(S.league.owners).find(id => id !== 'club-06' && id !== V.sponsor), false);
+  assert.equal(api.callOwner(S, target, false), 'noCalls');
+});
+
+test('the vote counts every owner, and a pass returns Columbus to Cleveland', () => {
+  let passedOnce = false, failedOnce = false;
+  for (let seed = 60; seed < 90 && !(passedOnce && failedOnce); seed++) {
+    const { api, S } = contested(seed);
+    untilMeeting(api, S);
+    untilVote(api, S);
+    const V = S.league.meeting;
+    assert.equal(Object.keys(V.votes).length, 32);
+    assert.equal(V.votes['club-07'], 'yes');
+    assert.equal(V.votes['club-06'], 'no');
+    if (V.passed) { passedOnce = true; assert.equal(S.league.markets.columbus.holder, 'club-07'); assert.deepEqual(api.mapPoints(S).find(p => p.id === 'columbus').holders, ['club-07']); }
+    else { failedOnce = true; assert.equal(S.league.markets.columbus.holder, 'club-06'); assert.match(S.league.owners['club-07'].memory.at(-1).text, /block/); }
+    assert(S.league.news.some(n => /first-refusal rule/.test(n.text)));
+  }
+  assert(passedOnce && failedOnce, 'votes go both ways across seeds');
+});
+
+test('owners who resent subsidies hear about the plane you paid for', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v4Save)).save; // this save's owner paid for the plane personally
+  api.playWeek(S);
+  const resentful = Object.entries(S.league.owners).filter(([id, o]) => id !== 'club-06' && o.subsidy < -0.3);
+  assert(resentful.length > 0);
+  for (const [, o] of resentful) assert(o.memory.some(m => /team plane personally/.test(m.text)));
+  const others = Object.entries(S.league.owners).filter(([id, o]) => o.subsidy >= -0.3);
+  for (const [, o] of others) assert(!o.memory.some(m => /team plane/.test(m.text)));
+});
+
+test('owning out-of-market rights shows up in the books', () => {
+  const { api, S } = contested(57);
+  while (S.league.contest.status === 'open') api.playWeek(S);
+  api.playWeek(S);
+  assert.notEqual(S.finance.ledger.at(-1).lines.marketRights, 0);
+});
+
+test('voronoi cells: one per market, each contains its own city, and they tile the map', () => {
+  const { api } = load();
+  const pts = api.mapPoints(api.save), cells = api.voronoiCells(pts.map(p => [p.x, p.y]), 760, 590);
+  assert.equal(cells.length, 38);
+  const area = poly => Math.abs(poly.reduce((a, [x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x * y2 - x2 * y; }, 0)) / 2;
+  const inside = (poly, [px, py]) => poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) >= -1e-6; }) || poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) <= 1e-6; });
+  pts.forEach((p, i) => assert(inside(cells[i], [p.x, p.y]), p.id));
+  assert(Math.abs(cells.reduce((a, c) => a + area(c), 0) - 760 * 590) < 1);
+});
+
+test('league page renders with owners, map and headlines, escaped', () => {
+  const { api, S } = liveContest();
+  untilMeeting(api, S);
+  S.league.owners['club-01'].name = '<img src=x> Boss';
+  const html = api.leagueView();
+  assert(html.includes('marketMap') && html.includes('League meeting') && html.includes('Headlines') && html.includes('Promise support'));
+  assert(!html.includes('<img src=x>'));
 });
 
 // ---- Save files ------------------------------------------------------------

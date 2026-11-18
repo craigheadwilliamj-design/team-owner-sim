@@ -80,6 +80,12 @@ th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
 .ledger td:not(:first-child),.ledger th:not(:first-child){text-align:right;white-space:nowrap}
 .ledger .sum th{border-bottom:2px solid var(--rule-strong)}
 fieldset.exclude{border:1px solid var(--rule);border-radius:6px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 16px;padding:10px 12px;color:var(--muted)}
+figure.map{margin:0 0 16px}
+#marketMap{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:760/590}
+figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
+.owners td{vertical-align:top}
+.calls{white-space:nowrap}
+.calls button{padding:4px 8px;font-size:.85rem;margin:0 4px 4px 0}
 fieldset.exclude label{display:flex;gap:6px;align-items:center;color:var(--fg)}
 optgroup{font-style:normal}
 footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
@@ -450,7 +456,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=4;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=5;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
@@ -674,7 +680,7 @@ function newSave(seed=newSeed()){
   const season=makeSeason(r,1);
   return {schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,seasonIndex:0,seasons:[season],
     rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0,
-    world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r)};
+    world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r),league:makeLeague(r)};
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
 function record(S,type,data){
@@ -695,6 +701,7 @@ function playWeek(S){
   s.completed++;
   finishMedicalWeek(S,units,r);
   processStadium(S,r);
+  processLeague(S,r);
   processFinance(S);
   processNaming(S);
 }
@@ -959,6 +966,7 @@ function resolveVisit(S,v,r){
   if(v.ask==='listen'){site.infraKnown=true;if(site.issue&&w>=50)site.issueKnown=true;}
   const leaked=r()<(v.discretion==='quiet'?.06:.55)+(v.who!=='president'?.12:0);
   if(f){tell(f,official.id);if(leaked)leak(S,f);}
+  if(leaked)news(S,byId.get(S.club).market+' ownership quietly courted '+market.name+', sources say');
   v.status='done';
   record(S,'visitReport',{visitId:v.id,siteId:site.id,siteName:site.name,marketName:market.name,homeMarket:byId.get(S.club).market,
     plan:{who:v.who,discretion:v.discretion,ask:v.ask,signal:v.signal},
@@ -998,9 +1006,10 @@ function whoLabel(S,w){
   if(w==='consultants')return 'Feasibility consultants';
   if(w==='press')return 'Reporters';
   if(w==='league')return 'League finance committee';
+  if(w==='station')return 'The local TV station';
   if(w==='sponsors')return 'Prospective sponsors';
   if(w==='home')return byId.get(S.club).market+' officials and fans';
-  const o=officialById(S,w);return o?o.title+' '+o.name+'’s office':w;
+  const o=officialById(S,w);return o?possessive(o.title+' '+o.name)+' office':w;
 }
 function factText(S,f){
   const site=siteById(S,f.siteId),market=site&&marketById(S,site.marketId);
@@ -1012,6 +1021,7 @@ function factText(S,f){
   if(f.kind==='study')return 'Feasibility study of '+where;
   if(f.kind==='ownerFunding')return 'You paid personally for the '+projectDef(f.project).name.toLowerCase();
   if(f.kind==='namingTalks')return 'Naming-rights talks for your stadium';
+  if(f.kind==='stationVisit')return 'Your visit to the '+openMarket(f.marketId).name+' TV station';
   return 'Note about '+where;
 }
 function stadiumView(){
@@ -1114,11 +1124,11 @@ const NAMING_SPONSORS={
 const CATEGORY_LABEL={bank:'Bank',insurance:'Insurance',airline:'Airline',telecom:'Telecom',sportsbook:'Sportsbook',crypto:'Crypto exchange',energy:'Energy',grocery:'Grocery'};
 const NAMING_ROUNDS=3;
 const LINE_LABELS={
-  nationalTV:'National TV share',localMedia:'Local media',sponsorship:'Sponsorship',namingRights:'Naming rights',
+  nationalTV:'National TV share',localMedia:'Local media',marketRights:'Out-of-market broadcast rights (net)',sponsorship:'Sponsorship',namingRights:'Naming rights',
   tickets:'Tickets',premium:'Suites and club seats',concessions:'Concessions and parking',visitorShare:'Gate sharing (34% goes to the visitor)',
   payroll:'Player payroll',footballOps:'Coaches, scouting and medical',businessOps:'Business operations',travel:'Team travel',
   stadiumRent:'Stadium rent',gameDay:'Game-day operations',projects:'Project running costs',debtService:'Debt payments'};
-const RECEIPT_LINES=['nationalTV','localMedia','sponsorship','namingRights','tickets','premium','concessions','visitorShare'];
+const RECEIPT_LINES=['nationalTV','localMedia','marketRights','sponsorship','namingRights','tickets','premium','concessions','visitorShare'];
 const EXPENSE_LINES=['payroll','footballOps','businessOps','travel','stadiumRent','gameDay','projects','debtService'];
 
 function makeFinance(r){
@@ -1165,7 +1175,8 @@ function payroll(S,id){
 function weekLines(S,g){
   const id=S.club,team=byId.get(id),lease=S.world.leases[id],F=S.finance,metro=localMetro(team);
   const L={nationalTV:perWeek(300),localMedia:perWeek(40+18*Math.sqrt(metro)),sponsorship:perWeek(25+10*Math.sqrt(metro)),
-    namingRights:F.naming.status==='signed'?perWeek(F.naming.deal.annual):0,tickets:0,premium:0,concessions:0,visitorShare:0,
+    namingRights:F.naming.status==='signed'?perWeek(F.naming.deal.annual):0,
+    marketRights:S.league?Object.entries(S.league.markets).filter(([,M])=>M.holder===id).reduce((sum,[mk,M])=>sum+perWeek(adValue(mk,M.fans[id]??0)-M.fee),0):0,tickets:0,premium:0,concessions:0,visitorShare:0,
     payroll:-perWeek(payroll(S,id)),footballOps:-perWeek(70),businessOps:-perWeek(45),travel:-perWeek(effectActive(S,'plane')?3:8),
     stadiumRent:-perWeek(leaseRent(lease)),gameDay:0,
     projects:-perWeek(F.projects.filter(p=>p.status==='active').reduce((sum,p)=>sum+projectDef(p.id).recurring,0)),
@@ -1282,6 +1293,7 @@ function signNaming(S,offer,delegated){
   const f=S.stadium.knowledge.find(x=>x.id===S.finance.naming.factId);
   if(f)tell(f,'press','home');
   S.finance.naming={status:'signed',deal};
+  news(S,old+' will become '+lease.stadium+' under a '+deal.years+'-year naming deal');
   record(S,'namingSigned',{deal});
 }
 function approveNaming(S){const N=S.finance.naming;if(N.status==='awaiting')signNaming(S,N.offer,false);}
@@ -1300,7 +1312,7 @@ function financeEventText(e){
     case 'namingAwaiting':{const o=e.offer;return e.outside?
       'After '+e.rounds+' rounds nobody met your terms. The best offer is '+o.company+' ('+CATEGORY_LABEL[o.category].toLowerCase()+') at $'+o.annual+'M a year for '+o.years+' years, but '+o.reason+'. It is on the Finances page through week '+e.expiresWeek+' if you want it anyway.':
       o.company+' offered $'+o.annual+'M a year for '+o.years+' years, inside your terms. You asked to approve it yourself, so it is on the Finances page through week '+e.expiresWeek+'.';}
-    case 'namingLapsed':return e.company+'’s naming offer lapsed without an answer.';
+    case 'namingLapsed':return possessive(e.company)+' naming offer lapsed without an answer.';
     case 'namingDeclined':return 'I told '+e.company+' we are passing on their naming offer.';
   }
   return '';
@@ -1315,7 +1327,7 @@ function financesView(){
   const S=save,id=S.club;
   if(!id)return heading('FINANCES','Choose a club first')+'<p>Take ownership on the Owner desk to open the books.</p>';
   const s=cur(),F=S.finance,season=F.ledger.filter(x=>x.season===s.number),last=season.at(-1);
-  const total=k=>round2(season.reduce((sum,x)=>sum+x.lines[k],0));
+  const total=k=>round2(season.reduce((sum,x)=>sum+(x.lines[k]??0),0));
   const result=round2(season.reduce((sum,x)=>sum+x.result,0));
   const ownerCapital=round2(F.capitalLog.filter(x=>x.season===s.number&&x.funding==='owner').reduce((a,x)=>a+x.amount,0));
   const ownerOperating=round2(season.reduce((a,x)=>a+x.ownerOperating,0));
@@ -1326,8 +1338,8 @@ function financesView(){
     '<div><small>Club debt</small><b>'+m1(F.debt)+'</b>League limit '+m1(DEBT_LIMIT)+'</div>'+
     '<div><small>Operating result</small><b>'+m1(result)+'</b>Season to date, before owner money</div></div>';
 
-  const row=k=>'<tr><td>'+LINE_LABELS[k]+'</td><td>'+(last?m1(last.lines[k]):'—')+'</td><td>'+(season.length?m1(total(k)):'—')+'</td></tr>';
-  const sub=(label,keys)=>{const t=round2(keys.reduce((a,k)=>a+total(k),0)),l=last?round2(keys.reduce((a,k)=>a+last.lines[k],0)):null;
+  const row=k=>'<tr><td>'+LINE_LABELS[k]+'</td><td>'+(last?m1(last.lines[k]??0):'—')+'</td><td>'+(season.length?m1(total(k)):'—')+'</td></tr>';
+  const sub=(label,keys)=>{const t=round2(keys.reduce((a,k)=>a+total(k),0)),l=last?round2(keys.reduce((a,k)=>a+(last.lines[k]??0),0)):null;
     return '<tr class="sum"><th>'+label+'</th><th>'+(l===null?'—':m1(l))+'</th><th>'+(season.length?m1(t):'—')+'</th></tr>';};
   const report='<h2>Operating report</h2><p>'+(season.length?season.length+' week'+(season.length===1?'':'s')+' recorded this season'+(season[0].week>1?', starting after week '+season[0].week:'')+'.':'The first report arrives after your next game.')+
     ' The club’s fiscal year runs with the 18-week season. Payroll follows the roster, so trades change it.</p>'+
@@ -1375,6 +1387,372 @@ function financesView(){
   return heading('FINANCES',teamName(id))+units+report+projects+naming;
 }
 
+
+// ---------------------------------------------------------------------------
+// Owners, press and markets
+//
+// league.markets   broadcast control and fan preference for each open market.
+//                  Control and fans are separate: Cleveland can keep more
+//                  Columbus fans after Cincinnati wins the rights.
+// league.contest   the rights renewal the owner can fight for: the nearest
+//                  open market another club controls
+// league.owners    the other 31 owners: style, traits, how they feel about
+//                  you, and what they remember
+// league.meeting   a vote the losing owner calls, which you can lobby
+// league.news      headlines, written from the same events as the inbox
+// ---------------------------------------------------------------------------
+const HOME_COORDS={buffalo:[42.89,-78.88],miami:[25.76,-80.19],'new-england':[42.09,-71.26],'new-york':[40.71,-74.0],baltimore:[39.29,-76.61],
+  cincinnati:[39.10,-84.51],cleveland:[41.50,-81.69],pittsburgh:[40.44,-79.99],houston:[29.76,-95.37],indianapolis:[39.77,-86.16],
+  jacksonville:[30.33,-81.66],tennessee:[36.16,-86.78],denver:[39.74,-104.99],'kansas-city':[39.10,-94.58],'las-vegas':[36.17,-115.14],
+  'los-angeles':[34.05,-118.24],dallas:[32.78,-96.80],philadelphia:[39.95,-75.17],washington:[38.91,-77.04],'green-bay':[44.51,-88.01],
+  chicago:[41.88,-87.63],detroit:[42.33,-83.05],minnesota:[44.98,-93.27],atlanta:[33.75,-84.39],carolina:[35.23,-80.84],
+  'new-orleans':[29.95,-90.07],'tampa-bay':[27.95,-82.46],arizona:[33.45,-112.07],'san-francisco':[37.77,-122.42],seattle:[47.61,-122.33]};
+// Placeholder initial rights; the bible leaves the real list open.
+const INITIAL_RIGHTS={columbus:'club-07','san-antonio':'club-09','oklahoma-city':'club-17','mexico-city':'club-29',
+  toronto:'club-01',portland:'club-32','st-louis':'club-14','san-diego':'club-30'};
+const OWNER_STYLES=['old guard','operator','maverick'];
+const possessive=n=>n+(n.endsWith('s')?'’':'’s');
+const VOTE_THRESHOLD=24;  // three quarters of 32 clubs
+const MEETING_CALLS=6;
+
+function milesBetween([la1,lo1],[la2,lo2]){
+  const rad=Math.PI/180,dla=(la2-la1)*rad,dlo=(lo2-lo1)*rad;
+  const h=Math.sin(dla/2)**2+Math.cos(la1*rad)*Math.cos(la2*rad)*Math.sin(dlo/2)**2;
+  return 3959*2*Math.asin(Math.sqrt(h));
+}
+const openMarket=id=>OPEN_MARKETS.find(m=>m.id===id);
+const clubCoords=id=>HOME_COORDS[byId.get(id).marketId];
+function nearestClubs(marketId,n){
+  const m=openMarket(marketId),seen=new Set();
+  return clubs.map(t=>({id:t.id,miles:milesBetween([m.lat,m.lon],HOME_COORDS[t.marketId])})).sort((a,b)=>a.miles-b.miles)
+    .filter(x=>{const mk=byId.get(x.id).marketId;if(seen.has(mk))return false;seen.add(mk);return true;}).slice(0,n).map(x=>x.id);
+}
+function makeLeague(r){
+  const owners=Object.fromEntries(clubs.map(t=>[t.id,{name:personName(r),style:OWNER_STYLES[randInt(r,3)],
+    tradition:round2(r()-.5),subsidy:round2(r()*1.2-.6),sponsorAffinity:round2(r()*.6-.3),relation:randInt(r,26)-5,memory:[]}]));
+  const markets=Object.fromEntries(OPEN_MARKETS.map(m=>{
+    const holder=INITIAL_RIGHTS[m.id],second=nearestClubs(m.id,3).find(id=>id!==holder);
+    return [m.id,{holder,fee:round1(1.5+randInt(r,6)*.5),signedSeason:0,fans:{[holder]:45+randInt(r,16),[second]:20+randInt(r,16)}}];
+  }));
+  return {owners,markets,contest:null,meeting:null,news:[],promises:[],planeNoted:false};
+}
+const adValue=(marketId,share)=>round1(share/100*openMarket(marketId).metro*4);
+const holdsOpenMarket=(S,clubId)=>Object.values(S.league.markets).some(m=>m.holder===clubId);
+function remember(S,clubId,text,delta){
+  const o=S.league.owners[clubId],s=cur(S);
+  o.relation=Math.max(-100,Math.min(100,o.relation+delta));
+  o.memory.push({season:s.number,week:s.completed,text,delta});
+}
+function news(S,text){const s=cur(S);S.league.news.push({season:s.number,week:s.completed,text});}
+
+// The rights fight starts once the owner has a club.
+function ensureContest(S){
+  if(!S.club||S.league.contest)return;
+  const s=cur(S),home=clubCoords(S.club);
+  const target=OPEN_MARKETS.filter(m=>S.league.markets[m.id].holder!==S.club)
+    .sort((a,b)=>milesBetween(home,[a.lat,a.lon])-milesBetween(home,[b.lat,b.lon]))[0];
+  const M=S.league.markets[target.id];
+  if(!(S.club in M.fans))M.fans[S.club]=8;
+  const deadline=Math.min(s.weeks.length,s.completed+4);
+  S.league.contest={marketId:target.id,holder:M.holder,deadlineWeek:deadline,status:'open',bid:null,lobbied:false};
+}
+function stationRange(S){
+  const C=S.league.contest,M=S.league.markets[C.marketId],base=adValue(C.marketId,M.fans[C.holder]??40);
+  return [round1(Math.max(1,base*.8)),round1(base*1.3)];
+}
+function submitBid(S,annual,years,lobby){
+  const C=S.league.contest,s=cur(S);
+  if(!C||C.status!=='open'||s.completed>=C.deadlineWeek)return 'closed';
+  if(!(annual>=1&&annual<=12)||![3,5,7].includes(years))return 'invalid';
+  C.bid={annual:round1(annual),years};
+  if(lobby&&!C.lobbied){
+    C.lobbied=true;
+    learn(S,{kind:'stationVisit',marketId:C.marketId},['owner','president','station']);
+  }
+  return 'ok';
+}
+function withdrawBid(S){const C=S.league.contest;if(C?.status==='open')C.bid=null;}
+
+// Kickoff windows decide whether two clubs' games compete for the same audience.
+function slotFor(weekIndex,g){
+  let h=weekIndex*31+7;
+  for(const ch of g.home)h=(h*33+ch.charCodeAt(0))%9973;
+  const v=h%7;
+  return v<3?'early':v<6?'late':'night';
+}
+function gameOf(S,weekIndex,clubId){return cur(S).weeks[weekIndex]?.find(g=>g.home===clubId||g.away===clubId)??null;}
+// Who a market sees in a given week.
+function coverage(S,marketId,weekIndex){
+  const M=S.league.markets[marketId],H=M.holder,hg=H&&gameOf(S,weekIndex,H),hs=hg&&slotFor(weekIndex,hg);
+  return Object.keys(M.fans).map(id=>{
+    const g=gameOf(S,weekIndex,id);
+    if(!g)return {id,slot:null,airs:false};
+    const slot=slotFor(weekIndex,g);
+    return {id,slot,airs:id===H||!hg||slot!==hs};
+  });
+}
+function coverageText(S,weekIndex){
+  const C=S.league.contest;if(!C)return '';
+  const M=S.league.markets[C.marketId],name=openMarket(C.marketId).name,rows=coverage(S,C.marketId,weekIndex);
+  const me=rows.find(x=>x.id===S.club),H=M.holder,them=rows.find(x=>x.id===H);
+  if(!me?.slot)return 'You are off that week.';
+  if(H===S.club)return 'Your game airs in '+name+' in the '+me.slot+' window.';
+  if(!them?.slot)return byId.get(H).market+' is off, so your game airs in '+name+'.';
+  return me.airs?'Both games air in '+name+': '+byId.get(H).market+' '+them.slot+', yours '+me.slot+'.':
+    'Both games are in the '+me.slot+' window, so '+name+' sees '+byId.get(H).market+', not you.';
+}
+
+// Runs after each played week.
+function processLeague(S,r){
+  ensureContest(S);
+  const L=S.league,s=cur(S),wi=s.completed-1;
+  // Fans follow what they can watch.
+  for(const [id,M] of Object.entries(L.markets)){
+    for(const row of coverage(S,id,wi)){
+      if(!row.slot)continue;
+      const growth=row.id===M.holder?.35:row.airs?.08:0;
+      const other=100-Object.values(M.fans).reduce((a,b)=>a+b,0);
+      M.fans[row.id]=round2(M.fans[row.id]+Math.min(growth,Math.max(0,other-5)));
+    }
+  }
+  // Other owners hear about a personally funded plane through the finance committee.
+  if(!L.planeNoted&&S.stadium.knowledge.some(f=>f.kind==='ownerFunding'&&f.project==='plane'&&f.knownBy.includes('league'))){
+    L.planeNoted=true;
+    for(const [id,o] of Object.entries(L.owners))if(id!==S.club&&o.subsidy<-.3)remember(S,id,'You paid for your team plane personally. Their players still fly charter.',-6);
+  }
+  const C=L.contest;
+  if(C&&C.status==='open'&&s.completed>=C.deadlineWeek)decideContest(S,r);
+  const V=L.meeting;
+  if(V&&V.status==='scheduled'&&s.completed>=V.week)resolveVote(S);
+}
+function decideContest(S,r){
+  const L=S.league,C=L.contest,M=L.markets[C.marketId],name=openMarket(C.marketId).name,rival=C.holder,ro=L.owners[rival];
+  const [lo,hi]=stationRange(S);
+  const rivalBid={annual:round1(lo+(hi-lo)*(.25+r()*.6)*(ro.style==='maverick'?1.1:1)),years:5};
+  const score=(clubId,b)=>b.annual+b.years*.15+(M.fans[clubId]??0)*.03+(clubId===rival?.4:0)+(clubId===S.club&&C.lobbied?.8:0);
+  C.rivalBid=rivalBid;
+  const won=!!C.bid&&score(S.club,C.bid)>score(rival,rivalBid);
+  C.status='decided';C.winner=won?S.club:rival;
+  if(won){
+    Object.assign(M,{holder:S.club,fee:C.bid.annual,signedSeason:cur(S).number});
+    remember(S,rival,'You took the '+name+' broadcast rights from them.',-25);
+    record(S,'rightsWon',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
+    news(S,teamName(S.club)+' win '+name+' TV rights from '+teamName(rival));
+  }else if(C.bid){
+    M.fee=rivalBid.annual;
+    remember(S,rival,'You bid against them for '+name+'.',-5);
+    record(S,'rightsLost',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
+    news(S,teamName(rival)+' hold on to '+name+' after a bidding fight with '+byId.get(S.club).market);
+  }else{
+    M.fee=rivalBid.annual;
+    record(S,'rightsRenewed',{marketId:C.marketId,marketName:name,rival});
+  }
+  scheduleMeeting(S);
+}
+// The rival owner takes the fight to the owners' room.
+function scheduleMeeting(S){
+  const s=cur(S),L=S.league,C=L.contest;
+  const week=Math.min(s.weeks.length,s.completed+3);
+  if(week<=s.completed)return;
+  L.meeting={week,sponsor:C.holder,marketId:C.marketId,status:'scheduled',callsLeft:MEETING_CALLS,lobby:{},revealed:{},playerVote:null,
+    reversal:C.winner===S.club};
+  const name=openMarket(C.marketId).name,o=L.owners[C.holder];
+  record(S,'meetingCalled',{sponsor:C.holder,owner:o.name,marketName:name,week,reversal:L.meeting.reversal});
+  news(S,byId.get(C.holder).market+' owner '+o.name+' asks the league for a first-refusal rule on broadcast markets');
+}
+const playerOpposes=S=>S.league.meeting&&(S.league.meeting.reversal||S.league.contest?.bid!=null);
+function ownerLean(S,clubId){
+  const L=S.league,V=L.meeting,o=L.owners[clubId];
+  if(clubId===V.sponsor)return 9;
+  let x=.2+o.tradition*.6+o.sponsorAffinity+(holdsOpenMarket(S,clubId)?.5:0);
+  x+=(playerOpposes(S)?-1:1)*o.relation/100*.9;
+  return round2(x+(V.lobby[clubId]??0));
+}
+const leanLabel=x=>x>.15?'Leaning yes':x<-.15?'Leaning no':'Undecided';
+function callOwner(S,clubId,promise){
+  const L=S.league,V=L.meeting,o=L.owners[clubId];
+  if(!V||V.status!=='scheduled'||!o||clubId===S.club||clubId===V.sponsor)return 'unavailable';
+  if(V.callsLeft<=0)return 'noCalls';
+  V.callsLeft--;
+  const toward=playerOpposes(S)?-1:1;
+  let shift=o.relation>=10?.2:o.relation<=-10?-.1:.1;
+  if(promise){
+    shift=.6;
+    L.promises.push({clubId,season:cur(S).number,week:cur(S).completed,text:'Back their next proposal at a league meeting'});
+    remember(S,clubId,'You promised to back their next proposal.',5);
+  }
+  V.lobby[clubId]=round2((V.lobby[clubId]??0)+toward*shift);
+  V.revealed[clubId]=ownerLean(S,clubId);
+  return 'ok';
+}
+function setPlayerVote(S,vote){const V=S.league.meeting;if(V?.status==='scheduled'&&['yes','no'].includes(vote))V.playerVote=vote;}
+function resolveVote(S){
+  const L=S.league,V=L.meeting,name=openMarket(V.marketId).name,sponsor=V.sponsor,o=L.owners[sponsor];
+  const mine=V.playerVote??(playerOpposes(S)?'no':'yes');
+  const votes=Object.fromEntries(clubs.map(t=>[t.id,t.id===S.club?mine:ownerLean(S,t.id)>0?'yes':'no']));
+  const yes=Object.values(votes).filter(v=>v==='yes').length,passed=yes>=VOTE_THRESHOLD;
+  Object.assign(V,{status:'decided',votes,yes,passed});
+  let lostMarket=false;
+  if(passed&&V.reversal&&L.markets[V.marketId].holder===S.club){
+    Object.assign(L.markets[V.marketId],{holder:sponsor,signedSeason:cur(S).number});
+    lostMarket=true;
+  }
+  if(passed)remember(S,sponsor,'The owners backed their first-refusal rule.',4);
+  else if(mine==='no')remember(S,sponsor,'You helped block their first-refusal rule.',-10);
+  for(const t of clubs)if(t.id!==S.club&&t.id!==sponsor&&votes[t.id]===mine&&V.lobby[t.id])remember(S,t.id,'Voted with you on first refusal after your call.',2);
+  record(S,'voteResult',{sponsor,owner:o.name,marketName:name,yes,no:32-yes,passed,lostMarket,mine});
+  news(S,passed?'Owners approve first-refusal rule '+yes+'–'+(32-yes)+(lostMarket?'; '+name+' returns to '+byId.get(sponsor).market:''):
+    'First-refusal rule falls short, '+yes+'–'+(32-yes)+(V.reversal?'; '+byId.get(S.club).market+' keeps '+name:''));
+}
+
+// Words for league events.
+function leagueEventText(e){
+  const rival=e.rival&&teamName(e.rival);
+  switch(e.type){
+    case 'rightsWon':return 'The '+e.marketName+' station took our offer: $'+e.bid.annual+'M a year for '+e.bid.years+' years against '+possessive(rival)+' $'+e.rivalBid.annual+'M. Our games get preferred coverage there. Expect to hear from their owner.';
+    case 'rightsLost':return rival+' kept '+e.marketName+'. They offered $'+e.rivalBid.annual+'M a year against our $'+e.bid.annual+'M. They know we tried.';
+    case 'rightsRenewed':return rival+' renewed the '+e.marketName+' broadcast rights unopposed.';
+    case 'meetingCalled':return e.owner+' has called a league vote after week '+e.week+' on a first-refusal rule for broadcast markets.'+(e.reversal?' It would apply to deals signed this season, which means '+e.marketName+'.':'');
+    case 'voteResult':return 'The owners voted '+e.yes+'–'+e.no+' on '+possessive(e.owner)+' first-refusal rule. It needed '+VOTE_THRESHOLD+'. '+(e.passed?'It passed.'+(e.lostMarket?' '+e.marketName+' goes back to '+byId.get(e.sponsor).market+'.':''):'It failed.')+' You voted '+e.mine+'.';
+  }
+  return '';
+}
+
+// ---------------------------------------------------------------------------
+// The market map: one Voronoi cell per market city. Fill is the controlling
+// club's primary color, border its secondary. Shared home markets are striped.
+// ---------------------------------------------------------------------------
+const MAP={w:760,h:590,lon0:-128.5,lat0:53.5,k:.788};
+const mapScale=MAP.w/(64*MAP.k);
+const project=(lat,lon)=>[(lon-MAP.lon0)*MAP.k*mapScale,(MAP.lat0-lat)*mapScale];
+// Rough coastline and northern edge of the playable map, as [lon, lat].
+const OUTLINE=[[-124.7,48.4],[-124.1,46.2],[-124.5,42.8],[-124.2,40.4],[-122.5,37.7],[-120.6,34.6],[-118.4,33.9],[-117.1,32.5],
+  [-116.6,31.5],[-115.8,30.3],[-114.2,28.0],[-112.1,24.8],[-109.9,22.9],[-106.4,23.2],[-105.3,20.6],[-104.3,19.1],[-101.0,17.9],
+  [-98.0,16.3],[-94.0,16.0],[-92.2,14.6],[-91.4,17.3],[-89.1,17.9],[-87.5,18.5],[-87.0,21.5],[-90.4,21.2],[-90.5,19.5],[-92.5,18.6],
+  [-94.5,18.1],[-96.1,19.2],[-97.2,21.0],[-97.7,23.5],[-97.2,25.9],[-97.4,27.8],[-94.8,29.3],[-93.8,29.7],[-91.5,29.5],[-89.4,29.0],
+  [-89.6,30.2],[-88.0,30.4],[-85.4,29.7],[-84.0,30.1],[-82.8,28.0],[-81.8,26.1],[-80.9,25.1],[-80.1,25.8],[-80.6,28.4],[-81.4,30.5],
+  [-81.0,32.0],[-79.0,33.6],[-76.6,34.7],[-75.5,35.3],[-76.0,37.0],[-75.0,38.5],[-74.0,40.4],[-72.0,41.0],[-70.0,41.6],[-70.8,42.6],
+  [-70.2,43.7],[-67.0,44.8],[-65.8,44.3],[-63.6,44.6],[-61.0,45.6],[-64.8,48.8],[-68.5,49.0],[-66.5,50.2],[-60.0,50.3],[-70,52],
+  [-80,52],[-90,53],[-100,53],[-115,53],[-123,53],[-127.9,50.6],[-125.3,48.8],[-123.4,48.3]];
+function mapPoints(S){
+  const home=[...new Set(clubs.map(t=>t.marketId))].map(mk=>{
+    const ids=clubs.filter(t=>t.marketId===mk).map(t=>t.id),[x,y]=project(...HOME_COORDS[mk]);
+    return {id:mk,x,y,holders:ids,label:byId.get(ids[0]).market,open:false};
+  });
+  const open=OPEN_MARKETS.map(m=>{const [x,y]=project(m.lat,m.lon),h=S.league.markets[m.id].holder;return {id:m.id,x,y,holders:h?[h]:[],label:m.name,open:true};});
+  return [...home,...open];
+}
+function clipHalfPlane(poly,a,b,c){ // keep a*x + b*y <= c
+  const out=[];
+  for(let i=0;i<poly.length;i++){
+    const P=poly[i],Q=poly[(i+1)%poly.length],fp=a*P[0]+b*P[1]-c,fq=a*Q[0]+b*Q[1]-c;
+    if(fp<=0)out.push(P);
+    if((fp<0&&fq>0)||(fp>0&&fq<0)){const t=fp/(fp-fq);out.push([P[0]+t*(Q[0]-P[0]),P[1]+t*(Q[1]-P[1])]);}
+  }
+  return out;
+}
+function voronoiCells(points,w,h){
+  return points.map((p,i)=>points.reduce((poly,q,j)=>i===j?poly:
+    clipHalfPlane(poly,q[0]-p[0],q[1]-p[1],(q[0]*q[0]+q[1]*q[1]-p[0]*p[0]-p[1]*p[1])/2),[[0,0],[w,0],[w,h],[0,h]]));
+}
+function drawMap(canvas,S){
+  const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
+  canvas.width=MAP.w*dpr;canvas.height=MAP.h*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const css=getComputedStyle(document.documentElement),token=(n,f)=>css.getPropertyValue(n).trim()||f;
+  const fg=token('--fg','#192d36'),bg=token('--bg','#f5f3eb'),neutral=token('--rule','#c4ccc5');
+  const pts=mapPoints(S),cells=voronoiCells(pts.map(p=>[p.x,p.y]),MAP.w,MAP.h);
+  const land=new Path2D();
+  OUTLINE.forEach(([lon,lat],i)=>{const [x,y]=project(lat,lon);i?land.lineTo(x,y):land.moveTo(x,y);});
+  land.closePath();
+  const stripes=(a,b)=>{
+    const c=document.createElement('canvas');c.width=c.height=14;const g=c.getContext('2d');
+    g.fillStyle=a;g.fillRect(0,0,14,14);g.strokeStyle=b;g.lineWidth=5;
+    g.beginPath();g.moveTo(-3,3);g.lineTo(3,-3);g.moveTo(0,14);g.lineTo(14,0);g.moveTo(11,17);g.lineTo(17,11);g.stroke();
+    return ctx.createPattern(c,'repeat');
+  };
+  ctx.clearRect(0,0,MAP.w,MAP.h);
+  ctx.save();ctx.clip(land);
+  cells.forEach((cell,i)=>{
+    const teams=pts[i].holders.map(id=>byId.get(id));
+    ctx.beginPath();cell.forEach(([x,y],k)=>k?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+    ctx.fillStyle=teams.length>1?stripes(color(teams[0].primary),color(teams[1].primary)):teams[0]?color(teams[0].primary):neutral;
+    ctx.fill();
+    ctx.strokeStyle=teams[0]?color(teams[0].secondary):fg;ctx.lineWidth=2.5;ctx.stroke();
+  });
+  ctx.restore();
+  ctx.strokeStyle=fg;ctx.lineWidth=1.5;ctx.stroke(land);
+  const contested=S.league.contest?.status==='open'?S.league.contest.marketId:null,home=S.club&&byId.get(S.club).marketId;
+  ctx.font='600 11px '+token('--body','sans-serif');ctx.textBaseline='middle';
+  for(const p of pts){
+    ctx.beginPath();ctx.arc(p.x,p.y,p.open?4:3,0,Math.PI*2);ctx.fillStyle=p.open?bg:fg;ctx.fill();ctx.strokeStyle=p.open?fg:bg;ctx.lineWidth=1.5;ctx.stroke();
+    if(p.id===contested||p.id===home){ctx.beginPath();ctx.setLineDash(p.id===contested?[3,3]:[]);ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.strokeStyle=fg;ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);}
+    if(p.open||p.id===home){
+      ctx.lineWidth=3;ctx.strokeStyle=bg;ctx.strokeText(p.label,p.x+8,p.y-9);ctx.fillStyle=fg;ctx.fillText(p.label,p.x+8,p.y-9);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// League view
+// ---------------------------------------------------------------------------
+const leagueUi={bid:null,lobby:false,notice:''};
+const relationLabel=v=>v>=25?'Warm':v>=5?'Friendly':v>-10?'Neutral':v>-30?'Cool':'Hostile';
+function leagueView(){
+  const S=save,L=S.league,s=cur();
+  let html=heading('LEAGUE','Broadcast markets')+
+    '<figure class="map"><canvas id="marketMap" role="img" aria-label="Map of broadcast markets. Each market city’s area is filled with the color of the club that holds its broadcast rights."></canvas>'+
+    '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed ring the rights you can contest':'')+'.</figcaption></figure>';
+  html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
+    const M=L.markets[m.id],fans=Object.entries(M.fans).sort((a,b)=>b[1]-a[1]).map(([id,v])=>byId.get(id).abbr+' '+Math.round(v)+'%').join(' · ');
+    return '<tr><td>'+esc(m.name)+'</td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(fans)+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>'+headlines(S);
+  const C=L.contest;
+  if(C){
+    const name=openMarket(C.marketId).name,M=L.markets[C.marketId];
+    html+='<h2>'+esc(name)+' broadcast rights</h2>';
+    if(C.status==='open'){
+      const [lo,hi]=stationRange(S);
+      leagueUi.bid??={annual:C.bid?.annual??Math.round(hi*2)/2,years:C.bid?.years??5};
+      const b=leagueUi.bid,amounts=[];for(let v=1;v<=12;v+=.5)amounts.push(v);
+      html+='<p>'+esc(teamName(C.holder)+' hold the rights. The station decides after week '+C.deadlineWeek+' and expects offers of $'+lo+'M to $'+hi+'M a year. It also weighs term length, ratings (fan preference) and who shows up in person. '+
+        'The rights would earn us about $'+adValue(C.marketId,M.fans[S.club]??0)+'M a year in local advertising at today’s fan preference.')+'</p>'+
+        '<p>'+esc('This week: '+coverageText(S,s.completed))+'</p>'+
+        (C.bid?'<p><b>'+esc('Your offer: $'+C.bid.annual+'M a year for '+C.bid.years+' years'+(C.lobbied?', and you visited the station yourself.':'.'))+'</b></p>':'')+
+        (s.completed<C.deadlineWeek?'<div class="controls"><label>Annual guarantee <select id="bidAnnual">'+amounts.map(v=>option(v,'$'+v.toFixed(1)+'M',v===b.annual)).join('')+'</select></label>'+
+        '<label>Term <select id="bidYears">'+[3,5,7].map(v=>option(v,v+' years',v===b.years)).join('')+'</select></label>'+
+        (C.lobbied?'':'<label><input type="checkbox" id="bidLobby"'+(leagueUi.lobby?' checked':'')+'> Visit the station yourself</label>')+
+        '<button id="submitBid">'+(C.bid?'Revise offer':'Make offer')+'</button>'+(C.bid?'<button id="withdrawBid">Withdraw</button>':'')+'</div>':'')+
+        (leagueUi.notice?'<p>'+esc(leagueUi.notice)+'</p>':'');
+    }else html+='<p>'+esc(C.winner===S.club?'You won the rights: $'+C.bid.annual+'M a year for '+C.bid.years+' years. '+(M.holder===S.club?'This week: '+coverageText(S,Math.min(s.completed,s.weeks.length-1)):'The league has since returned them to '+byId.get(M.holder).market+'.'):
+      teamName(C.winner)+' kept the rights'+(C.bid?' with $'+C.rivalBid.annual+'M a year against your $'+C.bid.annual+'M.':'.'))+'</p>';
+  }
+  const V=L.meeting;
+  if(V){
+    const sponsor=L.owners[V.sponsor],name=openMarket(V.marketId).name;
+    html+='<h2>League meeting</h2><p>'+esc(sponsor.name+' ('+teamName(V.sponsor)+') proposes a first-refusal rule: a club that held a market’s broadcast rights before this season may match any rival’s offer at renewal. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
+      '<p><b>Effect on your club:</b> '+esc(V.reversal?name+' would go back to '+byId.get(V.sponsor).market+'. You would lose preferred coverage there and about $'+round1(adValue(V.marketId,L.markets[V.marketId].fans[S.club]??0)-(L.markets[V.marketId].fee??0))+'M a year net.':'It would lock '+possessive(byId.get(V.sponsor).market)+' hold on '+name+' at the next renewal.')+'</p>';
+    if(V.status==='scheduled'){
+      const mine=V.playerVote??(playerOpposes(S)?'no':'yes');
+      html+='<p>'+esc('The vote is after week '+V.week+'. Calls left before the meeting: '+V.callsLeft+'. A call tells you where an owner stands and nudges them your way; a promise moves them further and is recorded.')+'</p>'+
+        '<div class="controls"><label>Your vote <select id="playerVote">'+option('no','No',mine==='no')+option('yes','Yes',mine==='yes')+'</select></label></div>';
+    }else html+='<p>'+esc('Result: '+V.yes+'–'+(32-V.yes)+', '+(V.passed?'passed':'failed')+'.')+'</p>';
+    html+='<div class="wide"><table class="owners"><thead><tr><th>Club</th><th>Owner</th><th>Toward you</th><th>'+(V.status==='scheduled'?'Where they stand':'Vote')+'</th><th>What they remember</th><th></th></tr></thead><tbody>'+
+      clubs.filter(t=>t.id!==S.club).map(t=>{
+        const o=L.owners[t.id],m=o.memory.at(-1);
+        const stand=V.status==='decided'?(V.votes[t.id]==='yes'?'Yes':'No'):t.id===V.sponsor?'Sponsor':t.id in V.revealed?leanLabel(V.revealed[t.id]):'Unknown';
+        const calls=V.status==='scheduled'&&t.id!==V.sponsor&&V.callsLeft>0?'<button data-call="'+t.id+'">Call</button><button data-promise="'+t.id+'">Promise support</button>':'';
+        return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+esc(stand)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td><td class="calls">'+calls+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  return html+headlines(S);
+}
+function headlines(S){
+  const items=[...S.league.news].reverse().slice(0,8);
+  return '<h2>Headlines</h2>'+(items.length?'<ul>'+items.map(n=>'<li><strong>'+(n.week?'Week '+n.week:'Preseason')+'</strong> '+esc(n.text)+'</li>').join('')+'</ul>':'<p>Quiet week around the league.</p>');
+}
+
 // ---------------------------------------------------------------------------
 // Words. Everything returned here is already escaped HTML.
 // ---------------------------------------------------------------------------
@@ -1391,6 +1769,7 @@ function describeEvent(e){
     case 'visitReport':return esc(visitReportText(e));
     case 'studyReport':return esc(studyReportText(e));
     case 'projectDone':case 'namingSigned':case 'namingAwaiting':case 'namingLapsed':case 'namingDeclined':return esc(financeEventText(e));
+    case 'rightsWon':case 'rightsLost':case 'rightsRenewed':case 'meetingCalled':case 'voteResult':return esc(leagueEventText(e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');
@@ -1422,7 +1801,17 @@ const migrations={
   1:migrateV1,
   2:migrateV2,
   3:migrateV3,
+  4:migrateV4,
 };
+// v4 -> v5: adds owners, open-market broadcast control and fan preference,
+// headlines, and (for a save with a club) the rights contest.
+function migrateV4(old){
+  old.league=makeLeague(rngFor(old.rng));
+  old.schemaVersion=5;
+  ensureContest(old);
+  (old.migrations??=[]).push({from:4,to:5,at:new Date().toISOString()});
+  return old;
+}
 // v3 -> v4: adds owner and club finances, funding proposals and naming-rights
 // state. Operating reports start with the next played week.
 function migrateV3(old){
@@ -1543,6 +1932,14 @@ function validateSave(S){
     if(!['none','negotiating','awaiting','signed'].includes(F.naming.status))fail('The naming-rights talks are invalid.');
     if(F.naming.status==='signed'&&!(F.naming.deal&&Number.isFinite(F.naming.deal.annual)))fail('The naming-rights deal is invalid.');
     if(F.ledger.some(x=>!x||!x.lines||!Number.isFinite(x.result)))fail('An operating report is invalid.');
+  }
+  const Lg=S.league;
+  if(!Lg||!Lg.owners||!Lg.markets||!Array.isArray(Lg.news)||!Array.isArray(Lg.promises))fail('League records are missing.');
+  else{
+    if(!clubs.every(t=>{const o=Lg.owners[t.id];return o&&typeof o.name==='string'&&Number.isFinite(o.relation)&&Array.isArray(o.memory);}))fail('An owner record is invalid.');
+    if(!OPEN_MARKETS.every(m=>{const M=Lg.markets[m.id];return M&&(M.holder===null||byId.has(M.holder))&&M.fans&&Object.entries(M.fans).every(([id,v])=>byId.has(id)&&Number.isFinite(v));}))fail('A broadcast market record is invalid.');
+    if(Lg.contest&&(!openMarket(Lg.contest.marketId)||!byId.has(Lg.contest.holder)||!['open','decided'].includes(Lg.contest.status)))fail('The broadcast rights contest is invalid.');
+    if(Lg.meeting&&(!byId.has(Lg.meeting.sponsor)||!['scheduled','decided'].includes(Lg.meeting.status)||!isInt(Lg.meeting.callsLeft,0)))fail('The league meeting record is invalid.');
   }
   return errors;
 }
@@ -1776,6 +2173,13 @@ function comingDue(S){
   const site=open[0];
   return '<div><small>Coming due</small>'+esc(marketById(S,site.marketId).name+' '+site.name.toLowerCase()+' offer expires after week '+site.expiresWeek)+'</div>';
 }
+function leagueCard(S){
+  const C=S.league.contest,V=S.league.meeting;
+  if(C?.status==='open')return '<div><small>Broadcast rights</small>'+esc(openMarket(C.marketId).name+': station decides after week '+C.deadlineWeek)+' <button data-tab="League">Bid</button></div>';
+  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after week '+V.week)+' <button data-tab="League">Lobby</button></div>';
+  const n=S.league.news.at(-1);
+  return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
+}
 function moneyCard(S){
   if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="Finances">Review</button></div>';
   const season=S.finance.ledger.filter(x=>x.season===cur(S).number);
@@ -1793,7 +2197,7 @@ function ownershipDesk(){
     return esc('Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(g.score?' · '+resultText(g,id):''));
   };
   const week=s.completed+1,injuries=S.rosters[id].filter(p=>p.out);
-  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=s.weeks.length&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>'+comingDue(S)+moneyCard(S)+'</div>';
+  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+fixture(games.filter(x=>x.g.score).pop())+'</div><div><small>Next opponent</small>'+(week<=s.weeks.length&&!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>'+comingDue(S)+moneyCard(S)+leagueCard(S)+'</div>';
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
   let gm;
   if(S.offer)gm=negotiationView(S);
@@ -1844,7 +2248,7 @@ function rosterView(){
         section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>';
 }
-const TABS=['Owner desk','Stadium','Finances','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+const TABS=['Owner desk','Stadium','Finances','League','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).completed?'after week '+cur(S).completed:'preseason');
 function draw(){
   const s=cur();
@@ -1857,7 +2261,8 @@ function draw(){
   next.disabled=s.completed===s.weeks.length||!save.club;
   next.textContent=!save.club?'Choose a club':s.completed===s.weeks.length?'Regular season complete':'Advance week '+(s.completed+1)+' →';
   $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='League'?leagueView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
 // ---------------------------------------------------------------------------
@@ -1875,7 +2280,7 @@ document.addEventListener('click',e=>{
   const b=e.target.closest?.('button');if(!b)return;
   if(b.dataset.tab){tab=b.dataset.tab;draw();}
   if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
-  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
+  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;ensureContest(save);commit();}}
   if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
@@ -1898,6 +2303,13 @@ document.addEventListener('click',e=>{
   if(b.id==='delegateNaming'){const result=startNaming(save,financeUi.mandate);financeUi.notice='';if(result==='ok')commit();else draw();}
   if(b.id==='endNaming'||b.id==='declineNaming'){declineNaming(save);commit();}
   if(b.id==='signNaming'){approveNaming(save);commit();}
+  if(b.id==='submitBid'&&leagueUi.bid){
+    const result=submitBid(save,leagueUi.bid.annual,leagueUi.bid.years,leagueUi.lobby);
+    leagueUi.notice=result==='ok'?'':result==='closed'?'The station has already decided.':'Choose an amount and term.';
+    if(result==='ok'){leagueUi.lobby=false;commit();}else draw();
+  }
+  if(b.id==='withdrawBid'){withdrawBid(save);commit();}
+  if(b.dataset.call||b.dataset.promise){callOwner(save,b.dataset.call??b.dataset.promise,!!b.dataset.promise);commit();}
   if(b.id==='importNo'){pendingImport=null;draw();}
   if(b.id==='advance'&&save.club&&cur().completed<cur().weeks.length){playWeek(save);viewed=cur().completed;tab='Owner desk';commit();}
 });
@@ -1910,6 +2322,10 @@ app.onchange=e=>{
   const planKeys={visitSite:'site',visitWho:'who',visitDiscretion:'discretion',visitAsk:'ask',visitSignal:'signal'};
   if(planKeys[e.target.id]){stadiumUi.plan[planKeys[e.target.id]]=e.target.value;stadiumUi.notice='';return;}
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
+  if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
+  if(leagueUi.bid&&e.target.id==='bidAnnual'){leagueUi.bid.annual=Number(e.target.value);return;}
+  if(leagueUi.bid&&e.target.id==='bidYears'){leagueUi.bid.years=Number(e.target.value);return;}
+  if(e.target.id==='bidLobby'){leagueUi.lobby=e.target.checked;return;}
   if(financeUi.mandate&&['nameMin','nameYears','nameAuthority'].includes(e.target.id)){
     const m=financeUi.mandate;
     if(e.target.id==='nameMin')m.minAnnual=Number(e.target.value);

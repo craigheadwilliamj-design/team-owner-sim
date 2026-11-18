@@ -14,6 +14,7 @@ const v3Save = fs.readFileSync(path.join(FIX, 'v3-save.json'), 'utf8');
 const v4Save = fs.readFileSync(path.join(FIX, 'v4-save.json'), 'utf8');
 const v5Save = fs.readFileSync(path.join(FIX, 'v5-save.json'), 'utf8');
 const v6Save = fs.readFileSync(path.join(FIX, 'v6-save.json'), 'utf8');
+const v7Save = fs.readFileSync(path.join(FIX, 'v7-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -21,7 +22,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -855,16 +856,16 @@ test('v6 save upgrades to v7: every player under contract, every club near the c
   assert.equal(api.cur(S).completed, old.seasons.at(-1).completed);
 });
 
-test('release: salary comes off, remaining bonus money lands on this year as dead money', () => {
+test('release: salary comes off; this year takes dead money, and guarantees are still owed', () => {
   const { api, S } = owned(201);
+  api.jumpTo(S, 30); // March: inside the window where all dead money hits at once
   const p = S.rosters['club-06'].filter(x => x.contract.yearsLeft >= 2).sort((a, b) => b.contract.prorated - a.contract.prorated)[0];
-  const before = api.committed(S, 'club-06'), dead = api.deadIfCut(p), hit = api.capHit(p);
-  assert.equal(dead, Math.round(p.contract.prorated * p.contract.yearsLeft * 100) / 100);
+  const before = api.committed(S, 'club-06'), cost = api.releaseCost(S, p), hit = api.capHit(p);
+  assert(!cost.split && cost.deadLater === 0);
   api.ownerRelease(S, p.id);
   assert(!S.rosters['club-06'].includes(p));
-  assert(Math.abs(api.committed(S, 'club-06') - (before - hit + dead)) < 0.02);
-  assert.equal(S.cap.dead['club-06'], dead);
-  assert.match(api.describeEvent(S.events.at(-1), S), /dead money/);
+  assert(Math.abs(api.committed(S, 'club-06') - (before - hit + cost.deadNow)) < 0.02);
+  assert.match(api.describeEvent(S.events.at(-1), S), /Dead money/);
 });
 
 test('restructure: cap room now, cash now, more cap later; the owner can pay it', () => {
@@ -951,8 +952,8 @@ test('every club opens each season at 53 and under the cap; the owner is forced 
     api.jumpTo(S, 51);
     for (const t of api.clubs) { assert.equal(S.rosters[t.id].length >= 53, true, t.id); assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id)); }
   }
-  api.jumpTo(S, 45);
-  S.cap.dead['club-06'] = api.capRoom(S, 'club-06') + 20; // $20M over
+  api.jumpTo(S, 50); // after final cuts
+  S.cap.dead['club-06'] = (S.cap.dead['club-06'] ?? 0) + api.capRoom(S, 'club-06') + 20; // $20M over
   api.jumpTo(S, 51);
   assert(api.capRoom(S, 'club-06') >= -0.01);
   assert(S.events.some(e => e.type === 'capCompliance'));
@@ -966,6 +967,160 @@ test('contracts page renders the cap sheet, expiring deals, free agents and the 
   api.jumpTo(S, 29);
   html = api.contractsView();
   assert(html.includes('Offer asking terms'));
+  assert(!/<script|onerror/i.test(html));
+});
+
+
+// ---- Contracts phase 2: negotiation, guarantees, tags, options, floor -------
+const hasPriority = (api, list, pr) => list.find(p => api.priorityFor(p) === pr);
+
+test('v7 save upgrades to v8: guarantees, rookie options, carryover and tag books', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v7Save)).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert(S.cap.deadNext && S.cap.carry && S.cap.tags);
+  const firsts = Object.values(S.rosters).flat().filter(p => p.contract.kind === 'rookie' && p.drafted?.round === 1);
+  assert(firsts.length > 0 && firsts.every(p => p.contract.option && p.contract.gYears === p.contract.yearsLeft));
+  assert(S.fa.pool.every(p => p.ask.gYears !== undefined));
+});
+
+test('negotiation: the asking terms work, a lowball does not, and priorities change the read', () => {
+  const { api, S } = owned(301);
+  api.jumpTo(S, 29);
+  const p = S.fa.pool.filter(x => x.ask.years >= 2).sort((a, b) => b.rating - a.rating)[0];
+  assert(api.agentRead(S, p, p.ask, 'club-06', p.ask).u >= 0.95);
+  assert.equal(api.agentRead(S, p, { ...p.ask, salary: p.ask.salary * 0.6, bonus: 0 }, 'club-06', p.ask).verdict, 'no');
+  const roster = Object.values(S.rosters).flat();
+  const sec = hasPriority(api, roster, 'security'), mon = hasPriority(api, roster, 'money');
+  const gain = q => { const ask = api.askFor(S, q), base = { ...ask, gYears: 0, bonus: 0 }, safe = { ...base, gYears: base.years };
+    return api.utility(S, q, safe, 'club-06', ask) - api.utility(S, q, base, 'club-06', ask); };
+  assert(gain(sec) > gain(mon), 'security-minded players value guarantees more');
+});
+
+test('extension negotiation: a low offer gets a counter, and accepting the counter signs him', () => {
+  const { api, S } = owned(302);
+  const p = S.rosters['club-06'].find(x => x.contract.yearsLeft === 1 && x.rating >= 65);
+  const ask = api.extensionTerms(S, p), low = { ...ask, salary: Math.round(ask.salary * 0.75 * 10) / 10 };
+  assert.equal(api.extendPlayer(S, p.id, 'club', low), 'refused');
+  const counter = api.counterTerms(S, p, low, 'club-06', ask);
+  assert(counter.salary > low.salary);
+  assert.equal(api.extendPlayer(S, p.id, 'club', counter), 'ok');
+  assert.equal(p.contract.yearsLeft, counter.years + 1);
+});
+
+test('free agency: a rich offer beats the market', () => {
+  const { api, S } = owned(303);
+  api.setGmHandles(S, false);
+  api.jumpTo(S, 28);
+  const p = S.fa.pool.filter(x => api.termsHit(x.ask) * 1.4 < api.capRoom(S, 'club-06')).sort((a, b) => b.rating - a.rating)[0];
+  const years = p.ask.years, rich = { salary: Math.round(p.ask.salary * 1.4 * 100) / 100, years, bonus: Math.round(p.ask.bonus * 1.4 * 100) / 100, gYears: years };
+  assert.equal(api.makeOffer(S, p.id, 'club', rich), 'ok');
+  api.advance(S);
+  assert(S.rosters['club-06'].some(x => x.id === p.id), 'he signs with us');
+  assert(S.events.some(e => e.type === 'faSigned' && e.player.id === p.id && e.terms.gYears === years));
+});
+
+test('guaranteed salary is owed in cash when a player is released', () => {
+  const { api, S } = owned(304);
+  api.jumpTo(S, 30);
+  const p = S.rosters['club-06'].sort((a, b) => b.contract.salary - a.contract.salary)[0];
+  Object.assign(p.contract, { yearsLeft: 3, gYears: 2 }); // two guaranteed years left
+  const cost = api.releaseCost(S, p);
+  assert(cost.owed >= p.contract.salary - 0.01, 'at least this season’s salary is owed');
+  api.ownerRelease(S, p.id);
+  assert(S.finance.ledger.at(-1).lines.releasePay <= -cost.owed + 0.01);
+  assert(cost.deadNow >= cost.owed);
+});
+
+test('June 1: later releases split dead money across two cap years', () => {
+  const { api, S } = owned(305);
+  api.jumpTo(S, 41); // June Week 3
+  const p = S.rosters['club-06'].filter(x => x.contract.yearsLeft >= 3 && x.contract.prorated > 0.5)[0];
+  const cost = api.releaseCost(S, p);
+  assert(cost.split && cost.deadLater > 0);
+  api.ownerRelease(S, p.id);
+  assert.equal(S.cap.deadNext['club-06'], cost.deadLater);
+  api.jumpTo(S, 51); api.jumpTo(S, 28); // next league year
+  assert(S.cap.dead['club-06'] >= cost.deadLater - 0.01, 'deferred dead money lands in the new cap year');
+});
+
+test('unused room carries over, up to the limit', () => {
+  const { api, S } = owned(306);
+  api.jumpTo(S, 27);
+  const room = api.capRoom(S, 'club-06');
+  api.advance(S);
+  assert.equal(S.cap.carry['club-06'], Math.round(Math.max(0, Math.min(25, room)) * 100) / 100);
+  assert.equal(api.limitFor(S, 'club-06'), Math.round((S.cap.limit + S.cap.carry['club-06']) * 100) / 100);
+});
+
+test('franchise tag: one player, February to March, one year at the top-five average', () => {
+  const { api, S } = owned(307);
+  api.setGmHandles(S, false);
+  const p = S.rosters['club-06'].filter(x => x.contract.yearsLeft === 1).sort((a, b) => b.rating - a.rating)[0];
+  assert.equal(api.tagPlayer(S, 'club-06', p.id), 'closed');
+  api.jumpTo(S, 24);
+  const amount = api.tagAmount(S, p.pos);
+  assert.equal(api.tagPlayer(S, 'club-06', p.id), 'ok');
+  const q = S.rosters['club-06'].find(x => x.contract.yearsLeft === 1 && x.id !== p.id);
+  if (q) assert.equal(api.tagPlayer(S, 'club-06', q.id), 'used');
+  api.jumpTo(S, 28);
+  assert(S.rosters['club-06'].includes(p), 'tagged player stays');
+  assert.equal(p.contract.kind, 'tag');
+  assert.equal(p.contract.salary, amount);
+  assert.equal(p.contract.yearsLeft, 1);
+  assert.equal(p.contract.gYears, 1);
+});
+
+test('fifth-year option: first-round rookies can be kept a year at a set price', () => {
+  const { api, S } = owned(308);
+  api.jumpTo(S, 36); // after the draft
+  const p = S.rosters['club-06'].find(x => x.contract.option);
+  assert(p, 'a first-round rookie has an option');
+  p.contract.yearsLeft = 1; p.contract.gYears = 1; // fast-forward to his final rookie year
+  const amount = api.optionAmount(S, p);
+  assert.equal(api.exerciseOption(S, 'club-06', p.id), 'ok');
+  assert.equal(p.contract.yearsLeft, 2);
+  api.jumpTo(S, 51); api.jumpTo(S, 28);
+  assert.equal(p.contract.yearsLeft, 1);
+  assert(Math.abs(p.contract.salary - amount) < 0.01);
+});
+
+test('salary floor: the GM prepays to reach it; an owner in charge is warned, then pays the gap', () => {
+  const squeeze = S => { for (const p of S.rosters['club-06']) { p.contract.salary = S.cap.minSalary; p.contract.prorated = 0; } };
+  const gm = owned(309);
+  squeeze(gm.S);
+  for (const p of gm.S.rosters['club-06'].slice(0, 20)) p.contract.yearsLeft = Math.max(3, p.contract.yearsLeft);
+  for (let p of gm.S.rosters['club-06'].slice(0, 20)) p.contract.salary = 6;
+  while (gm.api.cur(gm.S).completed < 18) gm.api.advance(gm.S);
+  assert(gm.S.events.some(e => e.type === 'salaryPrepaid' && e.byGm));
+  assert(gm.api.committed(gm.S, 'club-06') >= gm.api.CAP_FLOOR * gm.S.cap.limit - 0.05);
+  const me = owned(310);
+  me.api.setGmHandles(me.S, false);
+  squeeze(me.S);
+  me.api.jumpTo(me.S, 23);
+  assert(me.S.events.some(e => e.type === 'floorWarning'));
+  const e = me.S.events.find(x => x.type === 'floorShortfall');
+  assert(e && e.shortfall > 0);
+  assert(me.S.finance.ledger.some(x => x.lines.floorShortfall < 0));
+});
+
+test('trade prices weigh contracts: a bargain costs more than the same player overpaid', () => {
+  const { api, S } = owned(311);
+  const p = S.rosters['club-17'].filter(x => x.pos === 'WR').sort((a, b) => b.rating - a.rating)[0];
+  const value = api.marketValue(S, p);
+  p.contract = { ...p.contract, salary: S.cap.minSalary, prorated: 0, yearsLeft: 3 };
+  const cheap = api.termsNeeded(p, null, S);
+  p.contract = { ...p.contract, salary: value * 2, prorated: 0, yearsLeft: 3 };
+  const dear = api.termsNeeded(p, null, S);
+  assert(cheap > dear + 20, `bargain ${cheap} vs overpaid ${dear}`);
+});
+
+test('contracts page shows negotiation, tag and option controls', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06'; api.setGmHandles(S, false);
+  api.jumpTo(S, 24);
+  const html = api.contractsView();
+  assert(html.includes('Franchise tag') && html.includes('data-negotiate') && html.includes('Salary floor'));
   assert(!/<script|onerror/i.test(html));
 });
 

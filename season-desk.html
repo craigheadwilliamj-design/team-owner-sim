@@ -467,7 +467,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=9;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=10;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
@@ -696,6 +696,7 @@ function newSave(seed=newSeed()){
     draft:makeDraft(r,1),history:[],draftHistory:[]};
   makeCap(S,r);
   makeStaffAll(S,r);
+  initDepth(S,r);
   return S;
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
@@ -739,7 +740,7 @@ function finishMedicalWeek(S,units,r,games){
       if(r()>(starter?.024:.006)*(t.id===S.club?injuryFactor(S):1))continue;
       const healthy=S.rosters[t.id].filter(other=>other.pos===p.pos&&!other.out);
       if(healthy.length<=starters)continue;
-      p.out=1+randInt(r,5);
+      p.out=r()<.12?IR_THRESHOLD+randInt(r,11):1+randInt(r,5);
       if(t.id===S.club&&effectActive(S,'facility')&&p.out>1&&r()<.4)p.out--;
       if(t.id===S.club&&starter){
         const backup=personnel(S.rosters[t.id]).chart[p.pos][starters-1];
@@ -1196,7 +1197,7 @@ function gate(S,clubId){
 const salaryRaw=p=>.9+playerValue(p)*.06;
 // Cash salaries for a season. Signing bonuses were paid in cash when signed.
 function payroll(S,id){
-  return S.rosters[id].reduce((sum,p)=>sum+(p.contract?.salary??0),0);
+  return [...S.rosters[id],...(S.practice?.[id]??[])].reduce((sum,p)=>sum+(p.contract?.salary??0),0);
 }
 function weekLines(S,g){
   const id=S.club,team=byId.get(id),lease=S.world.leases[id],F=S.finance,metro=localMetro(team);
@@ -1918,22 +1919,24 @@ function developPlayers(S,r){
       return true;
     });
   }
+  if(S.practice)for(const t of clubs)for(const p of S.practice[t.id]){p.age++;if(p.age<=26)p.rating=Math.min(99,p.rating+Math.max(0,Math.round(((p.potential??p.rating)-p.rating)*(.14+r()*.28)*devFactor(S,t.id))));}
   return {retired,risers:risers.sort((a,b)=>b.gain-a.gain).slice(0,3)};
 }
 // Camp work: young players inch toward their potential.
 function campWork(S,r){
-  for(const t of clubs){const k=.35*devFactor(S,t.id);for(const p of S.rosters[t.id])if(p.age<=25&&p.rating<(p.potential??0)&&r()<k)p.rating++;}
+  for(const t of clubs){const k=.35*devFactor(S,t.id);for(const p of [...S.rosters[t.id],...(S.practice?.[t.id]??[])])if(p.age<=25&&p.rating<(p.potential??0)&&r()<k)p.rating++;}
 }
 // Keep the best at each position up to the roster slots, then the best of the rest to 53.
-function finalCuts(S){
+function finalCuts(S,r){
   let mine=[];
   for(const t of clubs){
-    const roster=S.rosters[t.id],keep=new Set();
+    const roster=S.rosters[t.id].filter(p=>!p.ir),keep=new Set();
     for(const [pos,count] of positions)roster.filter(p=>p.pos===pos).sort((a,b)=>b.rating-a.rating).slice(0,count).forEach(p=>keep.add(p));
     roster.filter(p=>!keep.has(p)).sort((a,b)=>b.rating-a.rating).slice(0,Math.max(0,53-keep.size)).forEach(p=>keep.add(p));
     const cut=roster.filter(p=>!keep.has(p));
     if(t.id===S.club)mine=cut.map(snap);
     for(const p of cut)releasePlayer(S,t.id,p.id);
+    if(S.practice)fillPractice(S,t.id,r,cut);
   }
   return mine;
 }
@@ -2044,7 +2047,11 @@ function completeDraft(S){
 
 // ---- Advancing the clock ---------------------------------------------------
 function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
-  if(games&&units)finishMedicalWeek(S,units,r,games);
+  if(games&&units){
+    finishMedicalWeek(S,units,r,games);
+    if(S.practice){manageRoster(S,r);poachPractice(S,r);}
+    const hc=S.club&&S.staff?.clubs?.[S.club]?.hc;if(hc)hc.trust=Math.min(80,(hc.trust??70)+.5);
+  }
   else for(const p of Object.values(S.rosters).flat())if(p.out&&--p.out<=0)delete p.out;
   if(S.offer){record(S,'quoteExpired',{seller:S.offer.seller});S.offer=null;}
   expireProposals(S);
@@ -2089,7 +2096,7 @@ function offseasonWeek(S,r){
   if(t===RESIGN_TICK)resignExpiring(S,r);
   if(t===MILESTONES.cuts){
     fillRosters(S,r);
-    const cut=finalCuts(S);
+    const cut=finalCuts(S,r);
     record(S,'finalCuts',{count:cut.length,names:cut.sort((a,b)=>b.rating-a.rating).slice(0,3)});
   }
   afterTick(S,r);
@@ -2130,8 +2137,9 @@ function rollover(S,r){
   if(S.league.contest?.status==='open')S.league.contest.deadlineWeek=shift(S.league.contest.deadlineWeek);
   if(S.league.meeting?.status==='scheduled')S.league.meeting.week=shift(S.league.meeting.week);
   S.offer=null;
-  for(const t of clubs)comply(S,t.id,true);
+  if(S.depth){S.depth.overrides=0;S.depth.warned=false;}
   fillRosters(S,r);
+  for(const t of clubs)comply(S,t.id,true); // after filling, so the opener is always cap-compliant
   prunePool(S);
   S.draft=makeDraft(r,next.number);
   news(S,'Season '+next.number+' kicks off');
@@ -2263,7 +2271,7 @@ function releaseCost(S,p){
 }
 const deadIfCut=(p,S=save)=>{const r=releaseCost(S,p);return round2(r.deadNow+r.deadLater);};
 const limitFor=(S,id)=>round2(S.cap.limit+(S.cap.carry?.[id]??0));
-const committed=(S,id)=>round2(S.rosters[id].reduce((a,p)=>a+capHit(p),0)+(S.cap.dead[id]??0));
+const committed=(S,id)=>round2(S.rosters[id].reduce((a,p)=>a+capHit(p),0)+(S.practice?.[id]??[]).reduce((a,p)=>a+capHit(p),0)+(S.cap.dead[id]??0));
 const capRoom=(S,id)=>round2(limitFor(S,id)-committed(S,id));
 const PRIORITIES=['money','security','winning'];
 const PRIORITY_LABEL={money:'getting paid the most',security:'guaranteed money',winning:'playing for a winner'};
@@ -2536,6 +2544,8 @@ function turnCapYear(S){
       return false;
     });
   }
+  if(S.practice)for(const t of clubs){for(const p of S.practice[t.id])if(p.age<=26&&p.rating>=55)addToPool(S,p);S.practice[t.id]=[];} // filler leaves the league
+  for(const t of clubs)for(const p of S.rosters[t.id]){delete p.ir;delete p.out;}
   for(const p of S.fa.pool)p.ask=askFor(S,p);
   for(const t of clubs)if(t.id!==S.club)comply(S,t.id);
   const room=capRoom(S,S.club);
@@ -2595,7 +2605,7 @@ function comply(S,id,forced){
     const p=S.rosters[id].filter(x=>saves(x)>.5).sort((a,b)=>(Number(starters.has(a.id))-Number(starters.has(b.id)))||((a.rating-1.2*saves(a))-(b.rating-1.2*saves(b))))[0];
     if(!p)break;
     cuts.push({...snap(p),dead:releasePlayer(S,id,p.id).dead});
-    if(S.rosters[id].length<53)signMinimum(S,id,p.pos,r);
+    if(rosterCount(S,id)<53)signMinimum(S,id,p.pos,r);
   }
   if(forced&&id===S.club&&cuts.length)record(S,'capCompliance',{cuts});
   return cuts;
@@ -2610,7 +2620,7 @@ function processFreeAgency(S,r){
   for(const club of shuffled(r,clubs)){
     const id=club.id;
     if(!handledByStaff(S,id))continue;
-    const size=S.rosters[id].length,cap=offseason?60:53,hardMax=offseason?75:53;
+    const size=rosterCount(S,id),cap=offseason?60:53,hardMax=offseason?75:53;
     if(size>=hardMax)continue;
     for(let n=0;n<(opening?2:0)+(capRoom(S,id)>S.cap.limit*.2?2:1);n++){
       let room=capRoom(S,id)-(offseason&&t<MILESTONES.draft?8:0)-Object.values(bids).flat().filter(b=>b.club===id).reduce((a,b)=>a+termsHit(b.terms),0);
@@ -2658,10 +2668,10 @@ function signMinimum(S,id,pos,r){
 // Before final cuts, staff-run clubs fill holes with minimum deals.
 function fillRosters(S,r){
   for(const t of clubs){
-    if(!handledByStaff(S,t.id)&&S.rosters[t.id].length>=53)continue;
+    if(!handledByStaff(S,t.id)&&rosterCount(S,t.id)>=53)continue;
     for(let guard=0;guard<20;guard++){
       const need=positions.map(([pos])=>pos).find(pos=>slotsOpen(S,t.id,pos)>0);
-      if(S.rosters[t.id].length>=53&&!need)break;
+      if(rosterCount(S,t.id)>=53&&!need)break;
       let p=S.fa.pool.filter(x=>!need||x.pos===need).sort((a,b)=>b.rating-a.rating)[0];
       if(!p){
         const pos=need??positionWeights[randInt(r,positionWeights.length)];
@@ -2820,12 +2830,22 @@ function makeStaffAll(S,r){
     track:{season:cur(S).number,games:0,starts:{}},nextProposalId:1});
 }
 const hcOf=(S,id)=>S.staff.clubs[id].hc;
+function initDepth(S,r){
+  S.depth={order:{},inactive:[],active:[],overrides:0};
+  S.irReturns={season:cur(S).number,counts:{}};
+  S.staff.directives.rosterMoves??='gm';
+  for(const C of Object.values(S.staff.clubs))C.hc.trust??=70;
+  S.practice=Object.fromEntries(clubs.map(t=>[t.id,[]]));
+  for(const t of clubs)fillPractice(S,t.id,r);
+}
 const gmOf=(S,id)=>S.staff.clubs[id].gm;
 
 // ---- How staff shape football ---------------------------------------------------
 // Lineup bias: youth coaches start the younger of two close players, veteran coaches the older.
 function lineupBias(coach,p){
   if(!coach)return 0;
+  const order=coach.ownerOrder?.[p.pos];
+  if(order){const i=order.indexOf(p.id);if(i>=0)return 10000-i*100;} // the owner's order outranks any rating gap
   if(coach.qbStarter===p.id)return 100;
   const s=coach.style.lineup;
   if(s==='youth')return p.age<=24?2:p.age>=31?-1:0;
@@ -2834,7 +2854,7 @@ function lineupBias(coach,p){
 }
 function clubUnits(S,id){
   const hc=S.staff?.clubs?.[id]?.hc;
-  const u=personnel(S.rosters[id],hc);
+  const u=S.practice?personnel(activesFor(S,id),lineupCoach(S,id)):personnel(S.rosters[id],hc);
   if(!hc)return u;
   const o=(hc.ratings.offense-65)*.08,d=(hc.ratings.defense-65)*.08;
   u.passing+=o+(hc.style.offense==='pass'?.8:0);u.rushing+=o+(hc.style.offense==='run'?.8:0);
@@ -2949,7 +2969,9 @@ function evaluateCommitment(S,c,person){
   const since=person.hired?.season??1,snapshot=new Set(person.rosterAtHire??[]);
   switch(c.type){
     case 'wins':{const w=row.w;return {status:w>=c.target?'kept':w>=c.target-2?'close':'broken',text:'Promised '+c.target+' wins; got '+w+'.'};}
-    case 'qbStarter':{const n=T.starts[c.playerId]??0;return {status:n>=games*.7?'kept':n>0?'close':'broken',text:'Said '+c.name+' would start at QB; he started '+n+' of '+T.games+'.'};}
+    case 'qbStarter':{const n=T.starts[c.playerId]??0,benched=S.depth?.order?.QB&&S.depth.order.QB[0]!==c.playerId;
+      if(n<games*.7&&benched)return {status:'broken',blame:'owner',text:'Said '+c.name+' would start at QB; he started '+n+' of '+T.games+' after you overruled him.'};
+      return {status:n>=games*.7?'kept':n>0?'close':'broken',text:'Said '+c.name+' would start at QB; he started '+n+' of '+T.games+'.'};}
     case 'youth':{const n=c.playerIds.map(id=>T.starts[id]??0);const ok=n.filter(x=>x>=games/2).length;
       return {status:ok===n.length?'kept':ok?'close':'broken',text:'Said he would play '+c.names.join(' and ')+'; starts: '+n.join(', ')+'.'};}
     case 'needPosition':{const added=S.rosters[S.club].filter(p=>p.pos===c.pos&&!snapshot.has(p.id)&&(T.starts[p.id]??0)>=Math.min(6,games/2));
@@ -2971,7 +2993,7 @@ function staffReview(S){
   const C=S.staff.clubs[S.club],report=[];
   for(const person of [C.hc,C.gm]){
     const results=person.commitments.map(c=>evaluateCommitment(S,c,person));
-    report.push({role:person.role,name:person.name,interim:person.interim,record:{...person.record},results});
+    report.push({role:person.role,name:person.name,interim:person.interim,record:{...person.record},results,overrides:person.role==='hc'?S.depth?.overrides??0:0});
   }
   record(S,'staffReview',{report});
 }
@@ -2982,6 +3004,7 @@ function setDirective(S,key,value){
   if(key==='focus'&&value in FOCUS_GROUPS)D.focus=value;
   if(key==='approach'&&['gm',...GM_PHILOSOPHIES].includes(value))D.approach=value;
   if(key==='approvalOver')D.approvalOver=value===''||value==null?null:Number(value);
+  if(key==='rosterMoves'&&['gm','owner'].includes(value))D.rosterMoves=value;
 }
 const needsApproval=(S,hit)=>S.staff.directives.approvalOver!=null&&hit>S.staff.directives.approvalOver;
 function propose(S,kind,p,terms){
@@ -3086,7 +3109,7 @@ function staffEventText(S,e){
     case 'staffHired':return 'You hired '+e.name+' as '+job(e.role)+': '+e.contract.years+' years at '+money1(e.contract.salary)+' a year. His pitch: “'+e.statements.join(' ')+'”';
     case 'candidateLost':return e.name+', whom you interviewed, took the '+job(e.role)+' job with '+teamName(e.club)+'.';
     case 'staffReview':return 'Staff review. '+e.report.map(x=>(x.role==='hc'?'Coach ':'GM ')+x.name+(x.interim?' (interim)':'')+': '+x.record.w+'–'+x.record.l+(x.record.t?'–'+x.record.t:'')+'. '+
-      (x.results.length?x.results.map(c=>c.text+' '+({kept:'Kept.',close:'Close.',broken:'Broken.'}[c.status])+(c.blame==='gm'?' He blames the GM.':'')).join(' '):'Made no promises.')).join(' ');
+      (x.results.length?x.results.map(c=>c.text+' '+({kept:'Kept.',close:'Close.',broken:'Broken.'}[c.status])+(c.blame==='gm'?' He blames the GM.':c.blame==='owner'?' He says that was your call.':'')).join(' '):'Made no promises.')+(x.overrides?' You changed his lineup '+x.overrides+' time'+(x.overrides===1?'':'s')+'.':'')).join(' ');
     case 'proposalExpired':return 'The chance to sign '+e.name+' passed before you answered.';
     case 'coachObjects':return e.text;
   }
@@ -3134,6 +3157,241 @@ function staffView(){
   return html;
 }
 
+
+// ---------------------------------------------------------------------------
+// Depth chart and game-day roster
+//
+// player.ir = {since}       on injured reserve: off the 53, still on the cap
+// practice[club] = [...]    up to 16 practice-squad players on cheap one-year deals
+// depth = {order:{pos:[ids]}, inactive:[ids], active:[ids], overrides}
+//                           the owner's changes to the coach's depth chart
+// irReturns = {season, counts:{club:n}}   players brought back from IR
+// hc.trust                  how the coach feels about the owner's interference
+// ---------------------------------------------------------------------------
+const ACTIVE_LIMIT=48,PRACTICE_LIMIT=16,IR_MIN_WEEKS=4,IR_RETURNS=8,IR_THRESHOLD=6;
+const rosterCount=(S,id)=>S.rosters[id].filter(p=>!p.ir).length;
+const practiceOf=(S,id)=>S.practice?.[id]??[];
+const practiceTerms=S=>({salary:round2(S.cap.minSalary*.25),years:1,bonus:0,gYears:0});
+
+// The coach plus the owner's overrides, as the lineup function sees it.
+function lineupCoach(S,id){
+  const hc=S.staff?.clubs?.[id]?.hc;
+  if(id!==S.club||!S.depth)return hc;
+  return {...hc,ownerOrder:S.depth.order};
+}
+// Game day: 48 of the healthy players dress. Starters first, then the best
+// backups, then everyone else by rating. The owner can force either way.
+function activesFor(S,id){
+  const healthy=S.rosters[id].filter(p=>!p.ir&&!p.out);
+  const forcedOut=id===S.club&&S.depth?new Set(S.depth.inactive):new Set();
+  const forcedIn=id===S.club&&S.depth?new Set(S.depth.active):new Set();
+  const chart=personnel(healthy.filter(p=>!forcedOut.has(p.id)),lineupCoach(S,id)).chart;
+  const importance=new Map();
+  for(const [pos,,n] of positions)chart[pos].forEach((p,i)=>importance.set(p.id,(i<n?2000:i===n?1000:0)+p.rating));
+  const ranked=healthy.filter(p=>!forcedOut.has(p.id)).sort((a,b)=>Number(forcedIn.has(b.id))-Number(forcedIn.has(a.id))||(importance.get(b.id)??0)-(importance.get(a.id)??0));
+  return ranked.slice(0,ACTIVE_LIMIT);
+}
+const inactivesFor=(S,id)=>{const act=new Set(activesFor(S,id).map(p=>p.id));return S.rosters[id].filter(p=>!p.ir&&!p.out&&!act.has(p.id));};
+
+// ---- The owner's depth chart --------------------------------------------------------
+// The coach's order at a position, ignoring the owner, for comparison.
+function coachOrder(S,id,pos){
+  const healthy=S.rosters[id].filter(p=>!p.ir&&!p.out);
+  return personnel(healthy,S.staff.clubs[id].hc).chart[pos].map(p=>p.id);
+}
+function currentOrder(S,pos){
+  return personnel(S.rosters[S.club].filter(p=>!p.ir),lineupCoach(S,S.club)).chart[pos].map(p=>p.id);
+}
+function moveDepth(S,playerId,dir){
+  const p=S.rosters[S.club].find(x=>x.id===playerId);
+  if(!p||p.ir)return 'unavailable';
+  const order=currentOrder(S,p.pos),i=order.indexOf(playerId),j=i+dir;
+  if(i<0||j<0||j>=order.length)return 'unavailable';
+  [order[i],order[j]]=[order[j],order[i]];
+  const n=startersAt(p.pos),before=coachOrder(S,S.club,p.pos).slice(0,n).sort().join(),after=order.filter(id=>{const q=S.rosters[S.club].find(x=>x.id===id);return q&&!q.out;}).slice(0,n).sort().join();
+  S.depth.order[p.pos]=order;
+  if(before!==after){
+    S.depth.overrides++;
+    const hc=S.staff.clubs[S.club].hc;
+    hc.trust=Math.max(0,(hc.trust??70)-4);
+    if(hc.trust<40&&!S.depth.warned){S.depth.warned=true;record(S,'coachUnhappy',{name:hc.name,overrides:S.depth.overrides});}
+  }
+  return 'ok';
+}
+function resetDepth(S){S.depth.order={};S.depth.inactive=[];S.depth.active=[];}
+function toggleActive(S,playerId){
+  const D=S.depth,act=activesFor(S,S.club).some(p=>p.id===playerId);
+  D.inactive=D.inactive.filter(x=>x!==playerId);D.active=D.active.filter(x=>x!==playerId);
+  (act?D.inactive:D.active).push(playerId);
+  return 'ok';
+}
+
+// ---- Injured reserve -----------------------------------------------------------------
+function placeOnIR(S,id,playerId){
+  const p=S.rosters[id].find(x=>x.id===playerId);
+  if(!p||p.ir||!(p.out>=IR_MIN_WEEKS))return 'unavailable';
+  p.ir={since:now(S)};
+  if(id===S.club){S.depth.inactive=S.depth.inactive.filter(x=>x!==playerId);S.depth.active=S.depth.active.filter(x=>x!==playerId);}
+  return 'ok';
+}
+function irReturnsUsed(S,id){
+  if(S.irReturns.season!==cur(S).number)S.irReturns={season:cur(S).number,counts:{}};
+  return S.irReturns.counts[id]??0;
+}
+function canReturn(S,id,p){return !!p.ir&&!p.out&&now(S)-p.ir.since>=IR_MIN_WEEKS&&irReturnsUsed(S,id)<IR_RETURNS;}
+function activateFromIR(S,id,playerId){
+  const p=S.rosters[id].find(x=>x.id===playerId);
+  if(!p||!canReturn(S,id,p))return 'unavailable';
+  if(rosterCount(S,id)>=53)return 'rosterFull';
+  delete p.ir;
+  S.irReturns.counts[id]=irReturnsUsed(S,id)+1;
+  return 'ok';
+}
+
+// ---- Practice squad ------------------------------------------------------------------
+function signToPractice(S,id,p){
+  if(practiceOf(S,id).length>=PRACTICE_LIMIT)return false;
+  S.fa.pool=S.fa.pool.filter(x=>x.id!==p.id);
+  delete S.fa.offers[p.id];delete p.ask;delete p.out;delete p.ir;
+  p.contract=makeContract(S,practiceTerms(S),'practice');
+  S.practice[id].push(p);
+  return true;
+}
+function promote(S,id,playerId){
+  const ps=practiceOf(S,id),p=ps.find(x=>x.id===playerId);
+  if(!p)return 'unavailable';
+  if(rosterCount(S,id)>=53)return 'rosterFull';
+  S.practice[id]=ps.filter(x=>x!==p);
+  p.contract=makeContract(S,minimumTerms(S),'minimum');
+  S.rosters[id].push(p);
+  return 'ok';
+}
+function releasePractice(S,id,playerId){
+  const p=practiceOf(S,id).find(x=>x.id===playerId);
+  if(!p)return 'unavailable';
+  S.practice[id]=S.practice[id].filter(x=>x!==p);
+  addToPool(S,p);
+  return 'ok';
+}
+// Fill a practice squad with the best young players available.
+function fillPractice(S,id,r,candidates=[]){
+  const young=p=>p.age<=25;
+  for(const p of candidates.filter(young).sort((a,b)=>b.rating-a.rating)){if(!signToPractice(S,id,p))break;}
+  while(practiceOf(S,id).length<PRACTICE_LIMIT){
+    const p=S.fa.pool.filter(young).sort((a,b)=>b.rating-a.rating)[0];
+    if(p){signToPractice(S,id,p);continue;}
+    const q={id:'ps'+cur(S).number+'-'+id+'-'+randInt(r,1e9),name:personName(r),pos:positionWeights[randInt(r,positionWeights.length)],rating:46+randInt(r,10),age:22+randInt(r,3)};
+    q.potential=q.rating+4+randInt(r,10);
+    S.fa.pool.push(q);signToPractice(S,id,q);
+  }
+}
+// Other clubs sign practice-squad players to their 53; the owner hears about theirs.
+function poachPractice(S,r){
+  if(!S.club)return;
+  for(const p of [...practiceOf(S,S.club)]){
+    if(r()>.015||p.rating<62)continue;
+    const club=clubs.filter(t=>t.id!==S.club)[randInt(r,31)];
+    S.practice[S.club]=S.practice[S.club].filter(x=>x!==p);
+    p.contract=makeContract(S,minimumTerms(S),'minimum');
+    S.rosters[club.id].push(p);
+    record(S,'practicePoached',{player:snap(p),club:club.id});
+  }
+}
+
+// ---- Weekly roster moves by staff ----------------------------------------------------
+const rosterMovesByStaff=(S,id)=>id!==S.club||S.staff.directives.rosterMoves!=='owner';
+function weakestBackup(S,id){
+  const u=personnel(S.rosters[id].filter(p=>!p.ir),S.staff.clubs[id].hc),keep=new Set();
+  for(const [pos,,n] of positions)u.chart[pos].slice(0,n+1).forEach(p=>keep.add(p.id));
+  return S.rosters[id].filter(p=>!p.ir&&!p.out&&!keep.has(p.id)).sort((a,b)=>capHit(a)-capHit(b)||a.rating-b.rating)[0];
+}
+function manageRoster(S,r){
+  const notes=[];
+  for(const t of clubs){
+    const id=t.id;
+    if(!rosterMovesByStaff(S,id))continue;
+    for(const p of S.rosters[id])if(!p.ir&&p.out>=IR_THRESHOLD){placeOnIR(S,id,p.id);if(id===S.club)notes.push(p.pos+' '+p.name+' to injured reserve');}
+    for(const p of S.rosters[id].filter(x=>canReturn(S,id,x))){
+      if(rosterCount(S,id)>=53){const cut=weakestBackup(S,id);if(!cut)break;releasePlayer(S,id,cut.id);if(id===S.club)notes.push('released '+cut.pos+' '+cut.name);}
+      activateFromIR(S,id,p.id);if(id===S.club)notes.push(p.pos+' '+p.name+' back from injured reserve');
+    }
+    for(let guard=0;guard<6&&rosterCount(S,id)<53;guard++){
+      const healthy=pos=>S.rosters[id].filter(p=>p.pos===pos&&!p.ir&&!p.out).length;
+      const short=positions.map(([pos,,n])=>({pos,gap:n+1-healthy(pos)})).sort((a,b)=>b.gap-a.gap)[0];
+      const ps=practiceOf(S,id).filter(p=>p.pos===short.pos).sort((a,b)=>b.rating-a.rating)[0]??practiceOf(S,id).sort((a,b)=>b.rating-a.rating)[0];
+      if(ps){promote(S,id,ps.id);if(id===S.club)notes.push('promoted '+ps.pos+' '+ps.name+' from the practice squad');}
+      else{signMinimum(S,id,short.pos,r);const p=S.rosters[id].at(-1);if(id===S.club)notes.push('signed '+p.pos+' '+p.name);}
+    }
+  }
+  if(notes.length&&S.club)record(S,'rosterMoves',{notes});
+}
+// What the owner needs to know when they run the roster themselves.
+function rosterAlerts(S){
+  const id=S.club,alerts=[];
+  if(!id)return alerts;
+  const u=personnel(S.rosters[id].filter(p=>!p.ir),lineupCoach(S,id));
+  for(const [pos,,n] of positions)if(u.chart[pos].filter(p=>!p.out).length<n)alerts.push('No healthy starter at '+pos);
+  const irable=S.rosters[id].filter(p=>!p.ir&&p.out>=IR_MIN_WEEKS);
+  if(irable.length)alerts.push(irable.length+' player'+(irable.length===1?'':'s')+' could go on injured reserve');
+  const back=S.rosters[id].filter(p=>canReturn(S,id,p));
+  if(back.length)alerts.push(back.length+' ready to come back from IR');
+  const open=53-rosterCount(S,id);
+  if(open>0)alerts.push(open+' open roster spot'+(open===1?'':'s'));
+  return alerts;
+}
+
+// Words for depth-chart events.
+function depthEventText(S,e){
+  switch(e.type){
+    case 'rosterMoves':return 'Roster moves this week: '+e.notes.join('; ')+'.';
+    case 'practicePoached':return teamName(e.club)+' signed '+e.player.pos+' '+e.player.name+' off our practice squad.';
+    case 'coachUnhappy':return 'Coach '+e.name+' is unhappy about how often you change his lineup ('+e.overrides+' times so far). He says the players notice.';
+  }
+  return '';
+}
+
+// ---- Depth chart view ----------------------------------------------------------------
+const depthUi={notice:''};
+function depthView(){
+  const S=save,id=S.club;
+  if(!id)return heading('DEPTH CHART','Choose a club first')+'<p>Take ownership on the Owner desk to see your depth chart.</p>';
+  const hc=S.staff.clubs[id].hc,trust=hc.trust??70,actives=new Set(activesFor(S,id).map(p=>p.id)),roster=S.rosters[id];
+  const u=personnel(roster.filter(p=>!p.ir),lineupCoach(S,id)),ir=roster.filter(p=>p.ir),ps=practiceOf(S,id);
+  const coachName=hc.interim?'The interim coach':'Coach '+hc.name;
+  let html=heading('DEPTH CHART AND GAME DAY',teamName(id))+'<div class="units">'+
+    '<div><small>Active roster</small><b>'+rosterCount(S,id)+'/53</b>'+ir.length+' on injured reserve</div>'+
+    '<div><small>Game day</small><b>'+actives.size+'/'+ACTIVE_LIMIT+'</b>dress this week</div>'+
+    '<div><small>Practice squad</small><b>'+ps.length+'/'+PRACTICE_LIMIT+'</b>'+m1(ps.reduce((a,p)=>a+capHit(p),0))+' on the cap</div>'+
+    '<div><small>IR returns</small><b>'+irReturnsUsed(S,id)+'/'+IR_RETURNS+'</b>this season</div>'+
+    '<div><small>'+esc(coachName)+'</small><b>'+(trust>=60?'Settled':trust>=40?'Wary':'Unhappy')+'</b>'+S.depth.overrides+' lineup change'+(S.depth.overrides===1?'':'s')+' by you</div></div>';
+  html+='<p>'+esc(coachName+' sets the depth chart and picks the game-day inactives. Moving a player into or out of the starting lineup overrules him, and he keeps count.')+'</p>'+
+    '<div class="controls"><label>Weekly roster moves <select id="rosterMoves">'+option('gm','The GM handles them',S.staff.directives.rosterMoves!=='owner')+option('owner','I decide',S.staff.directives.rosterMoves==='owner')+'</select></label>'+
+    (Object.keys(S.depth.order).length||S.depth.inactive.length||S.depth.active.length?'<button id="resetDepth">Give the lineup back to the coach</button>':'')+'</div>'+
+    (depthUi.notice?'<p><b>'+esc(depthUi.notice)+'</b></p>':'');
+  const alerts=S.staff.directives.rosterMoves==='owner'?rosterAlerts(S):[];
+  if(alerts.length)html+='<div class="confirm"><span>'+esc(alerts.join(' · '))+'</span></div>';
+  const coachStarters=new Set(positions.flatMap(([pos,,n])=>coachOrder(S,id,pos).slice(0,n)));
+  const row=(p,idx,n,len)=>{
+    const status=p.out?'Out · '+p.out+' wk':!actives.has(p.id)?'Inactive':idx<n?'Starter':'Backup';
+    const changed=idx<n&&!p.out&&!coachStarters.has(p.id);
+    return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+esc(p.name)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
+      (idx>0?'<button data-depth="'+esc(p.id)+':-1" aria-label="Move up">↑</button>':'')+(idx<len-1?'<button data-depth="'+esc(p.id)+':1" aria-label="Move down">↓</button>':'')+
+      (p.out?'':'<button data-active="'+esc(p.id)+'">'+(actives.has(p.id)?'Make inactive':'Activate')+'</button>')+
+      (p.out>=IR_MIN_WEEKS?'<button data-ir="'+esc(p.id)+'">Injured reserve</button>':'')+'</td></tr>';
+  };
+  html+='<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
+    const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
+    return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rtg</th><th></th></tr></thead><tbody>'+
+      section.flatMap(([pos,,n])=>u.chart[pos].map((p,idx,arr)=>row(p,idx,n,arr.length))).join('')+'</tbody></table></section>';
+  }).join('')+'</div>';
+  html+='<h2>Injured reserve</h2>'+(ir.length?'<ul>'+ir.map(p=>'<li><div><strong>'+esc(p.pos+' '+p.name)+'</strong><small>'+esc((p.out?'Out '+p.out+' more wk':'Healthy')+' · on IR since '+weekLabel(p.ir.since))+'</small></div>'+
+      (canReturn(S,id,p)?'<button data-unir="'+esc(p.id)+'">Activate</button>':'')+'</li>').join('')+'</ul>':'<p>Nobody is on injured reserve.</p>');
+  html+='<h2>Practice squad</h2>'+(ps.length?'<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Potential</th><th></th></tr></thead><tbody>'+
+      [...ps].sort((a,b)=>b.rating-a.rating).map(p=>'<tr><td>'+esc(p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+(p.potential??p.rating)+'</td><td class="calls"><button data-promote="'+esc(p.id)+'">Promote</button><button data-psrelease="'+esc(p.id)+'">Release</button></td></tr>').join('')+'</tbody></table></div>':'<p>The practice squad is empty.</p>')+
+    (ps.length<PRACTICE_LIMIT?'<div class="controls"><button id="fillPractice">Fill the practice squad</button></div>':'');
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // Words. Everything returned here is already escaped HTML.
 // ---------------------------------------------------------------------------
@@ -3154,6 +3412,7 @@ function describeEvent(e,S=save){
     case 'playoffResult':case 'seasonReview':case 'leagueYear':case 'draftOpen':case 'draftUnattended':case 'draftDone':case 'calendarNote':case 'finalCuts':return esc(calendarEventText(S,e));
     case 'playerReleased':case 'contractRestructured':case 'contractExtended':case 'resignings':case 'capYear':case 'capWarning':case 'capCompliance':case 'faSigned':case 'faLost':case 'playerTagged':case 'optionExercised':case 'floorShortfall':case 'salaryPrepaid':case 'floorWarning':return esc(contractEventText(S,e));
     case 'staffFired':case 'staffHired':case 'candidateLost':case 'staffReview':case 'proposalExpired':return esc(staffEventText(S,e));
+    case 'rosterMoves':case 'practicePoached':case 'coachUnhappy':return esc(depthEventText(S,e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');
@@ -3192,7 +3451,15 @@ const migrations={
   6:migrateV6,
   7:migrateV7,
   8:migrateV8,
+  9:migrateV9,
 };
+// v9 -> v10: depth-chart overrides, game-day actives, injured reserve and practice squads.
+function migrateV9(old){
+  initDepth(old,rngFor(old.rng));
+  old.schemaVersion=10;
+  (old.migrations??=[]).push({from:9,to:10,at:new Date().toISOString()});
+  return old;
+}
 // v8 -> v9: head coaches and GMs for every club, owner instructions and approvals.
 function migrateV8(old){
   makeStaffAll(old,rngFor(old.rng));
@@ -3369,6 +3636,7 @@ function validateSave(S){
   if(!S.cap||![S.cap.limit,S.cap.scale,S.cap.minSalary].every(Number.isFinite)||!S.cap.dead||!S.cap.deadNext||!S.cap.carry||!S.cap.tags||!S.fa||!Array.isArray(S.fa.pool)||!S.fa.offers)fail('Salary cap records are missing.');
   else if(Object.values(S.rosters??{}).flat().some(p=>!p?.contract||![p.contract.salary,p.contract.prorated].every(Number.isFinite)||!isInt(p.contract.yearsLeft,1,10)))fail('A player contract is invalid.');
   if(!S.staff?.clubs||!clubs.every(t=>S.staff.clubs[t.id]?.hc?.ratings&&S.staff.clubs[t.id]?.gm?.ratings)||!S.staff.directives||!Array.isArray(S.staff.proposals)||!S.staff.market||!Array.isArray(S.staff.openings))fail('Coach and front-office records are missing.');
+  if(!S.depth||!S.depth.order||!Array.isArray(S.depth.inactive)||!Array.isArray(S.depth.active)||!S.irReturns||!S.practice||!clubs.every(t=>Array.isArray(S.practice[t.id])&&S.practice[t.id].length<=PRACTICE_LIMIT&&S.practice[t.id].every(p=>p.contract)))fail('Depth chart or practice-squad records are missing.');
   if(!S.draft||!Array.isArray(S.draft.prospects)||!['scouting','live','done'].includes(S.draft.status)||!isInt(S.draft.pick,0))fail('The draft class is missing.');
   if(!Array.isArray(S.history)||!Array.isArray(S.draftHistory))fail('Season history is missing.');
   const Lg=S.league;
@@ -3625,6 +3893,12 @@ function leagueCard(S){
   const n=S.league.news.at(-1);
   return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
 }
+function depthCard(S){
+  const alerts=S.staff.directives.rosterMoves==='owner'?rosterAlerts(S):[];
+  if(alerts.length)return '<div><small>Roster</small>'+esc(alerts[0])+' <button data-tab="Depth chart">Fix it</button></div>';
+  const out=inactivesFor(S,S.club);
+  return '<div><small>Game day</small>'+(out.length?esc(out.length+' inactive: '+out.slice(0,3).map(p=>p.pos+' '+p.name.split(' ')[1]).join(', ')+(out.length>3?'…':'')):'Everyone healthy dresses')+'</div>';
+}
 function staffCard(S){
   const C=S.staff.clubs[S.club],n=S.staff.proposals.length;
   if(n)return '<div><small>Needs your approval</small>'+n+' GM proposal'+(n===1?'':'s')+' <button data-tab="Staff">Review</button></div>';
@@ -3670,7 +3944,7 @@ function ownershipDesk(){
   const last=lastPlayoff?esc(lastPlayoff.name+' · '+(lastPlayoff.g.home===id||lastPlayoff.g.neutral?'vs. ':'at ')+teamName(lastPlayoff.g.home===id?lastPlayoff.g.away:lastPlayoff.g.home)+' · '+resultText(lastPlayoff.g,id)):fixture(games.filter(x=>x.g.score).pop());
   const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
-    staffCard(S)+comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
+    depthCard(S)+staffCard(S)+comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
   let gm;
   if(S.offer)gm=negotiationView(S);
@@ -3717,16 +3991,16 @@ function rosterView(){
   const team=byId.get(selected),units=personnel(save.rosters[selected]);
   const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
   return heading(team.conference+' '+team.division,teamName(selected))+
-    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+save.rosters[selected].length+' players · Depth chart · cap room '+m1(capRoom(save,selected))+'</span></div>'+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+rosterCount(save,selected)+' players · '+practiceOf(save,selected).length+' on the practice squad · cap room '+m1(capRoom(save,selected))+'</span></div>'+
     '<div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div>'+
     '<p>An uncovered starting spot uses an emergency rating of '+EMERGENCY_RATING+'. Starters lead each position group. The first reserve also contributes at running back, receiver, defensive end, defensive tackle, linebacker and cornerback.</p>'+
     '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
       const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
       return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th></tr></thead><tbody>'+
-        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>';
 }
-const TABS=['Owner desk','Staff','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+const TABS=['Owner desk','Depth chart','Staff','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
 function draw(){
   const s=cur();
@@ -3742,7 +4016,7 @@ function draw(){
   $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
   $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
   $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='Depth chart'?depthView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
   if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
@@ -3830,6 +4104,15 @@ document.addEventListener('click',e=>{
   if(b.dataset.hire){const [role,cid]=b.dataset.hire.split(':'),res=hire(save,role,cid);staffUi.notice=res==='ok'?'':'That candidate is no longer available.';commit();}
   if(b.dataset.approve){const res=approveProposal(save,Number(b.dataset.approve));staffUi.notice=res==='ok'?'':({capShort:'That no longer fits under the cap.',refused:'He no longer accepts those terms.'}[res]??'That deal is no longer available.');commit();}
   if(b.dataset.reject){declineProposal(save,Number(b.dataset.reject));commit();}
+  const depthNotice={rosterFull:'The 53-man roster is full. Release someone or put an injured player on IR first.',unavailable:'That move is not available.'};
+  if(b.dataset.depth){const [pid,dir]=b.dataset.depth.split(':');moveDepth(save,pid,Number(dir));depthUi.notice='';commit();}
+  if(b.dataset.active){toggleActive(save,b.dataset.active);commit();}
+  if(b.dataset.ir){const res=placeOnIR(save,save.club,b.dataset.ir);depthUi.notice=depthNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.unir){const res=activateFromIR(save,save.club,b.dataset.unir);depthUi.notice=depthNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.promote){const res=promote(save,save.club,b.dataset.promote);depthUi.notice=depthNotice[res]??'';res==='ok'?commit():draw();}
+  if(b.dataset.psrelease){releasePractice(save,save.club,b.dataset.psrelease);commit();}
+  if(b.id==='fillPractice'){fillPractice(save,save.club,rngFor(save.rng));commit();}
+  if(b.id==='resetDepth'){resetDepth(save);commit();}
   if(b.id==='prepay'){const res=ownerPrepay(save);contractsUi.notice=res==='ok'?'':'No contracts have future salary left to move.';res==='ok'?commit():draw();}
   if(b.dataset.option){const res=exerciseOption(save,save.club,b.dataset.option);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
   if(b.id==='gmFinish'){gmFinishDraft(save,false);commit();}
@@ -3845,7 +4128,7 @@ app.onchange=e=>{
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
   if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
   if(e.target.id==='gmHandles'){setGmHandles(save,e.target.value==='gm');commit();return;}
-  const dirKeys={dirFocus:'focus',dirApproach:'approach',dirApproval:'approvalOver'};
+  const dirKeys={dirFocus:'focus',dirApproach:'approach',dirApproval:'approvalOver',rosterMoves:'rosterMoves'};
   if(dirKeys[e.target.id]){setDirective(save,dirKeys[e.target.id],e.target.value);commit();return;}
   if(e.target.id==='bonusFunding'){contractsUi.funding=e.target.value;return;}
   const negKeys={negYears:'years',negSalary:'salary',negBonus:'bonus',negG:'gYears'};

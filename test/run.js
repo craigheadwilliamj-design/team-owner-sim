@@ -16,6 +16,7 @@ const v5Save = fs.readFileSync(path.join(FIX, 'v5-save.json'), 'utf8');
 const v6Save = fs.readFileSync(path.join(FIX, 'v6-save.json'), 'utf8');
 const v7Save = fs.readFileSync(path.join(FIX, 'v7-save.json'), 'utf8');
 const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
+const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -23,7 +24,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -1134,7 +1135,7 @@ test('v8 save upgrades to v9: every club has a head coach and a GM', () => {
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   for (const t of api.clubs) { assert(S.staff.clubs[t.id].hc.ratings.offense); assert(S.staff.clubs[t.id].gm.ratings.scouting); }
   assert.equal(S.staff.president.name, old.staff.president.name);
-  assert.deepEqual(S.staff.directives, { focus: 'none', approach: 'gm', approvalOver: null });
+  assert.deepEqual(S.staff.directives, { focus: 'none', approach: 'gm', approvalOver: null, rosterMoves: 'gm' });
   assert.equal(api.cur(S).completed, old.seasons.at(-1).completed);
 });
 
@@ -1221,11 +1222,11 @@ test('the February review checks promises against what happened', () => {
 
 test('approvals: big GM signings wait for the owner, and approving sends the offer', () => {
   const { api, S } = owned(408);
-  api.setDirective(S, 'approvalOver', 5);
+  api.setDirective(S, 'approvalOver', 2);
   api.jumpTo(S, 27);
   let P; for (let i = 0; i < 10 && !P; i++) { api.advance(S); P = S.staff.proposals.find(x => x.kind === 'fa' && S.fa.pool.some(p => p.id === x.playerId)); }
   assert(P, 'the GM asked first');
-  assert(api.termsHit(P.terms) > 5);
+  assert(api.termsHit(P.terms) > 2);
   assert(!S.rosters['club-06'].some(p => p.id === P.playerId));
   assert.equal(api.approveProposal(S, P.id), 'ok');
   assert(S.fa.offers[P.playerId]);
@@ -1288,6 +1289,123 @@ test('staff page renders cards, instructions and a candidate search', () => {
   html = api.staffView();
   assert(html.includes('General manager search') && html.includes('data-interview'));
   assert(!/<script|onerror/i.test(html));
+});
+
+
+// ---- Depth chart, game day, injured reserve, practice squad ------------------
+test('v9 save upgrades to v10: practice squads, depth chart and IR books', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v9Save)).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  for (const t of api.clubs) assert.equal(api.practiceOf(S, t.id).length, 16);
+  assert.deepEqual(S.depth, { order: {}, inactive: [], active: [], overrides: 0 });
+  assert.equal(S.staff.directives.rosterMoves, 'gm');
+  assert(Object.values(S.staff.clubs).every(c => c.hc.trust === 70));
+});
+
+test('game day: 48 dress, inactives do not play, and the owner can force either way', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const act = api.activesFor(S, 'club-06');
+  assert(act.length <= 48);
+  const sitting = api.inactivesFor(S, 'club-06');
+  assert(sitting.length >= 1);
+  const chart = Object.values(api.clubUnits(S, 'club-06').chart).flat();
+  assert(sitting.every(p => !chart.includes(p)), 'inactive players are not on the game chart');
+  api.toggleActive(S, sitting[0].id);
+  assert(api.activesFor(S, 'club-06').includes(sitting[0]));
+  const starter = api.clubUnits(S, 'club-06').chart.WR[0];
+  api.toggleActive(S, starter.id);
+  assert(!api.activesFor(S, 'club-06').includes(starter));
+});
+
+test('the owner can overrule the coach’s depth chart, and the coach keeps count', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const hc = api.hcOf(S, 'club-06'), trust = hc.trust;
+  const qbs = api.clubUnits(S, 'club-06').chart.QB, backup = qbs[1];
+  assert.equal(api.moveDepth(S, backup.id, -1), 'ok');
+  assert.equal(api.clubUnits(S, 'club-06').chart.QB[0], backup);
+  assert.equal(S.depth.overrides, 1);
+  assert(hc.trust < trust);
+  api.resetDepth(S);
+  assert.equal(api.clubUnits(S, 'club-06').chart.QB[0], qbs[0]);
+  for (let i = 0; i < 24; i++) { const q = api.clubUnits(S, 'club-06').chart.QB; api.moveDepth(S, q[1].id, -1); } // every other swap restores his choice
+  assert(S.events.some(e => e.type === 'coachUnhappy'));
+});
+
+test('benching the quarterback the coach promised to start is blamed on the owner', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  api.fireStaff(S, 'hc');
+  const c = S.staff.market.hc[0]; api.interview(S, 'hc', c.id); api.hire(S, 'hc', c.id);
+  const promise = c.commitments.find(x => x.type === 'qbStarter') ?? (c.commitments.push({ type: 'qbStarter', playerId: api.clubUnits(S, 'club-06').chart.QB[0].id, name: 'him' }), c.commitments.at(-1));
+  c.qbStarter = promise.playerId;
+  const other = S.rosters['club-06'].find(p => p.pos === 'QB' && p.id !== promise.playerId);
+  S.depth.order.QB = [other.id, promise.playerId];
+  while (api.cur(S).completed < 18) api.advance(S);
+  api.staffReview(S);
+  const e = S.events.at(-1), res = e.report.find(x => x.role === 'hc').results.find(x => /start at QB/.test(x.text));
+  assert.equal(res.blame, 'owner');
+  assert.match(api.describeEvent(e, S), /your call/);
+});
+
+test('injured reserve: the GM moves a long-term injury off the 53 and fills the spot', () => {
+  const { api, S } = owned(501);
+  const p = S.rosters['club-06'].find(x => x.pos === 'WR');
+  p.out = 10;
+  api.manageRoster(S, api.rngFor({ state: 1 }));
+  assert(p.ir, 'on IR');
+  assert.equal(api.rosterCount(S, 'club-06'), 53, 'replacement promoted or signed');
+  assert(S.events.some(e => e.type === 'rosterMoves'));
+  for (let i = 0; i < 10; i++) api.advance(S);
+  assert(!p.ir, 'back from IR once healthy');
+  assert.equal(S.irReturns.counts['club-06'], 1);
+  assert.equal(api.rosterCount(S, 'club-06'), 53);
+});
+
+test('an owner running the roster gets alerts instead of automatic moves', () => {
+  const { api, S } = owned(502);
+  api.setDirective(S, 'rosterMoves', 'owner');
+  const p = S.rosters['club-06'].find(x => x.pos === 'OT');
+  p.out = 9;
+  api.manageRoster(S, api.rngFor({ state: 2 }));
+  assert(!p.ir);
+  assert(api.rosterAlerts(S).some(a => /injured reserve/.test(a)));
+  const ps = api.practiceOf(S, 'club-06')[0];
+  assert.equal(api.promote(S, 'club-06', ps.id), 'rosterFull');
+  assert.equal(api.placeOnIR(S, 'club-06', p.id), 'ok');
+  assert.equal(api.promote(S, 'club-06', ps.id), 'ok');
+  assert(S.rosters['club-06'].includes(ps) && ps.contract.kind === 'minimum');
+});
+
+test('practice squads: cheap, on the cap, refilled from young cuts, expired each league year', () => {
+  const { api, S } = owned(503);
+  const before = api.committed(S, 'club-06');
+  api.releasePractice(S, 'club-06', api.practiceOf(S, 'club-06')[0].id);
+  assert(api.committed(S, 'club-06') < before, 'practice salaries count against the cap');
+  api.jumpTo(S, 28);
+  assert(api.clubs.every(t => api.practiceOf(S, t.id).length === 0), 'deals expire at the league year');
+  api.jumpTo(S, 50);
+  for (const t of api.clubs) { const ps = api.practiceOf(S, t.id); assert(ps.length === 16 && ps.every(p => p.age <= 26 && p.contract.kind === 'practice'), t.id); }
+});
+
+test('other clubs can poach practice-squad players', () => {
+  const { api, S } = owned(504);
+  const star = api.practiceOf(S, 'club-06')[0]; star.rating = 70;
+  api.poachPractice(S, () => 0);
+  assert(!api.practiceOf(S, 'club-06').includes(star));
+  assert(S.events.some(e => e.type === 'practicePoached'));
+});
+
+test('depth chart page renders roster, IR and practice squad', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const p = S.rosters['club-06'].find(x => x.pos === 'S'); p.out = 8; api.placeOnIR(S, 'club-06', p.id);
+  p.name = '<img src=x> Safety';
+  const html = api.depthView();
+  assert(html.includes('Practice squad') && html.includes('Injured reserve') && html.includes('data-depth'));
+  assert(!html.includes('<img src=x>'));
 });
 
 // ---- Save files ------------------------------------------------------------

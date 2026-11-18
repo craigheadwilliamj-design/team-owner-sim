@@ -17,6 +17,7 @@ const v6Save = fs.readFileSync(path.join(FIX, 'v6-save.json'), 'utf8');
 const v7Save = fs.readFileSync(path.join(FIX, 'v7-save.json'), 'utf8');
 const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
 const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
+const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -24,7 +25,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -789,8 +790,8 @@ test('season 2 opens with a new schedule, and deadlines carry over', () => {
   const { api, S } = owned(116);
   regular(api, S);
   toTick(api, S, 45);
-  const site = S.world.sites.find(x => x.status === 'open');
-  site.expiresWeek = 55;
+  const site = S.world.sites.find(x => x.status === 'open') ?? S.world.sites[0];
+  site.status = 'open'; site.expiresWeek = 55;
   api.jumpTo(S, api.SEASON_TICKS + 1);
   assert.equal(api.cur(S).number, 2);
   assert.equal(api.cur(S).tick, 0);
@@ -1135,7 +1136,7 @@ test('v8 save upgrades to v9: every club has a head coach and a GM', () => {
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   for (const t of api.clubs) { assert(S.staff.clubs[t.id].hc.ratings.offense); assert(S.staff.clubs[t.id].gm.ratings.scouting); }
   assert.equal(S.staff.president.name, old.staff.president.name);
-  assert.deepEqual(S.staff.directives, { focus: 'none', approach: 'gm', approvalOver: null, rosterMoves: 'gm' });
+  assert.deepEqual(S.staff.directives, { focus: 'none', approach: 'gm', approvalOver: null, tradeAuthority: 'all', rosterMoves: 'gm' });
   assert.equal(api.cur(S).completed, old.seasons.at(-1).completed);
 });
 
@@ -1406,6 +1407,94 @@ test('depth chart page renders roster, IR and practice squad', () => {
   const html = api.depthView();
   assert(html.includes('Practice squad') && html.includes('Injured reserve') && html.includes('data-depth'));
   assert(!html.includes('<img src=x>'));
+});
+
+
+// ---- Auto-hire, GM trade proposals, offers from other clubs ------------------
+const advanceUntil = (api, S, cond, weeks = 18) => { for (let i = 0; i < weeks && !cond(); i++) api.advance(S); return cond(); };
+
+test('v10 save upgrades to v11, and an open job is filled after four weeks', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v10Save)).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(S.staff.directives.tradeAuthority, 'all');
+  assert(api.hcOf(S, 'club-06').interim && api.hcOf(S, 'club-06').vacantSince);
+  for (let i = 0; i < 4; i++) api.advance(S);
+  assert(!api.hcOf(S, 'club-06').interim, 'the president hired someone');
+  const e = S.events.find(x => x.type === 'autoHired');
+  assert(e && /president/.test(api.describeEvent(e, S)));
+  assert(api.hcOf(S, 'club-06').commitments.length > 0, 'his interview promises are on record');
+});
+
+test('the GM brings trade ideas, and approving one makes the trade', () => {
+  const { api, S } = owned(601);
+  assert(advanceUntil(api, S, () => S.staff.proposals.some(P => P.kind === 'trade')), 'the GM proposed something');
+  const P = S.staff.proposals.find(x => x.kind === 'trade');
+  assert.match(api.tradeSummary(S, P), /^Trade for /);
+  assert(api.tradeRead(S, P.trade).text.length > 10);
+  const res = api.approveProposal(S, P.id);
+  if (res === 'ok') {
+    assert(S.rosters['club-06'].some(p => p.id === P.trade.targetId));
+    for (const k of P.trade.picks) assert.equal(S.picks.find(p => p.origin === k.origin && p.round === k.round).owner, P.trade.seller);
+    assert(S.events.some(e => e.type === 'trade'));
+  }
+});
+
+test('with authority, the GM trades on his own; first-round picks and starters still need a call under the middle setting', () => {
+  const { api, S } = owned(602);
+  api.setDirective(S, 'tradeAuthority', 'none');
+  assert(advanceUntil(api, S, () => S.events.some(e => (e.type === 'trade' || e.type === 'tradeAway') && e.by === 'gm'), 40), 'the GM made a deal');
+  api.setDirective(S, 'tradeAuthority', 'big');
+  const seller = S.rosters['club-17'][0];
+  assert.equal(api.needsCall(S, { buyer: 'club-06', seller: 'club-17', targetId: seller.id, outId: null, picks: [{ origin: 'club-06', round: 1 }] }), true);
+  const backup = S.rosters['club-06'].find(p => !api.starterIds(S, 'club-06').has(p.id));
+  assert.equal(api.needsCall(S, { buyer: 'club-06', seller: 'club-17', targetId: seller.id, outId: backup.id, picks: [{ origin: 'club-06', round: 5 }] }), false);
+});
+
+test('other clubs make offers; accepting sends the player away for their picks', () => {
+  const { api, S } = owned(603);
+  assert(advanceUntil(api, S, () => S.staff.proposals.some(P => P.kind === 'offer'), 30), 'an offer arrived');
+  const P = S.staff.proposals.find(x => x.kind === 'offer');
+  assert.match(api.tradeSummary(S, P), / offer /);
+  assert.match(api.tradeRead(S, P.trade).text, /cap room/);
+  assert.equal(api.approveProposal(S, P.id), 'ok');
+  assert(!S.rosters['club-06'].some(p => p.id === P.trade.targetId));
+  for (const k of P.trade.picks) assert.equal(S.picks.find(p => p.origin === k.origin && p.round === k.round).owner, 'club-06');
+  assert(S.events.some(e => e.type === 'tradeAway'));
+});
+
+test('unanswered trade proposals and offers expire after a week', () => {
+  const { api, S } = owned(604);
+  assert(advanceUntil(api, S, () => S.staff.proposals.some(P => P.kind === 'trade' || P.kind === 'offer'), 30));
+  const P = S.staff.proposals.find(x => x.kind === 'trade' || x.kind === 'offer');
+  api.advance(S);
+  assert(!S.staff.proposals.includes(P));
+  assert(S.events.some(e => e.type === 'tradeExpired'));
+});
+
+test('trade deadline after Week 10; trading reopens at the new league year', () => {
+  const { api, S } = owned(605);
+  for (let i = 0; i < 11; i++) api.advance(S);
+  assert(!api.tradeWindow(S));
+  const target = S.rosters['club-17'].find(p => p.pos === 'WR');
+  api.tradeQuote(S, 'club-17', target.id);
+  assert.equal(S.offer, null);
+  assert.equal(api.executeTrade(S, { buyer: 'club-06', seller: 'club-17', targetId: target.id, picks: [] }), 'closed');
+  const before = S.staff.proposals.filter(P => P.trade).length;
+  api.advance(S);
+  assert.equal(S.staff.proposals.filter(P => P.trade && P.week === api.now(S)).length, 0, 'no new trade talk after the deadline');
+  api.jumpTo(S, 28);
+  assert(api.tradeWindow(S));
+  assert(before >= 0);
+});
+
+test('executeTrade checks the cap and both rosters', () => {
+  const { api, S } = owned(606);
+  const k = S.rosters['club-17'].find(p => p.pos === 'K');
+  assert.equal(api.executeTrade(S, { buyer: 'club-06', seller: 'club-17', targetId: k.id, picks: [] }), 'depth', 'a club keeps its only kicker');
+  const big = S.rosters['club-17'].sort((a, b) => api.capHit(b) - api.capHit(a))[0];
+  S.cap.dead['club-06'] = api.capRoom(S, 'club-06');
+  assert.equal(api.executeTrade(S, { buyer: 'club-06', seller: 'club-17', targetId: big.id, picks: [] }), 'cap');
 });
 
 // ---- Save files ------------------------------------------------------------

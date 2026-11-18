@@ -467,7 +467,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=10;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=11;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
@@ -786,7 +786,7 @@ function tradeCap(S,seller,target,out){
 }
 function tradeQuote(S,seller,targetId){
   const s=cur(S);
-  if(!S.club||seller===S.club||S.offer)return;
+  if(!S.club||seller===S.club||S.offer||!tradeWindow(S))return;
   const target=S.rosters[seller]?.find(p=>p.id===targetId&&!p.out);
   if(!target)return;
   const base={seller,targetId,outId:null,origin:null,round:0,week:s.tick};
@@ -823,6 +823,7 @@ function counterTrade(S,outId,key){
 function resolveOffer(S,accept){
   const q=S.offer;if(!q)return;
   if(!accept){S.offer=null;record(S,'talksEnded',{seller:q.seller});return;}
+  if(!tradeWindow(S)){S.offer=null;record(S,'termsGone',{seller:q.seller});return;}
   if(q.firm===false)return;
   const theirs=S.rosters[q.seller],ours=S.rosters[S.club];
   const i=theirs.findIndex(p=>p.id===q.targetId&&!p.out),j=ours.findIndex(p=>p.id===q.outId&&!p.out);
@@ -2055,6 +2056,8 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
   else for(const p of Object.values(S.rosters).flat())if(p.out&&--p.out<=0)delete p.out;
   if(S.offer){record(S,'quoteExpired',{seller:S.offer.seller});S.offer=null;}
   expireProposals(S);
+  processTradeTalk(S,r);
+  autoHire(S);
   processStadium(S,r);
   processLeague(S,r,regularIndex);
   processFreeAgency(S,r);
@@ -2067,6 +2070,11 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
 function expireProposals(S){
   if(!S.staff?.proposals)return;
   S.staff.proposals=S.staff.proposals.filter(P=>{
+    if(P.kind==='trade'||P.kind==='offer'){
+      if(P.week>=now(S))return true;
+      record(S,'tradeExpired',{text:P.kind==='trade'?'The chance to trade for '+P.pos+' '+P.name+' passed before you answered.':possessive(teamName(P.club))+' offer for '+P.pos+' '+P.name+' expired.'});
+      return false;
+    }
     const alive=P.kind==='fa'?P.week>=now(S)&&S.fa.pool.some(x=>x.id===P.playerId):S.rosters[S.club]?.some(x=>x.id===P.playerId&&x.contract.yearsLeft===1);
     if(!alive&&P.kind==='fa'&&P.week<now(S))record(S,'proposalExpired',{name:P.name});
     return alive;
@@ -2354,7 +2362,7 @@ function releasePlayer(S,clubId,playerId,{toPool=true}={}){
   return {player:p,dead:cost.deadNow,deadLater:cost.deadLater,owed:cost.owed};
 }
 function addToPool(S,p){
-  delete p.contract;delete p.out;
+  delete p.contract;delete p.out;delete p.ir; // free agents carry no injury designation
   p.ask=askFor(S,p);
   S.fa.pool.push(p);
 }
@@ -2826,7 +2834,7 @@ function makeStaffAll(S,r){
     hc.hired=gm.hired={season:Math.max(1,cur(S).number-randInt(r,4))};
     return [t.id,{hc,gm}];
   }));
-  Object.assign(S.staff,{directives:{focus:'none',approach:'gm',approvalOver:null},proposals:[],market:{hc:[],gm:[]},openings:[],
+  Object.assign(S.staff,{directives:{focus:'none',approach:'gm',approvalOver:null,tradeAuthority:'all'},proposals:[],market:{hc:[],gm:[]},openings:[],
     track:{season:cur(S).number,games:0,starts:{}},nextProposalId:1});
 }
 const hcOf=(S,id)=>S.staff.clubs[id].hc;
@@ -3005,6 +3013,7 @@ function setDirective(S,key,value){
   if(key==='approach'&&['gm',...GM_PHILOSOPHIES].includes(value))D.approach=value;
   if(key==='approvalOver')D.approvalOver=value===''||value==null?null:Number(value);
   if(key==='rosterMoves'&&['gm','owner'].includes(value))D.rosterMoves=value;
+  if(key==='tradeAuthority'&&['all','big','none'].includes(value))D.tradeAuthority=value;
 }
 const needsApproval=(S,hit)=>S.staff.directives.approvalOver!=null&&hit>S.staff.directives.approvalOver;
 function propose(S,kind,p,terms){
@@ -3014,6 +3023,7 @@ function propose(S,kind,p,terms){
 function approveProposal(S,id){
   const P=S.staff.proposals.find(x=>x.id===id);if(!P)return 'unavailable';
   S.staff.proposals=S.staff.proposals.filter(x=>x!==P);
+  if(P.kind==='trade'||P.kind==='offer')return executeTrade(S,P.trade);
   if(P.kind==='fa')return makeOffer(S,P.playerId,'club',P.terms);
   return extendPlayer(S,P.playerId,'club',P.terms);
 }
@@ -3025,7 +3035,7 @@ function fireStaff(S,role){
   const r=rngFor(S.rng),cost=staffBuyout(person);
   if(cost)postCash(S,'staffBuyout',-cost);
   const interim=role==='hc'?makeCoach(r,{interim:true}):makeGm(r,{interim:true});
-  interim.hired={season:cur(S).number};
+  interim.hired={season:cur(S).number};interim.vacantSince=cur(S).number*100+now(S);
   C[role]=interim;
   fillMarket(S,r);
   record(S,'staffFired',{role,name:person.name,cost,interim:interim.name});
@@ -3079,8 +3089,9 @@ function carousel(S,r){
 }
 // February weeks: open jobs get filled, one club at a time, from the shared pool.
 function fillOpenings(S,r){
+  const last=now(S)>=MILESTONES.leagueYear+2;
   for(const o of [...S.staff.openings]){
-    if(r()>.6)continue;
+    if(!last&&r()>.6)continue;
     const pool=S.staff.market[o.role];
     if(!pool.length){pool.push(o.role==='hc'?makeCoach(r):makeGm(r));}
     const pick=pool.sort((a,b)=>(o.role==='hc'?coachScore(b)-coachScore(a):gmScore(b)-gmScore(a)))[randInt(r,Math.min(3,pool.length))];
@@ -3138,8 +3149,9 @@ function staffView(){
   html+='<h2>Your instructions to the GM</h2><p>'+esc(C.gm.name+' runs the roster day to day. These tell him what you care about.')+'</p><div class="controls">'+
     '<label>Focus <select id="dirFocus">'+Object.keys(FOCUS_GROUPS).map(k=>option(k,k==='none'?'No particular focus':capital(k),D.focus===k)).join('')+'</select></label>'+
     '<label>Approach <select id="dirApproach">'+option('gm','His call ('+STYLE_LABEL[C.gm.philosophy]+')',D.approach==='gm')+GM_PHILOSOPHIES.map(k=>option(k,capital(STYLE_LABEL[k]),D.approach===k)).join('')+'</select></label>'+
+    '<label>Trades <select id="dirTrades">'+option('all','Call me before any trade',authority(S)==='all')+option('big','Call me before trading a first or a starter',authority(S)==='big')+option('none','Make trades without me',authority(S)==='none')+'</select></label>'+
     '<label>Call me before <select id="dirApproval">'+option('','No approvals needed',D.approvalOver==null)+[5,10,15,20].map(v=>option(v,'any deal over $'+v+'M a year',D.approvalOver===v)).join('')+'</select></label></div>';
-  if(S.staff.proposals.length)html+='<h2>Waiting for your approval</h2><ul>'+S.staff.proposals.map(P=>'<li><div><strong>'+esc((P.kind==='fa'?'Sign ':'Re-sign ')+P.pos+' '+P.name)+'</strong><small>'+esc('Age '+P.age+', rating '+P.rating+' · '+P.terms.years+' yrs, '+m1(termsHit(P.terms))+' a year'+(P.terms.bonus?', '+m1(P.terms.bonus)+' bonus':''))+'</small></div><button data-approve="'+P.id+'">Approve</button><button data-reject="'+P.id+'">Decline</button></li>').join('')+'</ul>';
+  if(S.staff.proposals.length)html+='<h2>Waiting for your approval</h2><ul>'+S.staff.proposals.map(P=>'<li><div><strong>'+esc(P.trade?tradeSummary(S,P):(P.kind==='fa'?'Sign ':'Re-sign ')+P.pos+' '+P.name)+'</strong><small>'+esc(P.trade?tradeRead(S,P.trade).text:'Age '+P.age+', rating '+P.rating+' · '+P.terms.years+' yrs, '+m1(termsHit(P.terms))+' a year'+(P.terms.bonus?', '+m1(P.terms.bonus)+' bonus':''))+'</small></div><button data-approve="'+P.id+'">Approve</button><button data-reject="'+P.id+'">Decline</button></li>').join('')+'</ul>';
   for(const role of ['hc','gm']){
     if(!C[role].interim)continue;
     const pool=S.staff.market[role];
@@ -3392,6 +3404,167 @@ function depthView(){
   return html;
 }
 
+
+// ---------------------------------------------------------------------------
+// Trades the owner does not start: GM proposals and offers from other clubs
+//
+// A trade is {buyer, seller, targetId, outId?, picks:[{origin,round}]}: the
+// buyer receives the target player and sends the out player and picks.
+// GM ideas and incoming offers wait in staff.proposals (kind 'trade' and
+// 'offer') for one week unless the GM's authority lets him act alone.
+// ---------------------------------------------------------------------------
+const TRADE_DEADLINE=10,AUTO_HIRE_WEEKS=4;
+const tradeWindow=S=>{const t=now(S);return t<=TRADE_DEADLINE||t>=MILESTONES.leagueYear;};
+const picksOf=(S,id)=>S.picks.filter(p=>p.owner===id).sort((a,b)=>b.round-a.round);
+const pickWorth=k=>pickValues[k.round];
+const starterIds=(S,id)=>{const u=clubUnits(S,id),set=new Set();for(const [pos,,n] of positions)u.chart[pos].slice(0,n).forEach(p=>set.add(p.id));return set;};
+// Value a club puts on a player: talent plus contract surplus.
+const tradeValue=(S,p)=>playerValue(p)+contractSurplus(S,p);
+
+function executeTrade(S,T){
+  if(!tradeWindow(S))return 'closed';
+  const sellerR=S.rosters[T.seller],buyerR=S.rosters[T.buyer];
+  const target=sellerR.find(p=>p.id===T.targetId&&!p.out&&!p.ir);
+  const out=T.outId?buyerR.find(p=>p.id===T.outId&&!p.out&&!p.ir):null;
+  const picks=(T.picks??[]).map(k=>S.picks.find(p=>p.origin===k.origin&&p.round===k.round&&p.owner===T.buyer));
+  if(!target||(T.outId&&!out)||picks.some(p=>!p))return 'gone';
+  if(sellerShort(S,T.seller,target,out)||out&&healthyAfter(buyerR,out.pos,out,target)<startersAt(out.pos))return 'depth';
+  if(capRoom(S,T.buyer)-capHit(target)+(out?capHit(out):0)<0||capRoom(S,T.seller)+capHit(target)-(out?capHit(out):0)<0)return 'cap';
+  S.rosters[T.seller]=sellerR.filter(p=>p!==target);S.rosters[T.buyer]=buyerR.filter(p=>p!==out);
+  S.rosters[T.buyer].push(target);if(out)S.rosters[T.seller].push(out);
+  for(const p of picks)p.owner=T.seller;
+  const pk=picks.map(p=>({origin:p.origin,round:p.round}));
+  if(T.buyer===S.club)record(S,'trade',{seller:T.seller,incoming:snap(target),outgoing:out?snap(out):null,pick:pk[0]??null,picks:pk,by:T.by??'owner'});
+  if(T.seller===S.club)record(S,'tradeAway',{buyer:T.buyer,outgoing:snap(target),incoming:out?snap(out):null,picks:pk,by:T.by??'owner'});
+  if(target.rating>=80)news(S,teamName(T.buyer)+' acquire '+target.pos+' '+target.name+' from '+teamName(T.seller));
+  return 'ok';
+}
+const authority=S=>S.staff.directives.tradeAuthority??'all';
+// Does the owner want to be called about this one?
+function needsCall(S,T){
+  const a=authority(S);
+  if(a==='all')return true;
+  if(a==='none')return false;
+  const mine=T.buyer===S.club?T.outId:T.targetId;
+  return (T.buyer===S.club&&T.picks.some(k=>k.round===1))||(mine&&starterIds(S,S.club).has(mine));
+}
+
+// ---- The GM looks for upgrades ------------------------------------------------------
+function gmTradeIdea(S){
+  const id=S.club,u=clubUnits(S,id),focus=focusFor(S,id),approach=approachFor(S,id),mine=picksOf(S,id);
+  const ideas=[];
+  for(const [pos,,n] of positions){
+    if(['K','P','LS'].includes(pos))continue;
+    const weakest=u.chart[pos][n-1],floor=weakest?.rating??45;
+    for(const t of clubs){
+      if(t.id===id)continue;
+      for(const p of S.rosters[t.id]){
+        if(p.pos!==pos||p.out||p.ir||p.rating<floor+4)continue;
+        if(approach==='rebuild'&&p.age>=29)continue;
+        ideas.push({p,seller:t.id,weakest,gain:p.rating-floor+(focus.includes(pos)?4:0)+(approach==='win-now'?2:0)});
+      }
+    }
+  }
+  ideas.sort((a,b)=>b.gain-a.gain);
+  for(const {p,seller,weakest} of ideas.slice(0,25)){
+    if(S.staff.proposals.some(x=>x.trade?.targetId===p.id))continue;
+    const usable=mine.filter(k=>!(approach==='rebuild'&&k.round<=2));
+    for(const out of [null,weakest&&weakest.pos===p.pos&&!weakest.out?weakest:null]){
+      if(sellerShort(S,seller,p,out))continue;
+      const cap=tradeCap(S,seller,p,out);
+      if(cap.buyer<0||cap.seller<0)continue;
+      const need=termsNeeded(p,out,S);
+      const pick=need===0?null:usable.find(k=>pickWorth(k)>=need&&pickWorth(k)<=need*1.25+5); // he will not propose an overpay
+      if(need>0&&!pick)continue;
+      return {buyer:id,seller,targetId:p.id,outId:out?.id??null,picks:pick?[{origin:pick.origin,round:pick.round}]:[],by:'gm'};
+    }
+  }
+  return null;
+}
+// ---- Other clubs ask about the owner's players ---------------------------------------
+function aiOfferIdea(S,r){
+  const id=S.club,buyer=clubs.filter(t=>t.id!==id)[randInt(r,31)].id;
+  const theirs=clubUnits(S,buyer),candidates=[];
+  for(const p of S.rosters[id]){
+    if(p.out||p.ir||['K','P','LS'].includes(p.pos)||sellerShort(S,id,p,null))continue;
+    const n=startersAt(p.pos),floor=theirs.chart[p.pos][n-1]?.rating??45;
+    if(p.rating>=floor+4&&capRoom(S,buyer)>=capHit(p))candidates.push({p,gain:p.rating-floor});
+  }
+  if(!candidates.length)return null;
+  const {p}=candidates.sort((a,b)=>b.gain-a.gain)[randInt(r,Math.min(4,candidates.length))];
+  const want=tradeValue(S,p)*(.88+r()*.32),picks=picksOf(S,buyer).sort((a,b)=>pickWorth(a)-pickWorth(b));
+  let offer=picks.find(k=>pickWorth(k)>=want);
+  let package_=offer?[offer]:null;
+  if(!package_){
+    for(const a of picks)for(const b of picks)if(a!==b&&pickWorth(a)+pickWorth(b)>=want&&(!package_||pickWorth(a)+pickWorth(b)<package_.reduce((s,k)=>s+pickWorth(k),0)))package_=[a,b];
+  }
+  if(!package_)return null;
+  return {buyer,seller:id,targetId:p.id,outId:null,picks:package_.map(k=>({origin:k.origin,round:k.round})),by:'club'};
+}
+// How the owner's GM reads a trade, in plain words.
+function tradeRead(S,T){
+  const incoming=T.buyer===S.club,player=(incoming?S.rosters[T.seller]:S.rosters[S.club]).find(p=>p.id===T.targetId);
+  const out=T.outId?S.rosters[S.club].find(p=>p.id===T.outId):null;
+  if(!player)return {text:'That player has moved on.',ratio:0};
+  const picks=T.picks.reduce((a,k)=>a+pickWorth(k),0);
+  if(incoming){
+    const need=termsNeeded(player,out,S),ratio=(need+5)/(picks+5); // same measure the GM prices with
+    return {ratio,text:(ratio>=1.1?'A good price.':ratio>=.9?'A fair price.':'We would be overpaying.')+' He would start for us over '+(clubUnits(S,S.club).chart[player.pos][startersAt(player.pos)-1]?.name??'nobody')+'. Cap room after: '+m1(tradeCap(S,T.seller,player,out).buyer)+'.'};
+  }
+  const worth=tradeValue(S,player),ratio=picks/Math.max(1,worth),hc=hcOf(S,S.club),starts=starterIds(S,S.club).has(player.id);
+  return {ratio,text:(ratio>=1.1?'They are overpaying.':ratio>=.9?'That is a fair offer.':'That is light for him.')+' It would clear '+m1(capHit(player))+' of cap room.'+
+    (starts?' '+(hc.interim?'The interim coach':'Coach '+hc.name)+' does not want to lose a starter.':'')};
+}
+function proposeTrade(S,kind,T){
+  const player=(T.buyer===S.club?S.rosters[T.seller]:S.rosters[S.club]).find(p=>p.id===T.targetId);
+  S.staff.proposals.push({id:S.staff.nextProposalId++,kind,trade:T,playerId:player.id,name:player.name,pos:player.pos,rating:player.rating,age:player.age,
+    club:T.buyer===S.club?T.seller:T.buyer,week:now(S)});
+}
+// Weekly, inside the trade window.
+function processTradeTalk(S,r){
+  if(!S.club||!tradeWindow(S)||!S.staff?.clubs)return;
+  if(r()<.2){
+    const T=gmTradeIdea(S);
+    if(T){if(needsCall(S,T))proposeTrade(S,'trade',T);else executeTrade(S,T);}
+  }
+  if(r()<.15){
+    const T=aiOfferIdea(S,r);
+    if(T){
+      const read=tradeRead(S,T);
+      if(authority(S)!=='all'&&read.ratio>=1.1&&!starterIds(S,S.club).has(T.targetId))executeTrade(S,{...T,by:'gm'});
+      else proposeTrade(S,'offer',T);
+    }
+  }
+}
+
+// ---- Auto-hire ----------------------------------------------------------------------
+const absWeek=S=>cur(S).number*100+now(S);
+function autoHire(S){
+  if(!S.club||!S.staff?.clubs)return;
+  const C=S.staff.clubs[S.club];
+  for(const role of ['hc','gm']){
+    const person=C[role];
+    if(!person.interim)continue;
+    person.vacantSince??=absWeek(S);
+    if(absWeek(S)-person.vacantSince<AUTO_HIRE_WEEKS)continue;
+    fillMarket(S,rngFor(S.rng));
+    const best=[...S.staff.market[role]].sort((a,b)=>role==='hc'?coachScore(b)-coachScore(a):gmScore(b)-gmScore(a))[0];
+    hire(S,role,best.id);
+    record(S,'autoHired',{role,name:best.name,president:S.staff.president.name,weeks:AUTO_HIRE_WEEKS});
+  }
+}
+
+// Words.
+function tradeEventText(S,e){
+  const who=p=>p.pos+' '+p.name,picks=list=>list.map(pickLabel).join(' and ');
+  switch(e.type){
+    case 'tradeAway':return (e.by==='gm'?'I traded ':'We traded ')+who(e.outgoing)+' to '+teamName(e.buyer)+' for '+[e.incoming&&who(e.incoming),e.picks.length&&picks(e.picks)].filter(Boolean).join(' and ')+'.';
+    case 'autoHired':return 'The '+(e.role==='hc'?'head coach':'general manager')+' job was open for '+e.weeks+' weeks, so team president '+e.president+' hired '+e.name+'. His promises are on the Staff page.';
+    case 'tradeExpired':return e.text;
+  }
+  return '';
+}
+
 // ---------------------------------------------------------------------------
 // Words. Everything returned here is already escaped HTML.
 // ---------------------------------------------------------------------------
@@ -3401,7 +3574,7 @@ function describeEvent(e,S=save){
   switch(e.type){
     case 'injury':return esc(e.player.name+' ('+e.player.pos+', '+e.player.rating+') is out '+weeksText(e.weeks)+'. '+e.backup.name+' ('+e.backup.rating+') moves into the starting group.');
     case 'cleared':return esc(e.player.name+' ('+e.player.pos+') is cleared to play. The staff has updated the depth chart.');
-    case 'trade':return esc('Acquired '+playerText(e.incoming)+' from '+teamName(e.seller)+' for '+[e.outgoing&&playerText(e.outgoing),e.pick&&pickLabel(e.pick)].filter(Boolean).join(' and ')+'.');
+    case 'trade':return esc((e.by==='gm'?'I traded for ':'Acquired ')+playerText(e.incoming)+' from '+teamName(e.seller)+' for '+[e.outgoing&&playerText(e.outgoing),...(e.picks??(e.pick?[e.pick]:[])).map(pickLabel)].filter(Boolean).join(' and ')+'.');
     case 'quoteExpired':return esc('The trade quote'+(e.seller?' from '+teamName(e.seller):'')+' expired when the week advanced.');
     case 'talksEnded':return esc('Ended trade talks with '+teamName(e.seller)+'.');
     case 'termsGone':return esc('The terms are no longer available.');
@@ -3413,6 +3586,7 @@ function describeEvent(e,S=save){
     case 'playerReleased':case 'contractRestructured':case 'contractExtended':case 'resignings':case 'capYear':case 'capWarning':case 'capCompliance':case 'faSigned':case 'faLost':case 'playerTagged':case 'optionExercised':case 'floorShortfall':case 'salaryPrepaid':case 'floorWarning':return esc(contractEventText(S,e));
     case 'staffFired':case 'staffHired':case 'candidateLost':case 'staffReview':case 'proposalExpired':return esc(staffEventText(S,e));
     case 'rosterMoves':case 'practicePoached':case 'coachUnhappy':return esc(depthEventText(S,e));
+    case 'tradeAway':case 'autoHired':case 'tradeExpired':return esc(tradeEventText(S,e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');
@@ -3452,7 +3626,17 @@ const migrations={
   7:migrateV7,
   8:migrateV8,
   9:migrateV9,
+  10:migrateV10,
 };
+// v10 -> v11: GM trade authority, and a clock on open jobs for auto-hire.
+function migrateV10(old){
+  old.staff.directives.tradeAuthority??='all';
+  const C=old.staff.clubs[old.club];
+  if(C)for(const role of ['hc','gm'])if(C[role].interim)C[role].vacantSince??=cur(old).number*100+cur(old).tick;
+  old.schemaVersion=11;
+  (old.migrations??=[]).push({from:10,to:11,at:new Date().toISOString()});
+  return old;
+}
 // v9 -> v10: depth-chart overrides, game-day actives, injured reserve and practice squads.
 function migrateV9(old){
   initDepth(old,rngFor(old.rng));
@@ -3901,7 +4085,7 @@ function depthCard(S){
 }
 function staffCard(S){
   const C=S.staff.clubs[S.club],n=S.staff.proposals.length;
-  if(n)return '<div><small>Needs your approval</small>'+n+' GM proposal'+(n===1?'':'s')+' <button data-tab="Staff">Review</button></div>';
+  if(n)return '<div><small>Needs your answer</small>'+n+' proposal'+(n===1?'':'s')+' and offer'+(n===1?'':'s')+' <button data-tab="Staff">Review</button></div>';
   const open=['hc','gm'].filter(role=>C[role].interim);
   if(open.length)return '<div><small>Staff</small>'+esc(open.map(role=>(role==='hc'?'Head coach':'GM')+' job open').join(', '))+' <button data-tab="Staff">Search</button></div>';
   return '<div><small>Head coach</small>'+esc(C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
@@ -3928,6 +4112,12 @@ function calendarCard(S){
   const next=jumpTargets(S)[0];
   return '<div><small>Next on the calendar</small>'+esc(next?next[1]:'Season '+(s.number+1))+(S.draft.status==='live'?' <button data-tab="Draft">Draft room</button>':'')+'</div>';
 }
+function tradeSummary(S,P){
+  const T=P.trade,picks=T.picks.map(pickLabel).join(' and ');
+  const out=T.outId?(S.rosters[S.club].find(p=>p.id===T.outId)):null;
+  if(P.kind==='trade')return 'Trade for '+P.pos+' '+P.name+' ('+P.rating+', '+teamName(T.seller)+'): send '+[out&&out.pos+' '+out.name,picks].filter(Boolean).join(' and ');
+  return teamName(T.buyer)+' offer '+picks+' for '+P.pos+' '+P.name+' ('+P.rating+')';
+}
 function ownershipDesk(){
   const S=save,s=cur(),id=S.club;
   if(!id)return heading('FRANCHISE OWNERSHIP','Choose your club')+'<p>Take over a franchise in this season. Your staff runs the depth chart and brings personnel decisions here.</p><div class="controls"><label>Franchise '+clubSelect('claimTeam',null)+'</label><button id="claim">Take ownership</button></div>';
@@ -3948,13 +4138,16 @@ function ownershipDesk(){
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
   let gm;
   if(S.offer)gm=negotiationView(S);
+  else if(!tradeWindow(S))gm='<p>'+esc('The trade deadline has passed. Trades reopen at the new league year, '+weekLabel(MILESTONES.leagueYear)+'.')+'</p>';
   else{
     const candidates=clubs.filter(t=>t.id!==id).flatMap(t=>S.rosters[t.id].filter(p=>p.pos===scoutPos&&!p.out).map(p=>({p,t}))).sort((a,b)=>b.p.rating-a.p.rating);
     gm='<div class="controls"><label>Position <select id="scout">'+positions.map(([pos])=>option(pos,pos,pos===scoutPos)).join('')+'</select></label>'+
       '<label>Trade target <select id="target">'+candidates.map(({p,t})=>option(t.id+'/'+p.id,p.name+' · '+t.abbr+' · '+p.rating,false)).join('')+'</select></label><button id="quote">Ask for a price</button></div>';
   }
   const reports=[...S.events].reverse().slice(0,40).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no pending reports.</li>';
-  return heading('OWNER’S DESK',teamName(id))+schedule+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+
+  const talk=S.staff.proposals.filter(P=>P.kind==='trade'||P.kind==='offer');
+  const talkHtml=talk.length?'<h2>Trade talk</h2><ul>'+talk.map(P=>'<li><div><strong>'+esc(tradeSummary(S,P))+'</strong><small>'+esc((P.kind==='trade'?'Your GM: ':'Your GM on it: ')+tradeRead(S,P.trade).text)+'</small></div><button data-approve="'+P.id+'">'+(P.kind==='trade'?'Make the trade':'Accept')+'</button><button data-reject="'+P.id+'">'+(P.kind==='trade'?'Pass':'Decline')+'</button></li>').join('')+'</ul>':'';
+  return heading('OWNER’S DESK',teamName(id))+schedule+talkHtml+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+
     '<small>Available draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', '))+'</small>'+
     '<h2>Staff messages</h2><ul>'+reports+'</ul>';
 }
@@ -4128,7 +4321,7 @@ app.onchange=e=>{
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
   if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
   if(e.target.id==='gmHandles'){setGmHandles(save,e.target.value==='gm');commit();return;}
-  const dirKeys={dirFocus:'focus',dirApproach:'approach',dirApproval:'approvalOver',rosterMoves:'rosterMoves'};
+  const dirKeys={dirFocus:'focus',dirApproach:'approach',dirApproval:'approvalOver',rosterMoves:'rosterMoves',dirTrades:'tradeAuthority'};
   if(dirKeys[e.target.id]){setDirective(save,dirKeys[e.target.id],e.target.value);commit();return;}
   if(e.target.id==='bonusFunding'){contractsUi.funding=e.target.value;return;}
   const negKeys={negYears:'years',negSalary:'salary',negBonus:'bonus',negG:'gYears'};

@@ -25,7 +25,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -1495,6 +1495,24 @@ test('executeTrade checks the cap and both rosters', () => {
   const big = S.rosters['club-17'].sort((a, b) => api.capHit(b) - api.capHit(a))[0];
   S.cap.dead['club-06'] = api.capRoom(S, 'club-06');
   assert.equal(api.executeTrade(S, { buyer: 'club-06', seller: 'club-17', targetId: big.id, picks: [] }), 'cap');
+});
+
+
+test('rivals pay a premium: division +20%, conference +8%, nothing across conferences', () => {
+  const { api, S } = owned(701); // Cincinnati: Charter North
+  assert.equal(api.rivalFactor('club-06', 'club-07'), 1.2);   // Cleveland, same division
+  assert.equal(api.rivalFactor('club-06', 'club-01'), 1.08);  // Buffalo, same conference
+  assert.equal(api.rivalFactor('club-06', 'club-21'), 1);     // Chicago, other conference
+  const p = S.rosters['club-07'].filter(x => x.pos === 'WR').sort((a, b) => b.rating - a.rating)[0];
+  const div = api.termsNeeded(p, null, S, 'club-07'), conf = api.termsNeeded(p, null, S, 'club-01'), other = api.termsNeeded(p, null, S, 'club-21');
+  assert(div > conf && conf > other, `${div} > ${conf} > ${other}`);
+  const mine = S.rosters['club-06'].filter(x => x.pos === 'DE').sort((a, b) => b.rating - a.rating)[0];
+  const offer = buyer => ({ buyer, seller: 'club-06', targetId: mine.id, outId: null, picks: [{ origin: buyer, round: 2 }] });
+  const fromRival = api.tradeRead(S, offer('club-07')), fromAfar = api.tradeRead(S, offer('club-21'));
+  assert(fromRival.ratio < fromAfar.ratio, 'the same picks are worth less coming from a rival');
+  assert.match(fromRival.text, /division rival/);
+  api.tradeQuote(S, 'club-07', p.id);
+  assert.match(api.negotiationView(S), /division rival, so they want a premium/);
 });
 
 // ---- Save files ------------------------------------------------------------

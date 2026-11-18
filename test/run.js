@@ -10,10 +10,12 @@ const FIX = path.join(__dirname, 'fixtures');
 const v1Save = fs.readFileSync(path.join(FIX, 'v1-save.json'), 'utf8');
 const v1Copy = fs.readFileSync(path.join(FIX, 'v1-copy.html'), 'utf8');
 const v2Save = fs.readFileSync(path.join(FIX, 'v2-save.json'), 'utf8');
+const v3Save = fs.readFileSync(path.join(FIX, 'v3-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
+  'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -213,11 +215,11 @@ test('ordinary depth trades still go through', () => {
 const owned = (seed = 11, club = 'club-06') => { const { api } = load(); const S = api.newSave(seed); S.club = club; return { api, S }; };
 const plan = (o = {}) => ({ who: 'president', discretion: 'quiet', ask: 'publicMoney', signal: 'serious', ...o });
 
-test('v2 save upgrades to v3 with markets, sites and leases, and nothing else changes', () => {
+test('v2 save upgrades with markets, sites and leases, and nothing else changes', () => {
   const { api } = load();
   const old = JSON.parse(v2Save);
   const S = api.upgrade(old).save;
-  assert.equal(S.schemaVersion, 3);
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.equal(S.world.markets.length, 8);
   assert.equal(S.world.sites.length, 16);
   assert.equal(Object.keys(S.world.leases).length, 32);
@@ -228,8 +230,8 @@ test('v2 save upgrades to v3 with markets, sites and leases, and nothing else ch
 test('v2 browser save upgrades on boot and keeps a backup', () => {
   const storage = memoryStorage({ 'cgl.save.default': v2Save });
   const { api } = load({ storage });
-  assert.match(api.saveMessage, /from format v2 to v3/);
-  assert.equal(storage.getItem('cgl.save.default.before-v3'), v2Save);
+  assert.match(api.saveMessage, new RegExp('from format v2 to v' + api.SCHEMA_VERSION));
+  assert.equal(storage.getItem('cgl.save.default.before-v' + api.SCHEMA_VERSION), v2Save);
   assert.equal(api.save.club, 'club-06');
 });
 
@@ -320,6 +322,165 @@ test('stadium pages render, with hostile official names escaped', () => {
   const html = api.stadiumView() + api.ownershipDesk();
   assert(!html.includes('<b>Boss'));
   assert(html.includes('Compare sites') && html.includes('Who knows') && html.includes('Visit to San Antonio this week'));
+});
+
+
+// ---- Money and authority ---------------------------------------------------
+const mandate = (o = {}) => ({ minAnnual: 6, maxYears: 25, exclude: [], authority: 'sign', ...o });
+const playAll = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); };
+
+test('v3 save upgrades to v4 with finances, and stadium talks survive', () => {
+  const { api } = load();
+  const old = JSON.parse(v3Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, 4);
+  assert.deepEqual(S.stadium, old.stadium);
+  assert.deepEqual(S.world, old.world);
+  assert.equal(S.finance.ledger.length, 0);
+  assert(S.finance.projects.every(p => p.status === 'proposed'));
+  api.playWeek(S);
+  assert.equal(S.finance.ledger.length, 1, 'reports start with the next played week');
+});
+
+test('every week posts an operating report, and the books balance', () => {
+  const { api, S } = owned(31);
+  const start = { club: S.finance.clubCash, owner: S.finance.ownerCash };
+  playAll(api, S);
+  const F = S.finance;
+  assert.equal(F.ledger.length, 18);
+  const result = F.ledger.reduce((a, x) => a + x.result, 0), income = F.ledger.reduce((a, x) => a + x.ownerIncome, 0);
+  const borrowed = F.ledger.reduce((a, x) => a + x.borrowed, 0);
+  assert(Math.abs(start.club + result + borrowed - F.clubCash) < 0.05, 'club cash = start + results + shortfall borrowing');
+  assert(Math.abs(start.owner + income - F.ownerCash) < 0.05, 'owner cash = start + distributions');
+  const homeWeeks = F.ledger.filter(x => x.lines.tickets > 0).length;
+  assert(homeWeeks >= 8 && homeWeeks <= 9);
+  for (const x of F.ledger) for (const v of Object.values(x.lines)) assert(Number.isFinite(v));
+  console.log(`      season result ${result.toFixed(1)}M · receipts ${F.ledger.reduce((a, x) => a + Object.values(x.lines).filter(v => v > 0).reduce((p, v) => p + v, 0), 0).toFixed(0)}M`);
+});
+
+test('funding a project: club account, borrowing, or the owner personally', () => {
+  const { api, S } = owned(32);
+  const F = S.finance;
+  F.clubCash = 50;
+  assert.equal(api.fundProject(S, 'plane', 'club'), 'clubShort');
+  const owner = F.ownerCash;
+  assert.equal(api.fundProject(S, 'plane', 'owner'), 'ok');
+  assert.equal(F.ownerCash, Math.round((owner - 85) * 100) / 100);
+  assert.equal(F.contributions.capital, 85);
+  const fact = S.stadium.knowledge.at(-1);
+  assert.equal(fact.kind, 'ownerFunding');
+  assert(fact.knownBy.includes('league'), 'the league finance committee knows the owner paid');
+  const debt = F.debt;
+  assert.equal(api.fundProject(S, 'upgrade', 'debt'), 'ok');
+  assert.equal(F.debt, debt + 60);
+  F.debt = 440;
+  assert.equal(api.fundProject(S, 'facility', 'debt'), 'debtLimit');
+  api.declineProject(S, 'facility');
+  assert.equal(F.projects.find(p => p.id === 'facility').status, 'declined');
+});
+
+test('projects take effect when built: the plane cuts travel and injuries', () => {
+  const { api, S } = owned(33);
+  const before = api.injuryFactor(S);
+  api.fundProject(S, 'plane', 'owner');
+  for (let i = 0; i < 3; i++) api.playWeek(S);
+  assert.equal(S.finance.projects.find(p => p.id === 'plane').status, 'building');
+  api.playWeek(S);
+  assert.equal(S.finance.projects.find(p => p.id === 'plane').status, 'active');
+  assert(S.events.some(e => e.type === 'projectDone'));
+  api.playWeek(S);
+  const last = S.finance.ledger.at(-1).lines;
+  assert.equal(last.travel, -Math.round(3 / 18 * 100) / 100);
+  assert(api.injuryFactor(S) < before);
+});
+
+test('loss policy: borrow by default, or the owner covers the shortfall', () => {
+  for (const policy of ['borrow', 'owner']) {
+    const { api, S } = owned(34);
+    api.setLossPolicy(S, policy);
+    let week; for (week = 0; week < 18; week++) { S.finance.clubCash = 0; api.playWeek(S); if (S.finance.ledger.at(-1).result < 0) break; }
+    const x = S.finance.ledger.at(-1);
+    assert(x.result < 0, 'found a losing week');
+    if (policy === 'borrow') assert(x.borrowed > 0 && x.ownerOperating === 0);
+    else assert(x.ownerOperating > 0 && S.finance.contributions.operating > 0);
+  }
+});
+
+test('trades change payroll', () => {
+  const { api, S } = owned(35);
+  const before = api.payroll(S, 'club-06');
+  const qb = S.rosters['club-32'].filter(p => p.pos === 'QB').sort((a, b) => b.rating - a.rating)[0];
+  const ours = S.rosters['club-06'].filter(p => p.pos === 'QB').sort((a, b) => a.rating - b.rating)[0];
+  S.rosters['club-06'].push(qb); S.rosters['club-32'].splice(S.rosters['club-32'].indexOf(qb), 1);
+  S.rosters['club-06'].splice(S.rosters['club-06'].indexOf(ours), 1); S.rosters['club-32'].push(ours);
+  assert(api.payroll(S, 'club-06') > before);
+});
+
+test('delegated naming rights: the president signs within the mandate without asking', () => {
+  const { api, S } = owned(36);
+  const old = S.world.leases['club-06'].stadium;
+  assert.equal(api.startNaming(S, mandate({ authority: 'sign' })), 'ok');
+  api.playWeek(S);
+  assert.equal(S.finance.naming.status, 'signed');
+  const d = S.finance.naming.deal;
+  assert(d.delegated && d.annual >= 6 && d.years <= 25);
+  assert.equal(S.world.leases['club-06'].stadium, d.newName);
+  assert.match(api.describeEvent(S.events.find(e => e.type === 'namingSigned')), new RegExp('Inside your terms.*' + old + ' becomes'));
+  api.playWeek(S);
+  assert.equal(S.finance.ledger.at(-1).lines.namingRights, Math.round(d.annual / 18 * 100) / 100);
+  const fact = S.stadium.knowledge.find(f => f.kind === 'namingTalks');
+  assert(fact.knownBy.includes('press'), 'a signed deal is public');
+});
+
+test('report-first mandate brings the offer to the owner, who can sign or decline', () => {
+  const { api, S } = owned(37);
+  api.startNaming(S, mandate({ authority: 'report' }));
+  api.playWeek(S);
+  assert.equal(S.finance.naming.status, 'awaiting');
+  assert.equal(S.finance.naming.outside, false);
+  api.approveNaming(S);
+  assert.equal(S.finance.naming.status, 'signed');
+  assert.equal(S.finance.naming.deal.delegated, false);
+});
+
+test('an impossible mandate comes back after three rounds with the best offer and the reason', () => {
+  const { api, S } = owned(38);
+  api.startNaming(S, mandate({ minAnnual: 60, authority: 'sign' }));
+  api.playWeek(S); api.playWeek(S);
+  assert.equal(S.finance.naming.status, 'negotiating');
+  api.playWeek(S);
+  const N = S.finance.naming;
+  assert.equal(N.status, 'awaiting');
+  assert(N.outside);
+  assert.match(N.offer.reason, /below your \$60M floor/);
+  assert.match(api.describeEvent(S.events.at(-1)), /nobody met your terms/);
+  api.playWeek(S); api.playWeek(S);
+  assert.equal(S.finance.naming.status, 'none', 'unanswered offers lapse');
+});
+
+test('excluded categories are never signed', () => {
+  for (let seed = 40; seed < 70; seed++) {
+    const { api, S } = owned(seed);
+    const all = Object.keys({ bank: 1, insurance: 1, airline: 1, telecom: 1, sportsbook: 1, crypto: 1, energy: 1, grocery: 1 });
+    api.startNaming(S, mandate({ exclude: ['sportsbook', 'crypto'] }));
+    for (let i = 0; i < 3; i++) api.playWeek(S);
+    const N = S.finance.naming;
+    if (N.status === 'signed') assert(!['sportsbook', 'crypto'].includes(N.deal.category));
+    if (N.status === 'awaiting' && N.outside && ['sportsbook', 'crypto'].includes(N.offer.category)) assert.match(N.offer.reason, /ruled out/);
+    assert(all.length === 8);
+  }
+});
+
+test('finances page renders every state without raw markup', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  let html = api.financesView();
+  assert(html.includes('Operating report') && html.includes('Funding decisions') && html.includes('Naming rights'));
+  api.startNaming(S, mandate({ minAnnual: 60 }));
+  for (let i = 0; i < 3; i++) api.playWeek(S);
+  html = api.financesView() + api.ownershipDesk();
+  assert(html.includes('Sign the deal') && html.includes('Needs your decision'));
+  assert(!/<script|onerror/i.test(html));
 });
 
 // ---- Save files ------------------------------------------------------------

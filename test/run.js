@@ -9,9 +9,11 @@ const GAME = path.join(__dirname, '..', 'season-desk.html');
 const FIX = path.join(__dirname, 'fixtures');
 const v1Save = fs.readFileSync(path.join(FIX, 'v1-save.json'), 'utf8');
 const v1Copy = fs.readFileSync(path.join(FIX, 'v1-copy.html'), 'utf8');
+const v2Save = fs.readFileSync(path.join(FIX, 'v2-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
+  'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -52,9 +54,9 @@ test('v1 browser save migrates on boot, keeps progress, and keeps a backup', () 
   assert.equal(api.save.club, old.office.club);
   assert.equal(api.cur().completed, old.completed);
   assert.deepEqual(api.cur().weeks, old.weeks);
-  assert.equal(storage.getItem('cgl.save.default.before-v2'), v1Save);
+  assert.equal(storage.getItem('cgl.save.default.before-v' + api.SCHEMA_VERSION), v1Save);
   assert.equal(storage.getItem('cgl.regular-season.v1.default'), v1Save, 'old key left untouched');
-  assert.equal(JSON.parse(storage.getItem('cgl.save.default')).schemaVersion, 2);
+  assert.equal(JSON.parse(storage.getItem('cgl.save.default')).schemaVersion, api.SCHEMA_VERSION);
   assert.equal(api.save.offer.status, 'opening', 'open quote carried over');
 });
 
@@ -93,7 +95,7 @@ test('v1 staff sentences become structured events and read the same', () => {
 test('v1 downloaded season copy imports through Load save', () => {
   const { api } = load();
   const S = api.readSaveFile(v1Copy);
-  assert.equal(S.schemaVersion, 2);
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.equal(api.cur(S).completed, JSON.parse(v1Save).completed);
 });
 
@@ -206,12 +208,126 @@ test('ordinary depth trades still go through', () => {
 });
 
 
+
+// ---- Stadium talks ---------------------------------------------------------
+const owned = (seed = 11, club = 'club-06') => { const { api } = load(); const S = api.newSave(seed); S.club = club; return { api, S }; };
+const plan = (o = {}) => ({ who: 'president', discretion: 'quiet', ask: 'publicMoney', signal: 'serious', ...o });
+
+test('v2 save upgrades to v3 with markets, sites and leases, and nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v2Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, 3);
+  assert.equal(S.world.markets.length, 8);
+  assert.equal(S.world.sites.length, 16);
+  assert.equal(Object.keys(S.world.leases).length, 32);
+  assert(S.world.sites.every(x => x.expiresWeek > old.seasons[0].completed), 'deadlines start after the current week');
+  for (const k of ['saveId', 'club', 'seasons', 'rosters', 'picks', 'events', 'revision']) assert.deepEqual(S[k], old[k], k);
+});
+
+test('v2 browser save upgrades on boot and keeps a backup', () => {
+  const storage = memoryStorage({ 'cgl.save.default': v2Save });
+  const { api } = load({ storage });
+  assert.match(api.saveMessage, /from format v2 to v3/);
+  assert.equal(storage.getItem('cgl.save.default.before-v3'), v2Save);
+  assert.equal(api.save.club, 'club-06');
+});
+
+test('compare two sites, authorize a visit, advance, and get a report that follows the instructions', () => {
+  const { api, S } = owned();
+  const site = S.world.sites.find(x => x.kind === 'edge');
+  const offer = site.publicOffer;
+  assert.equal(api.authorizeVisit(S, site.id, plan({ who: 'both', ask: 'publicMoney', signal: 'serious' })), 'ok');
+  assert.equal(api.authorizeVisit(S, S.world.sites[0].id, plan()), 'busy', 'one visit a week');
+  api.playWeek(S);
+  const e = S.events.at(-1);
+  assert.equal(e.type, 'visitReport');
+  const text = api.describeEvent(e);
+  assert.match(text, /together/);
+  assert.match(text, /serious about moving/);
+  assert.match(text, /kept it quiet/);
+  assert(site.publicOffer > offer, 'serious ask for public money raises the offer');
+  assert.match(text, new RegExp('\\$' + offer + 'M to \\$' + site.publicOffer + 'M'));
+  const fact = S.stadium.knowledge[0];
+  assert.deepEqual(fact.knownBy.slice(0, 3), ['owner', 'president', site.sponsor]);
+});
+
+test('each priority changes what the visit gets', () => {
+  const run = ask => { const { api, S } = owned(21); const site = S.world.sites[2]; const before = { ...site }; api.authorizeVisit(S, site.id, plan({ ask })); api.playWeek(S); return { before, site, e: S.events.at(-1) }; };
+  const d = run('deadline'); assert(d.site.expiresWeek > d.before.expiresWeek);
+  const l = run('landTerms'); assert(l.site.parking > l.before.parking);
+  const h = run('listen'); assert(h.site.infraKnown); assert.equal(h.e.revealed.infra, h.site.infraTrue);
+});
+
+test('quiet visits by the president rarely leak; open visits with the owner usually do', () => {
+  const leaks = p => { let n = 0; for (let seed = 1; seed <= 200; seed++) { const { api, S } = owned(seed); api.authorizeVisit(S, S.world.sites[0].id, plan(p)); api.playWeek(S); if (S.events.find(e => e.type === 'visitReport').leaked) n++; } return n / 200; };
+  const quiet = leaks({ who: 'president', discretion: 'quiet' }), loud = leaks({ who: 'owner', discretion: 'open' });
+  console.log(`      leak rate · quiet president ${(quiet * 100).toFixed(0)}% · open owner ${(loud * 100).toFixed(0)}%`);
+  assert(quiet < 0.15 && loud > 0.5);
+});
+
+test('a leak tells the press and the home city, and lowers home mood', () => {
+  for (let seed = 1; seed < 50; seed++) {
+    const { api, S } = owned(seed);
+    api.authorizeVisit(S, S.world.sites[0].id, plan({ who: 'owner', discretion: 'open' }));
+    api.playWeek(S);
+    const e = S.events.find(x => x.type === 'visitReport');
+    if (!e.leaked) continue;
+    assert(S.stadium.knowledge[0].knownBy.includes('press') && S.stadium.knowledge[0].knownBy.includes('home'));
+    assert(S.stadium.homeAware && S.stadium.homeMood < 60);
+    assert.match(api.describeEvent(e), /Cincinnati papers/);
+    return;
+  }
+  assert.fail('no leak in 50 seeds');
+});
+
+test('a feasibility study reports true costs after two weeks', () => {
+  const { api, S } = owned(5);
+  const site = S.world.sites.find(x => x.issue) ?? S.world.sites[0];
+  assert.equal(api.commissionStudy(S, site.id), 'ok');
+  api.playWeek(S);
+  assert(!site.infraKnown);
+  api.playWeek(S);
+  assert(site.infraKnown && site.issueKnown);
+  const e = S.events.find(x => x.type === 'studyReport');
+  assert.equal(e.infra, site.infraTrue);
+  if (site.issue) assert.match(api.describeEvent(e), new RegExp(site.issue.text));
+});
+
+test('offers expire on schedule, and the owner hears about ones they touched', () => {
+  const { api, S } = owned(8);
+  const site = S.world.sites.slice().sort((a, b) => a.expiresWeek - b.expiresWeek)[0];
+  api.commissionStudy(S, site.id);
+  while (api.cur(S).completed < site.expiresWeek) api.playWeek(S);
+  assert.equal(site.status, 'expired');
+  assert(S.events.some(e => e.type === 'siteExpired' && e.siteId === site.id));
+  assert.equal(api.authorizeVisit(S, site.id, plan()), 'unavailable');
+});
+
+test('cancelling a planned visit leaves no trace in who knows', () => {
+  const { api, S } = owned();
+  api.authorizeVisit(S, S.world.sites[1].id, plan());
+  api.cancelVisit(S);
+  assert.equal(S.stadium.knowledge.length, 0);
+  assert.equal(S.stadium.visits.length, 0);
+});
+
+test('stadium pages render, with hostile official names escaped', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  S.world.markets[0].officials[0].name = '<b>Boss</b> "Hogg"';
+  api.authorizeVisit(S, S.world.sites[0].id, plan());
+  const html = api.stadiumView() + api.ownershipDesk();
+  assert(!html.includes('<b>Boss'));
+  assert(html.includes('Compare sites') && html.includes('Who knows') && html.includes('Visit to San Antonio this week'));
+});
+
 // ---- Save files ------------------------------------------------------------
 test('season files load as JSON, and old cgl-week HTML copies still load', () => {
   const { api } = load();
   const S = api.newSave(5);
   assert.equal(api.readSaveFile(JSON.stringify(S)).saveId, S.saveId);
-  assert.equal(api.readSaveFile(v1Copy).schemaVersion, 2);
+  assert.equal(api.readSaveFile(v1Copy).schemaVersion, api.SCHEMA_VERSION);
 });
 
 test('the page never relies on confirm() or a page-started download', () => {

@@ -502,7 +502,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=12;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=13;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -1192,16 +1192,18 @@ function playWeek(S){
   if(s.completed>=s.weeks.length)return;
   const r=rngFor(S.rng);
   const units=Object.fromEntries(clubs.map(t=>[t.id,clubUnits(S,t.id)]));
-  const games=s.weeks[s.completed];
+  const games=s.weeks[s.completed],boxes=[];
   for(const g of games){
     const mine=g.home===S.club||g.away===S.club,result=playGame(units[g.home],units[g.away],r,{log:mine});
     g.score=result.score;
     if(result.ot)g.ot=true;
     if(mine)keepBroadcast(S,g,result,'Week '+(s.completed+1));
+    boxes.push(result.box);
   }
   s.completed++;
   s.tick=s.completed;
   creditRecords(S,games);
+  creditStats(S,units,games,boxes);
   trackStarts(S,units,games);
   afterTick(S,r,{games,units,regularIndex:s.completed-1});
   if(s.completed===s.weeks.length)floorPlanning(S);
@@ -1234,14 +1236,146 @@ function finishMedicalWeek(S,units,r,games){
 }
 
 // ---------------------------------------------------------------------------
+// Player season stats
+//
+// p.stats: regular-season lines, oldest first, the last STAT_SEASONS seasons:
+//   {season, club, gp, gs, ...counts from the box score}
+// gp counts games dressed, gs games started. Only counts above zero are kept.
+// Playoff games are not counted. club is where the player finished the season.
+// ---------------------------------------------------------------------------
+const STAT_SEASONS=3;
+const statLine=(p,season)=>p?.stats?.find(x=>x.season===season)??null;
+function statLineFor(p,season,club){
+  p.stats??=[];
+  let L=p.stats.at(-1);
+  if(L?.season!==season){L={season,club,gp:0};p.stats.push(L);if(p.stats.length>STAT_SEASONS)p.stats.shift();}
+  L.club=club;
+  return L;
+}
+function creditStats(S,units,games,boxes){
+  const season=cur(S).number;
+  games.forEach((g,i)=>{
+    const box=boxes[i];
+    if(!box)return;
+    [g.home,g.away].forEach((id,side)=>{
+      const roster=new Map(S.rosters[id].map(p=>[p.id,p])),chart=units[id].chart,starters=new Set();
+      for(const [pos,,n] of positions)for(const p of chart[pos].filter(x=>!x.out).slice(0,n))starters.add(p.id);
+      const dressed=new Set([...Object.values(chart).flat().filter(p=>!p.out).map(p=>p.id),...Object.values(box.players).filter(b=>b.side===side).map(b=>b.id)]);
+      for(const pid of dressed){
+        const p=roster.get(pid);if(!p)continue;
+        const L=statLineFor(p,season,id);
+        L.gp++;
+        if(starters.has(pid))L.gs=(L.gs??0)+1;
+        const b=box.players[pid];
+        if(b)for(const [k,v] of Object.entries(b))if(typeof v==='number'&&v&&k!=='side')L[k]=(L[k]??0)+v;
+      }
+    });
+  });
+}
+// What a season line says about a player, by position: a measure (higher is better)
+// and how far it can be trusted on this many chances (0-1). Linemen and snappers have none.
+function production(pos,L){
+  if(!L)return null;
+  const n=k=>L[k]??0;
+  const of=(x,d,k)=>d>0?{x:x/d,w:d/(d+k)}:null;
+  switch(pos){
+    case 'QB':return of(n('passYards')+20*n('passTd')-45*n('ints'),n('att')+n('sacked'),150);
+    case 'RB':return of(n('rushYards')+n('recYards')+20*(n('rushTd')+n('recTd'))-45*n('fumblesLost'),n('carries')+n('rec'),90);
+    case 'WR':case 'TE':return of(n('recYards')+20*n('recTd')-45*n('fumblesLost'),n('targets'),50);
+    case 'DE':case 'DT':case 'LB':return n('gs')?of(n('sacks')+1.5*n('defInts'),n('gs'),8):null;
+    case 'CB':case 'S':return of(25*n('defInts')-n('yardsAllowed'),n('targeted'),40);
+    case 'K':return of(n('fgm'),n('fga'),12);
+    case 'P':return of(n('puntYards'),n('punts'),20);
+  }
+  return null;
+}
+// For each position, what production a player's rating predicts across the league
+// (a weighted straight-line fit) and how widely players miss it. Refit as games are played.
+const statFitCache=new WeakMap();
+function statFits(S,season){
+  const key=cur(S).number+':'+cur(S).tick;
+  let c=statFitCache.get(S);
+  if(!c||c.key!==key){c={key,seasons:{}};statFitCache.set(S,c);}
+  if(c.seasons[season])return c.seasons[season];
+  const groups={};
+  for(const p of Object.values(S.rosters).flat()){const pr=production(p.pos,statLine(p,season));if(pr)(groups[p.pos]??=[]).push([p.rating,pr.x,pr.w]);}
+  const fits={};
+  for(const [pos,rows] of Object.entries(groups)){
+    if(rows.length<8)continue;
+    const W=rows.reduce((a,[,,w])=>a+w,0),mr=rows.reduce((a,[r,,w])=>a+w*r,0)/W,mx=rows.reduce((a,[,x,w])=>a+w*x,0)/W;
+    const srr=rows.reduce((a,[r,,w])=>a+w*(r-mr)**2,0),srx=rows.reduce((a,[r,x,w])=>a+w*(r-mr)*(x-mx),0);
+    const b=srr?srx/srr:0,a=mx-b*mr,sd=Math.sqrt(rows.reduce((s,[r,x,w])=>s+w*(x-a-b*r)**2,0)/W);
+    if(sd>0)fits[pos]={a,b,sd};
+  }
+  return c.seasons[season]=fits;
+}
+// How the league reads a player's numbers, in rating points: production above what his
+// rating predicts makes him look better than he is, below it worse. This season counts
+// first; last season fills in while this one is young.
+const STAT_EDGE=3.5,STAT_EDGE_MAX=6;
+function statEdge(S,p){
+  if(!p?.stats?.length||!S?.rosters||!S.seasons)return 0;
+  const n=cur(S).number;
+  let score=0,trust=0;
+  for(const [season,weight] of [[n,1],[n-1,.7]]){
+    const pr=production(p.pos,statLine(p,season)),f=pr&&statFits(S,season)[p.pos];
+    if(!f)continue;
+    const z=clampTo((pr.x-f.a-f.b*p.rating)/f.sd,-3,3),w=pr.w*weight*(1-trust);
+    score+=z*w;trust+=w;
+  }
+  return clampTo(Math.round(score*STAT_EDGE*10)/10,-STAT_EDGE_MAX,STAT_EDGE_MAX);
+}
+// The rating clubs price a player at.
+const perceivedRating=(S,p)=>clampTo(p.rating+statEdge(S,p),40,99);
+// A short line of a player's numbers for one season.
+function statText(p,L){
+  if(!L?.gp)return '';
+  const n=k=>L[k]??0,c=x=>x.toLocaleString('en-US');
+  const parts={
+    QB:()=>[n('comp')+'/'+n('att'),c(n('passYards'))+' yds',n('passTd')+' TD',n('ints')+' INT'],
+    RB:()=>[n('carries')+' car',c(n('rushYards'))+' yds',n('rushTd')+' TD',...(n('rec')?[n('rec')+' rec for '+c(n('recYards'))]:[])],
+    WR:()=>[n('rec')+' rec',c(n('recYards'))+' yds',n('recTd')+' TD'],
+    DE:()=>[n('sacks')+' sacks',...(n('defInts')?[n('defInts')+' INT']:[])],
+    CB:()=>[n('defInts')+' INT',c(n('yardsAllowed'))+' yds allowed on '+n('targeted')+' targets'],
+    K:()=>[n('fgm')+'/'+n('fga')+' FG',n('xpm')+'/'+n('xpa')+' XP'],
+    P:()=>[n('punts')+' punts',(n('punts')?(n('puntYards')/n('punts')).toFixed(1):'0.0')+' avg']
+  },alias={TE:'WR',DT:'DE',LB:'DE',S:'CB'};
+  const f=parts[alias[p.pos]??p.pos];
+  const some=production(p.pos,L)||n('sacks')||n('defInts');
+  return [L.gp+' gp',...(L.gs?[L.gs+' gs']:[]),...(f&&some?f():[])].join(' · ');
+}
+// This season's line, or last season's before he has played this year.
+function seasonText(S,p){
+  const n=cur(S).number,now_=statText(p,statLine(p,n));
+  if(now_)return now_;
+  const last=statText(p,statLine(p,n-1));
+  return last?'Last season: '+last:'';
+}
+// What the GM says about a player's numbers in trade talk, or nothing when they are unremarkable.
+function statNote(S,p){
+  const e=statEdge(S,p);
+  if(Math.abs(e)<1.5)return '';
+  const n=cur(S).number,L=statLine(p,n)?.gp?statLine(p,n):statLine(p,n-1),when=L?.season===n?'this season':'last season';
+  const line=L?' ('+statText(p,L)+')':'';
+  return e>0?'His numbers '+when+line+' have the league pricing him like a '+Math.round(perceivedRating(S,p))+', not the '+p.rating+' he is. ':
+    'His numbers '+when+line+' have the league pricing him like a '+Math.round(perceivedRating(S,p))+', below the '+p.rating+' he is. ';
+}
+// League leaders in one counting stat for a season.
+function statLeaders(S,season,key,count=5){
+  return clubs.flatMap(t=>S.rosters[t.id].map(p=>({p,club:t.id,v:statLine(p,season)?.[key]??0}))).filter(x=>x.v>0).sort((a,b)=>b.v-a.v||a.p.id.localeCompare(b.p.id)).slice(0,count);
+}
+
+// ---------------------------------------------------------------------------
 // Trades
 // ---------------------------------------------------------------------------
 const pickValues=[0,100,55,34,21,13,8,5];
 const pickKey=p=>p?p.origin+'/'+p.round:'none';
-function playerValue(p){
+function playerValue(p,rating=p.rating){
   const weight={QB:1.9,DE:1.25,OT:1.2,WR:1.1,CB:1.1,K:.085,P:.065,LS:.04}[p.pos]??.85;
-  return weight*(Math.pow(Math.max(3,p.rating-49),1.55)/4)*Math.max(.7,1-(p.age-25)*.022);
+  return weight*(Math.pow(Math.max(3,rating-49),1.55)/4)*Math.max(.7,1-(p.age-25)*.022);
 }
+// What other clubs think a player is worth: his talent as his season's numbers make it look.
+const perceivedValue=(S,p)=>playerValue(p,perceivedRating(S,p));
 // A bargain contract adds trade value; an expensive one subtracts it.
 function contractSurplus(S,p){
   if(!p?.contract||!S?.cap)return 0;
@@ -1255,9 +1389,9 @@ function rivalFactor(a,b){
 }
 const rivalNote=(a,b)=>{const f=rivalFactor(a,b);return f>=1.2?'a division rival':f>1?'a conference rival':'';};
 function termsNeeded(target,out,S=save,sellerId=null){
-  const base=playerValue(target)*tradeFactor(S)+contractSurplus(S,target);
+  const base=perceivedValue(S,target)*tradeFactor(S)+contractSurplus(S,target);
   const rf=sellerId&&S?.club?rivalFactor(S.club,sellerId):1;
-  return Math.max(0,Math.ceil(base*rf-(out?playerValue(out)+contractSurplus(S,out):0)));
+  return Math.max(0,Math.ceil(base*rf-(out?perceivedValue(S,out)+contractSurplus(S,out):0)));
 }
 function ownedPicks(S){
   return S.picks.filter(p=>p.owner===S.club).sort((a,b)=>b.round-a.round);
@@ -3955,8 +4089,8 @@ function pickPackage(picks,need,slack=1.25){
   return best?.ks??null;
 }
 const starterIds=(S,id)=>{const u=clubUnits(S,id),set=new Set();for(const [pos,,n] of positions)u.chart[pos].slice(0,n).forEach(p=>set.add(p.id));return set;};
-// Value a club puts on a player: talent plus contract surplus.
-const tradeValue=(S,p)=>playerValue(p)+contractSurplus(S,p);
+// Value a club puts on a player: talent as his numbers make it look, plus contract surplus.
+const tradeValue=(S,p)=>perceivedValue(S,p)+contractSurplus(S,p);
 
 function executeTrade(S,T){
   if(!tradeWindow(S))return 'closed';
@@ -4053,10 +4187,10 @@ function tradeRead(S,T){
   if(incoming){
     const need=termsNeeded(player,out,S,T.seller),ratio=(need+5)/(picks+5); // same measure the GM prices with
     const rival=rivalNote(S.club,T.seller);
-    return {ratio,text:(ratio>=1.1?'A good price.':ratio>=.9?'A fair price.':'We would be overpaying.')+(rival?' That includes the premium '+teamName(T.seller)+' charges '+(rival.startsWith('a division')?'a division':'a conference')+' rival.':'')+' He would start for us over '+(clubUnits(S,S.club).chart[player.pos][startersAt(player.pos)-1]?.name??'nobody')+'. Cap room after: '+m1(tradeCap(S,T.seller,player,out).buyer)+'.'};
+    return {ratio,text:(ratio>=1.1?'A good price.':ratio>=.9?'A fair price.':'We would be overpaying.')+(statNote(S,player)?' '+statNote(S,player).trim():'')+(rival?' That includes the premium '+teamName(T.seller)+' charges '+(rival.startsWith('a division')?'a division':'a conference')+' rival.':'')+' He would start for us over '+(clubUnits(S,S.club).chart[player.pos][startersAt(player.pos)-1]?.name??'nobody')+'. Cap room after: '+m1(tradeCap(S,T.seller,player,out).buyer)+'.'};
   }
   const rival=rivalNote(S.club,T.buyer),worth=tradeValue(S,player)*rivalFactor(S.club,T.buyer),ratio=picks/Math.max(1,worth),hc=hcOf(S,S.club),starts=starterIds(S,S.club).has(player.id);
-  return {ratio,text:(ratio>=1.1?'They are overpaying.':ratio>=.9?'That is a fair offer.':'That is light for him.')+(rival?' They are '+rival+', so I priced in a premium.':'')+' It would clear '+m1(capHit(player))+' of cap room.'+
+  return {ratio,text:(ratio>=1.1?'They are overpaying.':ratio>=.9?'That is a fair offer.':'That is light for him.')+(statNote(S,player)?' '+statNote(S,player).trim():'')+(rival?' They are '+rival+', so I priced in a premium.':'')+' It would clear '+m1(capHit(player))+' of cap room.'+
     (starts?' '+(hc.interim?'The interim coach':'Coach '+hc.name)+' does not want to lose a starter.':'')};
 }
 function proposeTrade(S,kind,T){
@@ -4086,10 +4220,10 @@ function processTradeTalk(S,r){
 // the rivalry premium, and the seller's own approach.
 function priceFor(S,buyer,seller,target,out){
   const neg=S.staff.clubs[buyer].gm.ratings.negotiation,approach=approachFor(S,seller);
-  let ask=(playerValue(target)*(1.12-neg*.0016)+contractSurplus(S,target))*rivalFactor(buyer,seller);
+  let ask=(perceivedValue(S,target)*(1.12-neg*.0016)+contractSurplus(S,target))*rivalFactor(buyer,seller);
   if(approach==='rebuild'&&target.age>=29)ask*=.9;
   if(approach==='win-now'&&starterIds(S,seller).has(target.id))ask*=1.15;
-  return Math.max(0,Math.ceil(ask-(out?playerValue(out)+contractSurplus(S,out):0)));
+  return Math.max(0,Math.ceil(ask-(out?perceivedValue(S,out)+contractSurplus(S,out):0)));
 }
 function aiTradeIdea(S,r,buyer){
   const u=clubUnits(S,buyer),approach=approachFor(S,buyer),season=cur(S).number;
@@ -4432,7 +4566,15 @@ const migrations={
   9:migrateV9,
   10:migrateV10,
   11:migrateV11,
+  12:migrateV12,
 };
+// v12 -> v13: player season stats. Games already played this season were not
+// recorded, so stats start with the next game.
+function migrateV12(old){
+  old.schemaVersion=13;
+  (old.migrations??=[]).push({from:12,to:13,at:new Date().toISOString()});
+  return old;
+}
 // v11 -> v12: prospect traits and histories, the college wire, the owner's scouting.
 function migrateV11(old){
   const r=rngFor(old.rng);
@@ -4584,6 +4726,7 @@ function validateSave(S){
         if(!p||typeof p.id!=='string'||ids.has(p.id)){fail(teamName(t.id)+' has a player with a missing or duplicate id.');continue;}
         ids.add(p.id);
         if(typeof p.name!=='string'||!positionNames.has(p.pos)||!Number.isFinite(p.rating)||!isInt(p.age,15,60)||(p.out!==undefined&&!isInt(p.out,1,52)))fail(teamName(t.id)+' has an invalid player record ('+p.id+').');
+        if(p.stats!==undefined&&(!Array.isArray(p.stats)||p.stats.some(L=>!L||!isInt(L.season,1)||!isInt(L.gp,0)||!byId.has(L.club))))fail(teamName(t.id)+' has invalid season stats ('+p.id+').');
       }
     }
   }
@@ -4945,6 +5088,7 @@ function negotiationView(S){
   if(draftOut&&S.staff?.clubs){const hc=hcOf(S,S.club),u=clubUnits(S,S.club);
     if(u.chart[draftOut.pos].filter(x=>!x.out).slice(0,startersAt(draftOut.pos)).some(x=>x.id===draftOut.id))advice+=(hc.interim?'The interim coach':'Coach '+hc.name)+' does not want to lose '+draftOut.name+'; he starts for us. ';}
   if(rivalNote(S.club,q.seller))advice+=teamName(q.seller)+' is '+rivalNote(S.club,q.seller)+', so they want a premium. ';
+  advice+=statNote(S,target);
   const surplus=contractSurplus(S,target);
   if(surplus>8)advice+='His contract is a bargain ('+m1(capHit(target))+' against a market value near '+m1(marketValue(S,target))+'), which raises the price. ';
   if(surplus<-8)advice+='His contract is expensive ('+m1(capHit(target))+' against a market value near '+m1(marketValue(S,target))+'), which brings the price down. ';
@@ -4956,7 +5100,7 @@ function negotiationView(S){
     const gap=swap&&termsNeeded(target,swap),round=swap&&[7,6,5,4,3,2,1].find(rd=>pickValues[rd]>=gap);
     estimate=!swap?'We have no healthy '+target.pos+' to send back.':gap===0?'Sending '+swap.name+' straight up should do it.':round?'If we send '+swap.name+', I value the gap at a round '+round+' pick.':'Even with '+swap.name+' going back, our picks cannot cover the gap.';
   }
-  const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="5">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+' · '+p.contract.yearsLeft+' yr</td></tr>';
+  const row=(label,p)=>!p?'<tr><th>'+label+'</th><td colspan="5">No player</td></tr>':'<tr><th>'+label+'</th><td>'+esc(p.name)+'<small>'+esc(seasonText(S,p)||'No stats yet')+'</small></td><td>'+esc(p.pos)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+' · '+p.contract.yearsLeft+' yr</td></tr>';
   const deal=[out?.name,quoted&&pickLabel(quoted)].filter(Boolean).join(' and ');
   return '<p>'+esc(offerMessage(S,q))+'</p>'+
     '<div class="wide"><table><thead><tr><th>Player comparison</th><th>Name</th><th>Pos.</th><th>Age</th><th>Rating</th><th>Contract</th></tr></thead><tbody>'+row('Their player',target)+row('Your proposed return',draftOut)+'</tbody></table></div>'+
@@ -5097,8 +5241,17 @@ function rosterView(){
     '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
       const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
       return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th></tr></thead><tbody>'+
-        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
-    }).join('')+'</div>';
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+esc(seasonText(save,p)?' · '+seasonText(save,p):'')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
+    }).join('')+'</div>'+leadersView(save);
+}
+// League leaders for the season under way, or the last one before the first game.
+function leadersView(S){
+  const s=cur(S),season=s.completed||s.number===1?s.number:s.number-1;
+  const cats=[['passYards','Passing yards'],['rushYards','Rushing yards'],['recYards','Receiving yards'],['sacks','Sacks'],['defInts','Interceptions']];
+  const lists=cats.map(([k,label])=>[label,statLeaders(S,season,k)]).filter(([,rows])=>rows.length);
+  if(!lists.length)return '';
+  return '<h2>'+esc('League leaders · Season '+season)+'</h2><div class="tables">'+lists.map(([label,rows])=>'<section><h3>'+esc(label)+'</h3><table><tbody>'+
+    rows.map(({p,club,v})=>'<tr><td>'+esc(p.name)+'<small>'+esc(p.pos+' · '+byId.get(club).abbr+' · '+p.rating)+'</small></td><td>'+esc(v.toLocaleString('en-US'))+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
 }
 // ---------------------------------------------------------------------------
 // The broadcast: the owner's game, presented live from its play log.

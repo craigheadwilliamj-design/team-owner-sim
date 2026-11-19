@@ -19,6 +19,7 @@ const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
 const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
 const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
 const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
+const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -27,7 +28,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
-  'playGame', 'rngFor', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
+  'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -832,6 +833,7 @@ test('five seasons stay stable: ratings, ages and roster sizes', () => {
   const age = all.reduce((a, p) => a + p.age, 0) / all.length;
   assert(age > 25.5 && age < 29, `avg age ${age.toFixed(1)}`);
   assert.deepEqual(api.validateSave(S), []);
+  assert(all.every(p => !p.stats || (p.stats.length <= 3 && p.stats.every((L, i) => !i || L.season > p.stats[i - 1].season))), 'three seasons of stats at most, oldest first');
   console.log(`      five seasons · avg rating ${start.toFixed(1)} → ${avg().toFixed(1)} · save ${Math.round(JSON.stringify(S).length / 1024)}KB`);
 });
 
@@ -1753,6 +1755,88 @@ test('broadcast: no watch button on a bye', () => {
   const S = api.newSave(12); S.club = 'club-06';
   while (api.cur(S).weeks[api.cur(S).completed].some(g => g.home === S.club || g.away === S.club)) api.playWeek(S);
   assert(!api.canWatch(S));
+});
+
+// ---- Player season stats -----------------------------------------------------
+const everyone = S => [...Object.values(S.rosters).flat(), ...Object.values(S.practice ?? {}).flat(), ...(S.fa?.pool ?? [])];
+test('season stats: box scores add up, starters start, playoffs are not counted', () => {
+  const { api, S } = owned(61);
+  for (let i = 0; i < 6; i++) api.playWeek(S);
+  const season = api.cur(S).number, lines = everyone(S).map(p => [p, api.statLine(p, season)]).filter(([, L]) => L);
+  const total = k => lines.reduce((a, [, L]) => a + (L[k] ?? 0), 0);
+  assert.equal(total('comp'), total('rec'), 'every completion is a catch');
+  assert(total('passYards') > 0 && total('sacks') > 0 && total('fgm') > 0);
+  const played = id => api.cur(S).weeks.slice(0, 6).filter(w => w.some(g => g.home === id || g.away === id)).length;
+  for (const t of api.clubs) {
+    const qb = S.rosters[t.id].filter(p => p.pos === 'QB' && api.statLine(p, season)).sort((a, b) => (api.statLine(b, season).gs ?? 0) - (api.statLine(a, season).gs ?? 0))[0];
+    assert(api.statLine(qb, season).gs >= 1 && api.statLine(qb, season).gp <= played(t.id));
+  }
+  for (const [p, L] of lines) {
+    assert(L.gp >= (L.gs ?? 0) && L.gp <= 6, p.id);
+    assert(Object.entries(L).every(([k, v]) => k === 'club' ? v === p.stats.at(-1).club : Number.isInteger(v) && (v !== 0 || k === 'gp')), p.id + ' keeps only counts');
+  }
+  assert.deepEqual(api.validateSave(S), []);
+  while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S);
+  const lines_ = () => Object.fromEntries(everyone(S).map(p => [p.id, JSON.stringify(p.stats ?? null)]));
+  const before = lines_();
+  api.advance(S); api.advance(S);
+  assert(api.cur(S).postseason?.rounds.length >= 1);
+  assert.deepEqual(lines_(), before, 'playoff games leave season lines alone');
+});
+
+test('season stats move trade prices: a big year costs more, a bad one less', () => {
+  const { api, S } = owned(62);
+  for (let i = 0; i < 12; i++) api.playWeek(S);
+  const season = api.cur(S).number;
+  const wr = Object.entries(S.rosters).filter(([id]) => id !== S.club).flatMap(([, r]) => r)
+    .filter(p => p.pos === 'WR' && (api.statLine(p, season)?.targets ?? 0) > 40 && !p.out).sort((a, b) => a.rating - b.rating)[3];
+  const L = api.statLine(wr, season), keep = { ...L };
+  const price = () => api.termsNeeded(wr, null, S);
+  Object.assign(L, { rec: Math.round(L.targets * .8), recYards: L.targets * 15, recTd: Math.round(L.targets / 6), fumblesLost: 0 });
+  const hot = [price(), api.statEdge(S, wr), api.tradeValue(S, wr)];
+  assert.match(api.statNote(S, wr), /pricing him like a \d+, not the \d+ he is/);
+  Object.assign(L, { rec: Math.round(L.targets * .3), recYards: L.targets * 3, recTd: 0, fumblesLost: 3 });
+  const cold = [price(), api.statEdge(S, wr), api.tradeValue(S, wr)];
+  assert.match(api.statNote(S, wr), /below the \d+ he is/);
+  Object.assign(L, keep);
+  assert(hot[1] > 2 && cold[1] < -2, hot[1] + ' / ' + cold[1]);
+  assert(hot[0] > price() && price() > cold[0], hot[0] + ' > ' + price() + ' > ' + cold[0]);
+  assert(hot[2] > cold[2]);
+  assert(api.perceivedRating(S, wr) >= 40 && api.perceivedRating(S, wr) <= 99);
+  // Linemen have no numbers to go on.
+  const ot = S.rosters['club-10'].find(p => p.pos === 'OT');
+  assert.equal(api.statEdge(S, ot), 0);
+  // A season-one player with no games has no edge either way.
+  assert.equal(api.statEdge(S, { ...wr, stats: [] }), 0);
+});
+
+test('season stats: last season still counts in the offseason, and the views show them', () => {
+  const { api, S } = owned(63);
+  api.jumpTo(S, 51);
+  const n = api.cur(S).number, prev = n - 1;
+  const qb = Object.values(S.rosters).flat().filter(p => p.pos === 'QB' && api.statLine(p, prev)?.att > 300).sort((a, b) => Math.abs(api.statEdge(S, b)) - Math.abs(api.statEdge(S, a)))[0];
+  assert(qb && !api.statLine(qb, n) && api.statEdge(S, qb) !== 0, 'last season’s numbers carry into the offseason');
+  assert.match(api.statText(qb, api.statLine(qb, prev)), /yds · \d+ TD · \d+ INT$/);
+  const leaders = api.statLeaders(S, prev, 'passYards');
+  assert.equal(leaders.length, 5);
+  assert(leaders.every((x, i) => !i || leaders[i - 1].v >= x.v));
+  leaders[0].p.name = '<b>Bold</b> & Co';
+  const html = api.leadersView(S);
+  assert(html.includes('League leaders · Season ' + prev) && html.includes('&lt;b&gt;Bold&lt;/b&gt; &amp; Co') && !html.includes('<b>Bold'));
+});
+
+test('v12 save upgrades to v13: no stats yet, and they start with the next game', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v12Save)).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.migrations.at(-1).from, 12);
+  assert(Object.values(S.rosters).flat().every(p => p.stats === undefined));
+  api.playWeek(S);
+  const season = api.cur(S).number;
+  assert(Object.values(S.rosters).flat().some(p => api.statLine(p, season)?.gp === 1));
+  assert.deepEqual(api.validateSave(S), []);
+  S.rosters['club-01'][0].stats = [{ season: 1, gp: -1, club: 'club-01' }];
+  assert(api.validateSave(S).some(e => /invalid season stats/.test(e)));
 });
 
 // ---- Save files ------------------------------------------------------------

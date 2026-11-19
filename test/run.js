@@ -1810,6 +1810,27 @@ test('season stats move trade prices: a big year costs more, a bad one less', ()
   assert.equal(api.statEdge(S, { ...wr, stats: [] }), 0);
 });
 
+test('season stats move contract asks: a big year asks more, a bad one less, the true market value holds', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06'; // the page renders the live save
+  for (let i = 0; i < 12; i++) api.playWeek(S);
+  const season = api.cur(S).number;
+  const qb = S.rosters[S.club].filter(p => p.pos === 'QB' && (api.statLine(p, season)?.att ?? 0) > 150)[0];
+  qb.contract.yearsLeft = 1; // on the expiring list
+  const L = api.statLine(qb, season), keep = { ...L }, market = api.marketValue(S, qb);
+  const ask = () => api.termsHit(api.extensionTerms(S, qb));
+  const base = ask();
+  Object.assign(L, { passYards: L.att * 10, passTd: Math.round(L.att / 12), ints: 0 });
+  const hot = ask();
+  assert.match(api.contractsView(), /big season, asking more/);
+  Object.assign(L, { passYards: L.att * 4, passTd: 0, ints: Math.round(L.att / 15) });
+  const cold = ask();
+  assert.match(api.contractsView(), /down season, asking less/);
+  assert.equal(api.marketValue(S, qb), market, 'market value is still talent alone');
+  Object.assign(L, keep);
+  assert(hot > base && base > cold, hot + ' > ' + base + ' > ' + cold);
+});
+
 test('season stats: last season still counts in the offseason, and the views show them', () => {
   const { api, S } = owned(63);
   api.jumpTo(S, 51);

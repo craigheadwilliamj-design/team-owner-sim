@@ -1360,6 +1360,11 @@ function statNote(S,p){
   return e>0?'His numbers '+when+line+' have the league pricing him like a '+Math.round(perceivedRating(S,p))+', not the '+p.rating+' he is. ':
     'His numbers '+when+line+' have the league pricing him like a '+Math.round(perceivedRating(S,p))+', below the '+p.rating+' he is. ';
 }
+// Why a contract ask runs above or below his rating, for the cap sheet.
+function askNote(S,p){
+  const e=statEdge(S,p);
+  return e>=1.5?' · big season, asking more':e<=-1.5?' · down season, asking less':'';
+}
 // League leaders in one counting stat for a season.
 function statLeaders(S,season,key,count=5){
   return clubs.flatMap(t=>S.rosters[t.id].map(p=>({p,club:t.id,v:statLine(p,season)?.[key]??0}))).filter(x=>x.v>0).sort((a,b)=>b.v-a.v||a.p.id.localeCompare(b.p.id)).slice(0,count);
@@ -2948,12 +2953,14 @@ const PRIORITIES=['money','security','winning'];
 const PRIORITY_LABEL={money:'getting paid the most',security:'guaranteed money',winning:'playing for a winner'};
 function priorityFor(p){let h=0;for(const ch of p.id)h=(h*31+ch.charCodeAt(0))%997;return PRIORITIES[h%3];}
 const nextYearCommitted=(S,id)=>round2(S.rosters[id].filter(p=>p.contract.yearsLeft>=2).reduce((a,p)=>a+capHit(p),0));
-const salaryRaw2=p=>.9+playerValue(p)*.06;
+const salaryRaw2=(p,rating=p.rating)=>.9+playerValue(p,rating)*.06;
 const ageFactor=age=>age>=33?.55:age>=31?.75:age>=29?.9:1;
 // What a player is worth on the open market this league year: annual value, before the bonus split.
-const marketValue=(S,p)=>round2(Math.max(S.cap.minSalary,S.cap.scale*salaryRaw2(p)*ageFactor(p.age)));
+// rating defaults to his true rating; asks use the rating his numbers make him look.
+const marketValue=(S,p,rating=p.rating)=>round2(Math.max(S.cap.minSalary,S.cap.scale*salaryRaw2(p,rating)*ageFactor(p.age)));
+// A player's agent prices off his season: a big year asks more, a poor one less.
 function askFor(S,p){
-  const annual=marketValue(S,p),years=p.age<=26?4:p.age<=29?3:p.age<=31?2:1;
+  const annual=marketValue(S,p,perceivedRating(S,p)),years=p.age<=26?4:p.age<=29?3:p.age<=31?2:1;
   const bonus=annual>S.cap.minSalary*2?round2(annual*years*.25):0;
   const gYears=annual>S.cap.minSalary*5&&years>=2?(p.rating>=82?2:1):0;
   return {salary:round2(annual-bonus/years),years,bonus,gYears};
@@ -3438,7 +3445,7 @@ function contractsView(){
       const actions='<button data-negotiate="extend:'+esc(p.id)+'">Negotiate</button><button data-extend="'+esc(p.id)+'">Extend at ask</button>'+
         (p.contract.option?'<button data-option="'+esc(p.id)+'" title="'+m1(optionAmount(S,p))+' next season">Pick up option</button>':'')+
         (tagged?'<button data-untag="1">Remove tag</button>':tagWindow(S)&&!tag?'<button data-tag="'+esc(p.id)+'" title="'+m1(tagAmount(S,p.pos))+' for one year">Franchise tag</button>':'');
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
+      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
   html+='<h2>Cap sheet</h2><div class="wide"><table class="capsheet"><thead><tr><th>Player</th><th>Rating</th><th>Cap hit</th><th>Salary</th><th>Years</th><th>Gtd</th><th>Dead if cut</th><th></th></tr></thead><tbody>'+
     [...roster].sort((a,b)=>capHit(b)-capHit(a)).map(p=>{const rs=restructureSavings(S,p);
       return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Age '+p.age+({rookie:' · rookie deal',tag:' · franchise tag'}[p.contract.kind]??'')+(p.contract.nextSalary?' · option year '+m1(p.contract.nextSalary):'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+(p.contract.gYears??0)+'</td><td>'+m1(deadIfCut(p,S))+'</td><td class="calls">'+
@@ -3447,7 +3454,7 @@ function contractsView(){
   html+='<h2>Free agents</h2>'+(pool.length?'<p>'+esc('Players weigh every offer the week it arrives: money, guarantees, years, and how good your team is, depending on what they care about. Early in free agency they hold out for their ask; later they settle.'+(S.cap.gmHandles?' The GM also signs free agents to fill holes; switch to “I decide” to run it yourself.':''))+'</p>'+
     '<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Asking</th><th>Cap hit</th><th></th></tr></thead><tbody>'+
     pool.map(p=>{const o=S.fa.offers[p.id];
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
+      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
         (o?'<small>'+esc('Offer in: '+o.years+' yrs, '+m1(termsHit(o))+'/yr')+'</small><button data-withdraw="'+esc(p.id)+'">Withdraw</button>':'<button data-negotiate="fa:'+esc(p.id)+'">Negotiate</button><button data-offer="'+esc(p.id)+'">Offer asking terms</button>')+'</td></tr>';}).join('')+'</tbody></table></div>':
     '<p>'+esc('Free agency opens at the new league year, '+weekLabel(MILESTONES.leagueYear)+', when expired contracts hit the market.')+'</p>');
   return html;

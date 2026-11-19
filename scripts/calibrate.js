@@ -1,5 +1,6 @@
 // Calibrates the play-by-play engine against NFL per-team-game averages and
-// against the old drive sim's sense of how much talent matters.
+// against the drive sim it replaced, whose talent-to-wins curve rosters, trades
+// and the AI GMs were tuned on (OLD_CURVE, measured on the same matchups).
 //   node scripts/calibrate.js [games]       stats table
 //   node scripts/calibrate.js --pbp [seed]  one game, play by play
 'use strict';
@@ -7,9 +8,11 @@ const path = require('path');
 const { loadGame } = require('../test/harness');
 
 const { api } = loadGame(path.join(__dirname, '..', 'season-desk.html'), {
-  exportNames: ['newSave', 'clubUnits', 'playGame', 'simulate', 'clubs', 'rngFor'],
+  exportNames: ['newSave', 'clubUnits', 'playGame', 'clubs', 'rngFor'],
 });
 const args = process.argv.slice(2);
+// Stronger side's win % in the old drive sim, by strength gap bucket (0-4, 5-9, ... 30+).
+const OLD_CURVE = { 0: 54.6, 5: 63.6, 10: 72.8, 15: 81.2, 20: 86.4, 25: 91.4, 30: 95.6 };
 
 // A pool of real club units from a few fresh leagues.
 function unitPool(leagues) {
@@ -56,7 +59,7 @@ const r = api.rngFor({ seed: 99, state: 99 });
 const sum = {}, add = (k, v) => { sum[k] = (sum[k] ?? 0) + v; };
 const strength = x => x.u.offense + x.u.defense;
 const bins = new Map(); // strength gap -> [new wins, old wins, games]
-let homeWins = 0, ties = 0, ots = 0, oldOts = 0, oldPts = 0, decided = 0;
+let homeWins = 0, ties = 0, ots = 0, decided = 0;
 const t0 = process.hrtime.bigint();
 let engineNs = 0n;
 for (let n = 0; n < N; n++) {
@@ -66,9 +69,6 @@ for (let n = 0; n < N; n++) {
   const s0 = process.hrtime.bigint();
   const g = api.playGame(h.u, a.u, r);
   engineNs += process.hrtime.bigint() - s0;
-  const old = api.simulate(h.u, a.u, r);
-  oldPts += old.score[0] + old.score[1];
-  if (old.ot) oldOts++;
   if (g.ot) ots++;
   if (g.score[0] === g.score[1]) ties++;
   else { decided++; if (g.score[0] > g.score[1]) homeWins++; }
@@ -84,9 +84,9 @@ for (let n = 0; n < N; n++) {
   // Win rate of the stronger side by strength gap, both engines.
   const gap = Math.abs(strength(h) - strength(a)), key = Math.min(30, Math.floor(gap / 5) * 5);
   const strongHome = strength(h) >= strength(a);
-  const b = bins.get(key) ?? [0, 0, 0];
+  const b = bins.get(key) ?? [0, 0];
   const win = s => s[0] === s[1] ? .5 : (s[0] > s[1]) === strongHome ? 1 : 0;
-  b[0] += win(g.score); b[1] += win(old.score); b[2]++;
+  b[0] += win(g.score); b[1]++;
   bins.set(key, b);
 }
 const elapsed = Number(process.hrtime.bigint() - t0) / 1e6;
@@ -119,12 +119,11 @@ console.log('Per team per game, ' + N + ' games\n');
 console.log('Stat'.padEnd(32) + 'engine'.padStart(8) + 'NFL'.padStart(8));
 for (const [label, v, nfl] of rows) console.log(label.padEnd(32) + v.toFixed(2).padStart(8) + String(nfl).padStart(8));
 console.log('\nHome win %'.padEnd(33) + (100 * homeWins / decided).toFixed(1).padStart(8) + '55'.padStart(8));
-console.log('Overtime %'.padEnd(32) + (100 * ots / N).toFixed(1).padStart(8) + '5.5'.padStart(8) + '   (old sim ' + (100 * oldOts / N).toFixed(1) + ')');
+console.log('Overtime %'.padEnd(32) + (100 * ots / N).toFixed(1).padStart(8) + '5.5'.padStart(8));
 console.log('Ties %'.padEnd(32) + (100 * ties / N).toFixed(2).padStart(8) + '0.3'.padStart(8));
-console.log('Old sim points per team'.padEnd(32) + (oldPts / (N * 2)).toFixed(2).padStart(8));
 console.log('\nStronger side win % by strength gap (offense + defense)');
 console.log('gap'.padEnd(8) + 'engine'.padStart(8) + 'old'.padStart(8) + 'games'.padStart(8));
-for (const [k, [nw, ow, c]] of [...bins].sort((x, y) => x[0] - y[0])) {
-  console.log((k + '-' + (k + 4) + (k === 30 ? '+' : '')).padEnd(8) + (100 * nw / c).toFixed(1).padStart(8) + (100 * ow / c).toFixed(1).padStart(8) + String(c).padStart(8));
+for (const [k, [nw, c]] of [...bins].sort((x, y) => x[0] - y[0])) {
+  console.log((k + '-' + (k + 4) + (k === 30 ? '+' : '')).padEnd(8) + (100 * nw / c).toFixed(1).padStart(8) + OLD_CURVE[k].toFixed(1).padStart(8) + String(c).padStart(8));
 }
 console.log('\nEngine time: ' + (Number(engineNs) / 1e6 / N).toFixed(3) + ' ms per game (' + (Number(engineNs) / 1e6).toFixed(0) + ' ms for ' + N + '); whole run ' + elapsed.toFixed(0) + ' ms');

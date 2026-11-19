@@ -27,7 +27,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
-  'playGame', 'rngFor',
+  'playGame', 'rngFor', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -1364,7 +1364,7 @@ test('injured reserve: the GM moves a long-term injury off the 53 and fills the 
   assert(S.events.some(e => e.type === 'rosterMoves'));
   for (let i = 0; i < 10; i++) api.advance(S);
   assert(!p.ir, 'back from IR once healthy');
-  assert.equal(S.irReturns.counts['club-06'], 1);
+  assert(S.irReturns.counts['club-06'] >= 1, 'his return is counted (other injuries may add more)');
   assert.equal(api.rosterCount(S, 'club-06'), 53);
 });
 
@@ -1676,6 +1676,43 @@ test('play engine: league-wide numbers look like pro football', () => {
   assert(comp > .58 && comp < .7, 'completion ' + comp);
   const home = games.filter(g => g.score[0] > g.score[1]).length / games.filter(g => g.score[0] !== g.score[1]).length;
   assert(home > .5 && home < .62, 'home ' + home);
+});
+
+test('broadcast: the owner’s game keeps its plays, and the view presents it live', () => {
+  const { api } = load();
+  const S = api.newSave(12); S.club = 'club-06';
+  while (!api.cur(S).weeks[api.cur(S).completed].some(g => g.home === S.club || g.away === S.club)) api.playWeek(S);
+  assert(api.canWatch(S));
+  api.playWeek(S);
+  const B = api.broadcast(), g = api.cur(S).weeks[api.cur(S).completed - 1].find(x => x.home === S.club || x.away === S.club);
+  assert(B && B.home === g.home && B.away === g.away);
+  assert.deepEqual(B.score, g.score);
+  assert.deepEqual(B.plays.at(-1).score, g.score);
+  api.bc.i = 0;
+  let html = api.broadcastView();
+  assert(html.includes('LIVE') && html.includes('<svg') && !html.includes('Box score'));
+  api.bc.i = 40;
+  html = api.broadcastView();
+  assert(html.includes('<rect') && html.includes('class="bar"'));
+  api.bc.i = B.plays.length;
+  html = api.broadcastView();
+  assert(!html.includes('LIVE') && html.includes('Final') && html.includes('Box score'));
+  assert(!/<script|onerror/i.test(html));
+});
+test('broadcast: the drive chart clears when the ball changes hands', () => {
+  const { api } = load();
+  const [g] = engineGames(api, 1, { log: true });
+  for (let i = 1; i <= g.plays.length; i++) {
+    const d = api.bcDrive(g.plays, i);
+    assert(d.every(p => p.kind === 'play' && p.off === d[0].off));
+    if (g.plays[i - 1].kind === 'kick') assert.equal(d.length, 0);
+  }
+});
+test('broadcast: no watch button on a bye', () => {
+  const { api } = load();
+  const S = api.newSave(12); S.club = 'club-06';
+  while (api.cur(S).weeks[api.cur(S).completed].some(g => g.home === S.club || g.away === S.club)) api.playWeek(S);
+  assert(!api.canWatch(S));
 });
 
 // ---- Save files ------------------------------------------------------------

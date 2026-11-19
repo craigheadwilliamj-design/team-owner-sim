@@ -233,8 +233,8 @@ test('v2 save upgrades with markets, sites and leases, and nothing else changes'
   const old = JSON.parse(v2Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.equal(S.world.markets.length, 15);
-  assert.equal(S.world.sites.length, 30);
+  assert.equal(S.world.markets.length, 17);
+  assert.equal(S.world.sites.length, 34);
   assert.equal(Object.keys(S.world.leases).length, 32);
   assert(S.world.sites.every(x => x.expiresWeek > old.seasons[0].completed), 'deadlines start after the current week');
   const without = (v, keys) => JSON.parse(JSON.stringify(v, (k, x) => (keys.includes(k) ? undefined : x)));
@@ -1439,7 +1439,7 @@ test('v10 save upgrades to v11, and an open job is filled after four weeks', () 
 });
 
 test('the GM brings trade ideas, and approving one makes the trade', () => {
-  const { api, S } = owned(601);
+  const { api, S } = owned(602); // about one seed in ten draws no idea before the deadline
   assert(advanceUntil(api, S, () => S.staff.proposals.some(P => P.kind === 'trade')), 'the GM proposed something');
   const P = S.staff.proposals.find(x => x.kind === 'trade');
   assert.match(api.tradeSummary(S, P), /^Trade for /);
@@ -1576,7 +1576,7 @@ test('v12 save upgrades to v13: twelve more open markets, nothing else moves', (
   assert.deepEqual(S.world.markets.slice(0, 8), old.world.markets);
   assert.deepEqual(S.world.sites.slice(0, 16), old.world.sites);
   const added = S.world.sites.slice(16);
-  assert.equal(added.length, 14, 'two sites in each of the seven new relocation markets');
+  assert.equal(added.length, 18, 'two sites in each of the nine new relocation markets');
   assert(added.every(x => x.status === 'open' && x.expiresWeek > api.cur(S).tick));
   assert(!S.world.markets.some(m => m.id === 'milwaukee'), 'TV-only markets have no stadium sites');
   api.playWeek(S);

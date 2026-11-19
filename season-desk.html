@@ -678,6 +678,435 @@ function simulate(home,away,r,neutral=false){
 }
 
 // ---------------------------------------------------------------------------
+// Play-by-play engine
+//
+// playGame plays a whole game snap by snap: four 15-minute quarters, downs and
+// distance, field position, a running clock with timeouts and the two-minute
+// warning, kicks, penalties, turnovers and overtime. A game takes well under a
+// millisecond, so every game in the league can go through it. Pass {log:true}
+// to keep the plays for a broadcast; the result is the same either way.
+//
+// yl is the ball's distance from the offense's own goal line (0-100).
+// Sides are 0 (home) and 1 (away).
+// ---------------------------------------------------------------------------
+const QUARTER_SECONDS=900,OT_SECONDS=600;
+const clampTo=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
+const gauss=r=>Math.sqrt(-2*Math.log(1-r()))*Math.cos(2*Math.PI*r());
+const expo=(r,mean)=>-Math.log(1-r())*mean;
+function pickWeighted(r,items,weights){
+  const live=items.map((x,i)=>[x,x?weights[i]:0]),total=live.reduce((a,[,w])=>a+w,0);
+  let roll=r()*total;
+  for(const [x,w] of live){if((roll-=w)<0)return x;}
+  return items.find(Boolean)??null;
+}
+// Talent scales unit-rating gaps; home field is worth a little on every snap.
+const TALENT=.66,HOME_EDGE=1.3;
+const homeEdge=(G,o)=>G.homeSide<0?0:G.homeSide===o?HOME_EDGE:-HOME_EDGE;
+const shortName=p=>p?p.name.replace(/^(\S)\S*\s+/,'$1. '):'the ball carrier';
+// Field-goal make probability: about 95% from 33 yards, 70% from 50, for an average kicker.
+const fgCenter=kick=>59+((kick??75)-75)*.25;
+const fgChance=(dist,kick)=>1/(1+Math.exp((dist-fgCenter(kick))/8.1));
+function castFor(u){
+  const up=pos=>(u.chart?.[pos]??[]).filter(p=>!p.out);
+  return {QB:up('QB')[0]??null,RB:up('RB').slice(0,2),WR:up('WR').slice(0,3),TE:up('TE')[0]??null,K:up('K')[0]??null,P:up('P')[0]??null,
+    rush:[...up('DE').slice(0,2),...up('DT').slice(0,2),...up('LB').slice(0,3)],
+    cover:[...up('CB').slice(0,2),...up('S').slice(0,2),...up('LB').slice(0,3)]};
+}
+const teamLine=()=>({plays:0,yards:0,passYards:0,rushYards:0,passAtt:0,comp:0,sacked:0,ints:0,fumblesLost:0,firstDowns:0,
+  third:[0,0],fourth:[0,0],penalties:0,penaltyYards:0,top:0,drives:0,punts:0,fga:0,fgm:0});
+function playGame(home,away,r,{neutral=false,playoff=false,log=false}={}){
+  const G={u:[home,away],cast:[castFor(home),castFor(away)],homeSide:neutral?-1:0,playoff,
+    q:1,clock:QUARTER_SECONDS,score:[0,0],to:[3,3],off:0,yl:25,down:1,toGo:10,kick:null,freeKick:false,
+    over:false,ot:false,otFirst:-1,otDone:[0,0],team:[teamLine(),teamLine()],players:{},log:log?[]:null};
+  const opening=r()<.5?0:1;
+  G.secondHalf=1-opening;G.kick=1-opening;
+  for(let n=0;n<800&&!G.over;n++){
+    if(G.clock<=0)endPeriod(G,r);
+    else if(G.kick!==null)kickoff(G,r);
+    else playSnap(G,r);
+  }
+  if(G.log&&G.log.at(-1)?.text!=='Final.')G.log.push({...preSnap(G),kind:'note',text:'Final in overtime.',score:[...G.score]});
+  const out={score:G.score,box:{teams:G.team,players:G.players}};
+  if(G.ot)out.ot=true;
+  if(log)out.plays=G.log;
+  return out;
+}
+// Log entries: kind 'play' for scrimmage plays, 'kick' for kicks and tries, 'note' for the rest.
+function say(G,pre,text,kind='play'){
+  if(!G.log)return;
+  G.log.push({...pre,kind,text,score:[...G.score]});
+  if(G.warnPending){G.warnPending=false;G.log.push({...preSnap(G),kind:'note',text:'Two-minute warning.',score:[...G.score]});}
+}
+const preSnap=G=>G.log&&{q:G.q,clock:G.clock,off:G.off,down:G.down,toGo:G.toGo,yl:G.yl};
+function credit(G,side,p,key,n=1){
+  if(!p)return;
+  const s=G.players[p.id]??={id:p.id,name:p.name,pos:p.pos,side};
+  s[key]=(s[key]??0)+n;
+}
+// Seconds come off the clock. A running clock stops at the two-minute warning.
+function tick(G,s,stopAtWarning){
+  const before=G.clock;
+  G.clock=Math.max(0,before-s);
+  let warned=false;
+  if((G.q===2||G.q===4)&&before>120&&G.clock<120){warned=true;if(stopAtWarning)G.clock=120;}
+  G.team[G.off].top+=before-G.clock;
+  if(warned){if(stopAtWarning)say(G,preSnap(G),'Two-minute warning.','note');else{G.stopped=true;G.warnPending=true;}}
+  return warned;
+}
+function endPeriod(G,r){
+  const pre=preSnap(G);
+  if(G.q===1||G.q===3){G.q++;G.clock=QUARTER_SECONDS;say(G,pre,'End of the '+(G.q===2?'first':'third')+' quarter.','note');return;}
+  if(G.q===2){
+    G.q=3;G.clock=QUARTER_SECONDS;G.to=[3,3];G.kick=1-G.secondHalf;G.freeKick=false;
+    say(G,pre,'Halftime.','note');return;
+  }
+  if(G.score[0]!==G.score[1]||(G.q>=5&&!G.playoff)){G.over=true;say(G,pre,'Final.','note');return;}
+  G.q++;G.ot=true;G.clock=G.playoff?QUARTER_SECONDS:OT_SECONDS;
+  if(G.q===5){
+    G.otFirst=r()<.5?0:1;G.kick=1-G.otFirst;G.to=[2,2];G.freeKick=false;
+    say(G,pre,'End of regulation. Overtime.','note');
+  }else{G.to=[2,2];say(G,pre,'End of the overtime period. Another one.','note');}
+}
+// Overtime: each side gets a possession, then the next score wins.
+function otDecided(G){
+  if(G.q<5||G.score[0]===G.score[1])return false;
+  const leader=G.score[0]>G.score[1]?0:1,first=G.otFirst,second=1-first;
+  return G.otDone[first]>=1&&(G.otDone[second]>=1||leader===second);
+}
+function settle(G){if(otDecided(G))G.over=true;return G.over;}
+function endPossession(G){if(G.q>=5)G.otDone[G.off]++;}
+function startPossession(G,side,yl){
+  G.off=side;G.yl=clampTo(Math.round(yl),1,99);G.down=1;G.toGo=Math.min(10,100-G.yl);G.team[side].drives++;
+}
+function kickoff(G,r){
+  const k=G.kick,recv=1-k,K=G.cast[k].K,lead=G.score[k]-G.score[recv],pre=preSnap(G),free=G.freeKick;
+  G.kick=null;G.freeKick=false;G.off=recv;
+  if(!free&&G.q>=4&&lead<0&&(G.clock<=150||(lead<-8&&G.clock<=300))){
+    tick(G,4,false);
+    if(r()<.12){
+      startPossession(G,k,45);
+      say(G,pre,shortName(K)+' onside kick. Recovered by the kicking team!','kick');
+    }else{
+      startPossession(G,recv,55);
+      say(G,pre,shortName(K)+' onside kick, recovered by the receiving team.','kick');
+    }
+    return;
+  }
+  if(!free&&r()<clampTo(.6+((G.u[k].kick??70)-70)*.01,.4,.85)){
+    startPossession(G,recv,30);
+    say(G,pre,shortName(K)+' kicks off. Touchback.','kick');
+    return;
+  }
+  tick(G,6,false);
+  if(r()<.003){
+    G.off=recv;say(G,pre,'Kickoff returned all the way for a touchdown!','kick');
+    endPossession(G);touchdown(G,r,recv);return;
+  }
+  const yl=clampTo(Math.round((free?38:25)+gauss(r)*7),5,60);
+  startPossession(G,recv,yl);
+  say(G,pre,(free?'Free kick':shortName(K)+' kicks off')+', returned to the '+yl+'.','kick');
+}
+function touchdown(G,r,side){
+  G.score[side]+=6;
+  if(settle(G))return;
+  const lead=G.score[side]-G.score[1-side],pre=preSnap(G);
+  if(G.q>=4&&G.clock<=600&&[-2,-5,-10,1,5].includes(lead)){
+    const good=r()<.48;
+    if(good)G.score[side]+=2;
+    say(G,pre,'Two-point try '+(good?'is good.':'fails.'),'kick');
+  }else{
+    const K=G.cast[side].K,good=r()<fgChance(33,G.u[side].kick);
+    credit(G,side,K,'xpa');
+    if(good){G.score[side]++;credit(G,side,K,'xpm');}
+    say(G,pre,'Extra point '+(good?'is good.':'is no good!'),'kick');
+  }
+  if(settle(G))return;
+  G.kick=side;
+}
+function safety(G){
+  const o=G.off;
+  endPossession(G);
+  G.score[1-o]+=2;
+  if(settle(G))return;
+  G.kick=o;G.freeKick=true;
+}
+function changeOfPossession(G,yl){
+  const d=1-G.off;
+  endPossession(G);
+  if(settle(G))return;
+  startPossession(G,d,yl);
+}
+// The ball moves y yards on a scrimmage play the offense keeps.
+function advanceBall(G,r,y){
+  const T=G.team[G.off],wasThird=G.down===3,wasFourth=G.down===4;
+  G.yl+=y;T.yards+=y;
+  if(G.yl>=100){
+    if(wasThird)T.third[1]++;if(wasFourth)T.fourth[1]++;
+    return 'td';
+  }
+  if(G.yl<=0)return 'safety';
+  if(y>=G.toGo){
+    G.down=1;G.toGo=Math.min(10,100-G.yl);T.firstDowns++;
+    if(wasThird)T.third[1]++;if(wasFourth)T.fourth[1]++;
+    return 'first';
+  }
+  G.toGo-=y;G.down++;
+  if(G.down>4){changeOfPossession(G,100-G.yl);return 'downs';}
+  return 'down';
+}
+function situation(G){
+  const o=G.off,lead=G.score[o]-G.score[1-o],late=G.q===4,ot=G.q>=5;
+  const hurry=(G.q===2&&G.clock<=120)||((late||ot)&&(lead<-16?G.clock<=720:lead<-8?G.clock<=480:lead<0?G.clock<=300:lead===0&&G.clock<=120));
+  const milk=late&&lead>0&&G.clock<=360;
+  return {o,d:1-o,lead,late,ot,hurry,milk,toGoal:100-G.yl,fgDist:117-G.yl};
+}
+function kneelWins(G){
+  const snaps=5-G.down,stops=Math.min(G.to[1-G.off],snaps);
+  return G.clock<=snaps*42-stops*40;
+}
+function playSnap(G,r){
+  const s=situation(G),{o,lead,late,ot}=s,pre=preSnap(G),reach=fgCenter(G.u[o].kick)-2.5;
+  const T=G.team[o];
+  G.stopped=false;
+  if((late&&lead>0&&G.yl>2&&kneelWins(G))||(G.q===2&&G.clock<=35&&G.yl<35&&G.to[o]===0)){
+    T.plays++;T.rushYards--;credit(G,o,G.cast[o].QB,'carries');credit(G,o,G.cast[o].QB,'rushYards',-1);tick(G,2,false);
+    const res=advanceBall(G,r,-1);
+    say(G,pre,shortName(G.cast[o].QB)+' takes a knee.');
+    if(res!=='downs')afterPlay(G,r,s,false);
+    return;
+  }
+  const halfEnd=G.q===2||G.q===4||ot,lastPlay=halfEnd&&G.clock<=8;
+  if(lastPlay&&s.fgDist<=reach+6&&(G.q===2||(lead<=0&&lead>=-3)))return fieldGoal(G,r,pre);
+  // In overtime, once a field goal would win, take it.
+  if(ot&&lead===0&&G.otDone[G.otFirst]>=1&&G.down>=3&&s.fgDist<=reach-8)return fieldGoal(G,r,pre);
+  if(lastPlay&&(G.q===2?s.toGoal<=55:lead<0))return hailMary(G,r,pre);
+  if(G.down===4){
+    const choice=fourthDown(G,r,s,reach);
+    if(choice==='punt')return punt(G,r,pre);
+    if(choice==='fg')return fieldGoal(G,r,pre);
+    T.fourth[0]++;
+  }
+  if(G.down===3)T.third[0]++;
+  const pen=r();
+  if(pen<.085)return penalty(G,r,s,pre,pen);
+  let pr=(G.u[o].passRate??.62)-.08;
+  if(G.down===1)pr-=.1;else if(G.down===2&&G.toGo>=8)pr+=.08;else if(G.down>=3)pr=G.toGo>=5?.88:G.toGo<=2?.35:.65;
+  if(s.toGoal<=3)pr=Math.min(pr,.45);
+  if(G.q>=3&&lead<=-14)pr+=.1;
+  if(G.q>=3&&lead>=14)pr-=.1;
+  if(s.hurry)pr=Math.max(pr,.82);
+  if(s.milk)pr=Math.min(pr,.25);
+  if(r()<pr)passPlay(G,r,s,pre);else runPlay(G,r,s,pre);
+}
+function fourthDown(G,r,s,reach){
+  const {lead,late,ot,toGoal,fgDist}=s;
+  if(lead<0&&(late||ot)){
+    const oneScore=-lead<=3;
+    if(oneScore&&fgDist<=reach+3&&(ot||G.clock<=120))return 'fg';
+    if(ot||G.clock<=(oneScore?150:360))return 'go';
+  }
+  if(lead>0&&late&&G.clock<=300)return fgDist<=reach-2?'fg':'punt';
+  const bold=((G.u[s.o].gameday??65)-65)*.01;
+  let go=0;
+  if(G.toGo<=1)go=G.yl>=45?.55:G.yl>=30?.25:.05;
+  else if(G.toGo<=3&&G.yl>=55)go=.2;
+  if(toGoal<=2&&G.toGo<=2)go=.5;
+  if(go&&r()<go+bold)return 'go';
+  if(fgDist<=reach-1)return 'fg';
+  if(G.yl>=62&&G.toGo<=5)return 'go';
+  return 'punt';
+}
+// After a play the offense keeps: the clock runs unless something stopped it.
+function afterPlay(G,r,s,stopped,outOfBounds=false){
+  if(G.stopped){G.stopped=false;return;}
+  if(G.clock<=0||stopped||G.over)return;
+  const critical=(G.q===2&&G.clock<=120)||(G.q>=4&&G.clock<=300);
+  if(outOfBounds&&critical)return;
+  const o=G.off,d=1-o,lead=G.score[o]-G.score[d];
+  if(s.hurry&&G.to[o]>0&&G.clock<=(G.q===2?110:150)){G.to[o]--;say(G,preSnap(G),'Timeout.','note');return;}
+  if(G.q>=4&&lead>0&&G.to[d]>0&&G.clock<=240&&G.clock>20){G.to[d]--;say(G,preSnap(G),'Timeout, defense.','note');return;}
+  if(s.hurry&&G.to[o]===0&&G.clock<=40&&G.down<=3&&G.down>1){
+    tick(G,8,true);G.down++;say(G,preSnap(G),shortName(G.cast[o].QB)+' spikes it to stop the clock.');return;
+  }
+  let runoff=s.hurry?12+randInt(r,7):s.milk?36+randInt(r,5):25+randInt(r,13);
+  if(outOfBounds)runoff-=10;
+  tick(G,runoff,true);
+}
+function penalty(G,r,s,pre,roll){
+  const T=G.team[G.off];
+  T.penalties++;
+  tick(G,3,false);
+  let text,y;
+  if(roll<.03){
+    y=-Math.min(5,Math.floor(G.yl/2));G.yl+=y;G.toGo-=y;text='False start, '+-y+' yards.';
+  }else if(roll<.056){
+    y=-Math.min(10,Math.floor(G.yl/2));G.yl+=y;G.toGo-=y;text='Holding on the offense, '+-y+' yards. Replay the down.';
+  }else{
+    // Defensive penalties are charged to the offense's line for simplicity of the box score.
+    const big=roll>=.074;
+    y=Math.min(big?10+randInt(r,16):5,Math.floor((100-G.yl)/2));
+    T.penalties--;G.team[1-G.off].penalties++;G.team[1-G.off].penaltyYards+=y;
+    G.yl+=y;
+    if(big||y>=G.toGo){G.down=1;G.toGo=Math.min(10,100-G.yl);T.firstDowns++;}
+    else G.toGo-=y;
+    text=big?'Pass interference on the defense, '+y+' yards. Automatic first down.':'Offside on the defense, '+y+' yards.';
+    say(G,pre,text);
+    afterPlay(G,r,s,false,true);
+    return;
+  }
+  T.penaltyYards+=-y;
+  if(G.down===3)T.third[0]--;
+  if(G.down===4)T.fourth[0]--;
+  say(G,pre,text);
+  afterPlay(G,r,s,false,true);
+}
+function passPlay(G,r,s,pre){
+  const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o],qb=C.QB;
+  const m=(U.passing-(.58*D.coverage+.42*D.pressure))*TALENT+homeEdge(G,o);
+  T.plays++;
+  if(r()<clampTo(.058-m*.0016+(s.hurry?.01:0),.03,.13)){
+    const loss=3+randInt(r,7),who=pickWeighted(r,G.cast[d].rush,[3,3,2,2,1,1,1]);
+    T.sacked++;credit(G,o,qb,'sacked');credit(G,d,who,'sacks');
+    tick(G,5,false);
+    if(r()<.04){
+      T.fumblesLost++;credit(G,o,qb,'fumblesLost');
+      say(G,pre,shortName(qb)+' is sacked by '+shortName(who)+' and fumbles! The defense recovers.');
+      G.yl-=loss;
+      if(G.yl<=0){endPossession(G);G.off=d;touchdown(G,r,d);return;}
+      changeOfPossession(G,100-G.yl);return;
+    }
+    const res=advanceBall(G,r,-loss);T.passYards-=loss;
+    if(res==='safety'){say(G,pre,shortName(qb)+' is sacked in the end zone by '+shortName(who)+'. Safety!');safety(G);return;}
+    say(G,pre,shortName(qb)+' is sacked by '+shortName(who)+' for a loss of '+loss+'.');
+    if(res!=='downs')afterPlay(G,r,s,false);
+    return;
+  }
+  T.passAtt++;credit(G,o,qb,'att');
+  const target=pickWeighted(r,[C.WR[0],C.WR[1],C.WR[2],C.TE,C.RB[0]],[30,22,14,18,16]);
+  credit(G,o,target,'targets');
+  if(r()<clampTo(.023-m*.0007,.008,.05)){
+    const air=8+randInt(r,15),spot=G.yl+air,who=pickWeighted(r,G.cast[d].cover,[3,3,2,2,1,1,1]);
+    T.ints++;credit(G,o,qb,'ints');credit(G,d,who,'defInts');
+    tick(G,6,false);
+    if(spot>=100){say(G,pre,shortName(qb)+' is intercepted in the end zone by '+shortName(who)+'. Touchback.');changeOfPossession(G,20);return;}
+    if(r()<.06){
+      say(G,pre,shortName(qb)+' is intercepted by '+shortName(who)+', who takes it all the way back!');
+      endPossession(G);G.off=d;touchdown(G,r,d);return;
+    }
+    const back=Math.round(expo(r,9));
+    say(G,pre,shortName(qb)+' is intercepted by '+shortName(who)+(back?', returned '+back+(back===1?' yard.':' yards.'):'.'));
+    changeOfPossession(G,Math.min(99,100-spot+back));return;
+  }
+  const deep=s.toGoal;
+  if(r()<clampTo(.665+m*.007-(G.down>=3&&G.toGo>=10?.05:0),.45,.82)){
+    let y=Math.round(2.5+expo(r,6.5)+m*.06);
+    if(r()<.06)y+=12+Math.round(expo(r,13));
+    // Routes are run past the sticks on third down, and often on second and long.
+    if(r()<(G.down>=3?.36:G.down===2&&G.toGo>=4?.42:G.down===1?.12:0))y=Math.max(y,G.toGo+randInt(r,4)-1);
+    y=Math.max(-2,Math.min(y,deep));
+    T.comp++;T.passYards+=y;credit(G,o,qb,'comp');credit(G,o,qb,'passYards',y);credit(G,o,target,'rec');credit(G,o,target,'recYards',y);
+    tick(G,5+randInt(r,4),false);
+    if(y<deep&&r()<.006){
+      T.fumblesLost++;credit(G,o,target,'fumblesLost');
+      G.yl+=y;T.yards+=y;
+      say(G,pre,shortName(qb)+' to '+shortName(target)+' for '+y+', but he fumbles! The defense recovers.');
+      changeOfPossession(G,100-G.yl);return;
+    }
+    const res=advanceBall(G,r,y);
+    if(res==='td'){
+      credit(G,o,qb,'passTd');credit(G,o,target,'recTd');
+      say(G,pre,shortName(qb)+' finds '+shortName(target)+' for a '+y+'-yard touchdown!');
+      endPossession(G);touchdown(G,r,o);return;
+    }
+    const oob=r()<(s.hurry?.35:.12);
+    say(G,pre,shortName(qb)+' complete to '+shortName(target)+' for '+y+(y===1?' yard':' yards')+(res==='first'?', first down':'')+(oob?', out of bounds':'')+'.');
+    if(res!=='downs')afterPlay(G,r,s,false,oob);
+    return;
+  }
+  tick(G,5,false);
+  const res=advanceBall(G,r,0);
+  say(G,pre,shortName(qb)+' pass incomplete'+(target?', intended for '+shortName(target):'')+'.');
+  if(res==='downs')return;
+}
+function runPlay(G,r,s,pre){
+  const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o];
+  const carrier=pickWeighted(r,[C.RB[0],C.RB[1],C.QB],[75,15,10]);
+  const m=(U.rushing-D.runDefense)*TALENT+homeEdge(G,o);
+  T.plays++;
+  let y=Math.round(3.35+m*.06+gauss(r)*2.6);
+  if(r()<.07)y+=6+Math.round(expo(r,11));
+  y=Math.min(y,s.toGoal);
+  credit(G,o,carrier,'carries');credit(G,o,carrier,'rushYards',y);T.rushYards+=y;
+  tick(G,5+randInt(r,4),false);
+  if(y<s.toGoal&&r()<.009){
+    T.fumblesLost++;credit(G,o,carrier,'fumblesLost');
+    G.yl+=y;T.yards+=y;
+    say(G,pre,shortName(carrier)+' runs for '+y+' and fumbles! The defense recovers.');
+    if(G.yl<=0){endPossession(G);G.off=d;touchdown(G,r,d);return;}
+    changeOfPossession(G,100-G.yl);return;
+  }
+  const res=advanceBall(G,r,y);
+  if(res==='td'){
+    credit(G,o,carrier,'rushTd');
+    say(G,pre,shortName(carrier)+(y===1?' plunges in from the 1':' runs it in from '+y+' yards out')+'. Touchdown!');
+    endPossession(G);touchdown(G,r,o);return;
+  }
+  if(res==='safety'){say(G,pre,shortName(carrier)+' is dropped in the end zone. Safety!');safety(G);return;}
+  const oob=r()<(s.hurry?.2:.05);
+  say(G,pre,shortName(carrier)+(y>0?' runs for '+y+(y===1?' yard':' yards'):y===0?' is stopped for no gain':' is stopped for a loss of '+-y)+(res==='first'?', first down':'')+(oob?', out of bounds':'')+'.');
+  if(res!=='downs')afterPlay(G,r,s,false,oob);
+}
+function hailMary(G,r,pre){
+  const o=G.off,C=G.cast[o],T=G.team[o],to=100-G.yl;
+  T.plays++;T.passAtt++;credit(G,o,C.QB,'att');tick(G,8,false);
+  const roll=r(),target=pickWeighted(r,C.WR,[3,2,2]);
+  if(to<=55&&roll<.07){
+    T.comp++;T.passYards+=to;credit(G,o,C.QB,'comp');credit(G,o,C.QB,'passYards',to);credit(G,o,C.QB,'passTd');
+    credit(G,o,target,'rec');credit(G,o,target,'recYards',to);credit(G,o,target,'recTd');
+    G.yl=100;T.yards+=to;
+    say(G,pre,'Hail Mary from '+shortName(C.QB)+'... caught by '+shortName(target)+' in the end zone! Touchdown!');
+    endPossession(G);touchdown(G,r,o);return;
+  }
+  if(roll<.25){
+    T.ints++;credit(G,o,C.QB,'ints');
+    say(G,pre,'Hail Mary from '+shortName(C.QB)+' is intercepted.');
+    changeOfPossession(G,20);return;
+  }
+  const res=advanceBall(G,r,0);
+  say(G,pre,'Hail Mary from '+shortName(C.QB)+' falls incomplete.');
+  if(res==='downs')return;
+}
+function fieldGoal(G,r,pre){
+  const o=G.off,T=G.team[o],K=G.cast[o].K,dist=117-G.yl,good=r()<fgChance(dist,G.u[o].kick);
+  T.fga++;credit(G,o,K,'fga');
+  tick(G,5,false);
+  if(good){
+    T.fgm++;credit(G,o,K,'fgm');
+    say(G,pre,shortName(K)+' '+dist+'-yard field goal is good.');
+    endPossession(G);G.score[o]+=3;
+    if(settle(G))return;
+    G.kick=o;return;
+  }
+  say(G,pre,shortName(K)+' '+dist+'-yard field goal is no good.');
+  changeOfPossession(G,Math.max(20,107-G.yl));
+}
+function punt(G,r,pre){
+  const o=G.off,P=G.cast[o].P,T=G.team[o];
+  T.punts++;
+  const gross=Math.round(44+((G.u[o].punt??70)-75)*.15+gauss(r)*6),land=G.yl+gross;
+  credit(G,o,P,'punts');credit(G,o,P,'puntYards',gross);
+  tick(G,7,false);
+  if(land>=100){say(G,pre,shortName(P)+' punts into the end zone. Touchback.');changeOfPossession(G,20);return;}
+  if(r()<.004){
+    say(G,pre,shortName(P)+' punts '+gross+' yards, and it is returned for a touchdown!');
+    endPossession(G);G.off=1-o;touchdown(G,r,1-o);return;
+  }
+  const fair=land>=88||r()<.45,back=fair?0:Math.max(0,Math.round(8+gauss(r)*6));
+  say(G,pre,shortName(P)+' punts '+gross+' yards'+(fair?', fair catch.':back?', returned '+back+'.':', no return.'));
+  changeOfPossession(G,100-land+back);
+}
+
+// ---------------------------------------------------------------------------
 // The save
 //
 // {schemaVersion, saveId, rng:{seed,state}, club, seasonIndex,

@@ -27,6 +27,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'playGame', 'rngFor',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -1623,6 +1624,58 @@ test('draft page shows the wire, the board and a prospect profile', () => {
   const html = api.draftView();
   assert(html.includes('College wire') && html.includes('Big board') && html.includes('data-scoutp') && html.includes(p.notes[0].text.slice(0, 20)));
   assert(!/<script|onerror/i.test(html));
+});
+
+// ---- Play-by-play engine --------------------------------------------------
+const engineGames = (api, n, opts = {}) => {
+  const S = api.newSave(31), units = api.clubs.map(t => api.clubUnits(S, t.id)), r = api.rngFor({ seed: 5, state: 5 });
+  return Array.from({ length: n }, (_, i) => api.playGame(units[i % 32], units[(i * 7 + 3) % 32 === i % 32 ? (i + 1) % 32 : (i * 7 + 3) % 32], r, opts));
+};
+test('play engine: the same seed plays the same game, with or without the play log', () => {
+  const { api } = load();
+  const S = api.newSave(8), h = api.clubUnits(S, 'club-06'), a = api.clubUnits(S, 'club-07');
+  const one = api.playGame(h, a, api.rngFor({ seed: 3, state: 3 }));
+  const two = api.playGame(h, a, api.rngFor({ seed: 3, state: 3 }), { log: true });
+  assert.deepEqual(one.score, two.score);
+  assert.deepEqual(one.box, two.box);
+  assert(two.plays.length > 120 && !one.plays);
+  assert.deepEqual(two.plays.at(-1).score, two.score);
+});
+test('play engine: games finish, the clock only runs down, and the log adds up', () => {
+  const { api } = load();
+  for (const g of engineGames(api, 300, { log: true })) {
+    let q = 1, clock = 900;
+    for (const p of g.plays) {
+      assert(p.clock >= 0);
+      if (p.kind === 'play') assert(p.down >= 1 && p.down <= 4 && p.yl >= 0 && p.yl <= 100);
+      if (p.q === q) assert(p.clock <= clock, 'clock went up in quarter ' + q);
+      q = p.q; clock = p.clock;
+    }
+    assert(['Final.', 'Final in overtime.'].includes(g.plays.at(-1).text));
+    if (!g.ot) assert.notEqual(g.score[0], g.score[1]);
+    const t = g.box.teams;
+    for (const x of t) assert.equal(x.yards, x.passYards + x.rushYards);
+    if (!g.ot) assert.equal(t[0].top + t[1].top, 3600);
+  }
+});
+test('play engine: playoff games never end tied; regular-season ties are rare', () => {
+  const { api } = load();
+  assert(engineGames(api, 400, { playoff: true }).every(g => g.score[0] !== g.score[1]));
+  const ties = engineGames(api, 2000).filter(g => g.score[0] === g.score[1]).length;
+  assert(ties < 40, ties + ' ties');
+});
+test('play engine: league-wide numbers look like pro football', () => {
+  const { api } = load();
+  const games = engineGames(api, 1500), teams = games.flatMap(g => g.box.teams);
+  const avg = k => teams.reduce((a, x) => a + x[k], 0) / teams.length;
+  const points = games.reduce((a, g) => a + g.score[0] + g.score[1], 0) / teams.length;
+  assert(points > 18 && points < 26, 'points ' + points);
+  assert(avg('yards') > 290 && avg('yards') < 380, 'yards ' + avg('yards'));
+  assert(avg('plays') > 56 && avg('plays') < 72, 'plays ' + avg('plays'));
+  const comp = teams.reduce((a, x) => a + x.comp, 0) / teams.reduce((a, x) => a + x.passAtt, 0);
+  assert(comp > .58 && comp < .7, 'completion ' + comp);
+  const home = games.filter(g => g.score[0] > g.score[1]).length / games.filter(g => g.score[0] !== g.score[1]).length;
+  assert(home > .5 && home < .62, 'home ' + home);
 });
 
 // ---- Save files ------------------------------------------------------------

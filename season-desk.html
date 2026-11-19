@@ -1785,7 +1785,14 @@ function leagueView(){
         return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+esc(stand)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td><td class="calls">'+calls+'</td></tr>';
       }).join('')+'</tbody></table></div>';
   }
-  return html+headlines(S);
+  return html+leagueTrades(S)+headlines(S);
+}
+function leagueTrades(S){
+  const list=[...(S.league.transactions??[])].reverse().slice(0,12);
+  if(!list.length)return '';
+  const side=(p,picks)=>[p&&p.pos+' '+p.name,...picks.map(pickLabel)].filter(Boolean).join(' and ');
+  return '<h2>Trades around the league</h2><ul>'+list.map(x=>'<li><strong>'+esc((x.season!==cur(S).number?'Season '+x.season+' · ':'')+shortLabel(x.week))+'</strong> '+
+    esc(byId.get(x.buyer).market+' get '+x.player.pos+' '+x.player.name+' ('+x.player.rating+') from '+byId.get(x.seller).market+' for '+side(x.out,x.picks))+'</li>').join('')+'</ul>';
 }
 function headlines(S){
   const items=[...S.league.news].reverse().slice(0,8);
@@ -2066,6 +2073,7 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
   if(S.offer){record(S,'quoteExpired',{seller:S.offer.seller});S.offer=null;}
   expireProposals(S);
   processTradeTalk(S,r);
+  processLeagueTrades(S,r);
   autoHire(S);
   processStadium(S,r);
   processLeague(S,r,regularIndex);
@@ -3358,6 +3366,7 @@ function rosterAlerts(S){
   if(back.length)alerts.push(back.length+' ready to come back from IR');
   const open=53-rosterCount(S,id);
   if(open>0)alerts.push(open+' open roster spot'+(open===1?'':'s'));
+  if(open<0&&now(S)<=REGULAR_WEEKS+4)alerts.push('Over the 53-man limit by '+(-open)+': release someone');
   return alerts;
 }
 
@@ -3442,7 +3451,12 @@ function executeTrade(S,T){
   S.rosters[T.seller]=sellerR.filter(p=>p!==target);S.rosters[T.buyer]=buyerR.filter(p=>p!==out);
   S.rosters[T.buyer].push(target);if(out)S.rosters[T.seller].push(out);
   for(const p of picks)p.owner=T.seller;
+  target.tradedSeason=cur(S).number;if(out)out.tradedSeason=cur(S).number;
   const pk=picks.map(p=>({origin:p.origin,round:p.round}));
+  S.league.transactions??=[];
+  S.league.transactions.push({season:cur(S).number,week:now(S),buyer:T.buyer,seller:T.seller,player:snap(target),out:out?snap(out):null,picks:pk});
+  if(S.league.transactions.length>80)S.league.transactions.shift();
+  trimAfterTrade(S,T.buyer);trimAfterTrade(S,T.seller);
   if(T.buyer===S.club)record(S,'trade',{seller:T.seller,incoming:snap(target),outgoing:out?snap(out):null,pick:pk[0]??null,picks:pk,by:T.by??'owner'});
   if(T.seller===S.club)record(S,'tradeAway',{buyer:T.buyer,outgoing:snap(target),incoming:out?snap(out):null,picks:pk,by:T.by??'owner'});
   if(target.rating>=80)news(S,teamName(T.buyer)+' acquire '+target.pos+' '+target.name+' from '+teamName(T.seller));
@@ -3545,6 +3559,72 @@ function processTradeTalk(S,r){
       if(authority(S)!=='all'&&read.ratio>=1.1&&!starterIds(S,S.club).has(T.targetId))executeTrade(S,{...T,by:'gm'});
       else proposeTrade(S,'offer',T);
     }
+  }
+}
+
+// ---- Trades between AI clubs -------------------------------------------------------
+// What a seller asks of a buyer: value and contract, the buyer GM's negotiating,
+// the rivalry premium, and the seller's own approach.
+function priceFor(S,buyer,seller,target,out){
+  const neg=S.staff.clubs[buyer].gm.ratings.negotiation,approach=approachFor(S,seller);
+  let ask=(playerValue(target)*(1.12-neg*.0016)+contractSurplus(S,target))*rivalFactor(buyer,seller);
+  if(approach==='rebuild'&&target.age>=29)ask*=.9;
+  if(approach==='win-now'&&starterIds(S,seller).has(target.id))ask*=1.15;
+  return Math.max(0,Math.ceil(ask-(out?playerValue(out)+contractSurplus(S,out):0)));
+}
+function aiTradeIdea(S,r,buyer){
+  const u=clubUnits(S,buyer),approach=approachFor(S,buyer),season=cur(S).number;
+  const ideas=[];
+  for(const [pos,,n] of positions){
+    if(['K','P','LS'].includes(pos))continue;
+    const weakest=u.chart[pos][n-1],floor=weakest?.rating??45;
+    for(const t of clubs){
+      if(t.id===buyer||t.id===S.club)continue;
+      for(const p of S.rosters[t.id]){
+        if(p.pos!==pos||p.out||p.ir||p.rating<floor+4||p.tradedSeason===season)continue;
+        if(approach==='rebuild'&&p.age>=29)continue;
+        ideas.push({p,seller:t.id,weakest,gain:p.rating-floor});
+      }
+    }
+  }
+  if(!ideas.length)return null;
+  ideas.sort((a,b)=>b.gain-a.gain);
+  const picks=picksOf(S,buyer).filter(k=>!(approach==='rebuild'&&k.round<=2));
+  for(const {p,seller,weakest} of ideas.slice(0,12).sort(()=>r()-.5)){
+    for(const out of [null,weakest&&weakest.pos===p.pos&&!weakest.out&&weakest.tradedSeason!==season?weakest:null]){
+      if(sellerShort(S,seller,p,out))continue;
+      if(capRoom(S,buyer)-capHit(p)+(out?capHit(out):0)<0||capRoom(S,seller)+capHit(p)-(out?capHit(out):0)<0)continue;
+      const need=priceFor(S,buyer,seller,p,out);
+      const pick=need===0?null:picks.find(k=>pickWorth(k)>=need&&pickWorth(k)<=need*1.3+5);
+      if(need>0&&!pick)continue;
+      return {buyer,seller,targetId:p.id,outId:out?.id??null,picks:pick?[{origin:pick.origin,round:pick.round}]:[],by:'club'};
+    }
+  }
+  return null;
+}
+// Weekly, inside the trade window: a couple of AI clubs shop for upgrades.
+function processLeagueTrades(S,r){
+  if(!S.staff?.clubs||!tradeWindow(S))return;
+  for(let n=0;n<2;n++){
+    if(r()>.45)continue;
+    const buyer=clubs.filter(t=>t.id!==S.club)[randInt(r,clubs.length-(S.club?1:0))].id;
+    const T=aiTradeIdea(S,r,buyer);
+    if(T)executeTrade(S,T);
+  }
+}
+// During the season a club that takes on an extra player cuts its weakest backup.
+function trimAfterTrade(S,id){
+  if(now(S)>REGULAR_WEEKS)return; // camp rosters run large in the offseason
+  while(rosterCount(S,id)>53&&rosterMovesByStaff(S,id)){
+    const cut=weakestBackup(S,id);if(!cut)break;
+    releasePlayer(S,id,cut.id);
+    if(id===S.club)record(S,'rosterMoves',{notes:['released '+cut.pos+' '+cut.name+' to make room after the trade']});
+  }
+  while(rosterCount(S,id)<53&&rosterMovesByStaff(S,id)){
+    const need=positions.map(([pos,,n])=>({pos,gap:n+1-S.rosters[id].filter(p=>p.pos===pos&&!p.ir&&!p.out).length})).sort((a,b)=>b.gap-a.gap)[0].pos;
+    const ps=practiceOf(S,id).filter(p=>p.pos===need).sort((a,b)=>b.rating-a.rating)[0]??practiceOf(S,id).sort((a,b)=>b.rating-a.rating)[0];
+    if(ps)promote(S,id,ps.id);else signMinimum(S,id,need,rngFor(S.rng));
+    if(id===S.club)record(S,'rosterMoves',{notes:[(ps?'promoted '+ps.pos+' '+ps.name:'signed a replacement')+' to fill the spot after the trade']});
   }
 }
 

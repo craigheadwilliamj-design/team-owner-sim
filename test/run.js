@@ -25,7 +25,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -1443,7 +1443,7 @@ test('the GM brings trade ideas, and approving one makes the trade', () => {
 test('with authority, the GM trades on his own; first-round picks and starters still need a call under the middle setting', () => {
   const { api, S } = owned(602);
   api.setDirective(S, 'tradeAuthority', 'none');
-  assert(advanceUntil(api, S, () => S.events.some(e => (e.type === 'trade' || e.type === 'tradeAway') && e.by === 'gm'), 40), 'the GM made a deal');
+  assert(advanceUntil(api, S, () => S.events.some(e => (e.type === 'trade' || e.type === 'tradeAway') && e.by === 'gm'), 80), 'the GM made a deal'); // AI clubs compete for targets now
   api.setDirective(S, 'tradeAuthority', 'big');
   const seller = S.rosters['club-17'][0];
   assert.equal(api.needsCall(S, { buyer: 'club-06', seller: 'club-17', targetId: seller.id, outId: null, picks: [{ origin: 'club-06', round: 1 }] }), true);
@@ -1513,6 +1513,27 @@ test('rivals pay a premium: division +20%, conference +8%, nothing across confer
   assert.match(fromRival.text, /division rival/);
   api.tradeQuote(S, 'club-07', p.id);
   assert.match(api.negotiationView(S), /division rival, so they want a premium/);
+});
+
+
+test('AI clubs trade with each other inside the window, on the same rules', () => {
+  const { api, S } = owned(702);
+  api.jumpTo(S, 51);
+  const tx = S.league.transactions.filter(x => x.season === 1);
+  assert(tx.length >= 5, `${tx.length} trades`);
+  assert(tx.every(x => x.week <= 10 || x.week >= 28), 'nothing between the deadline and the league year');
+  const players = tx.map(x => x.player.id);
+  assert.equal(new Set(players).size, players.length, 'nobody is flipped twice in a season');
+  for (const t of api.clubs) { assert.equal(api.rosterCount(S, t.id), 53); assert(api.capRoom(S, t.id) >= -0.01); }
+  const p = S.rosters['club-08'].sort((a, b) => b.rating - a.rating)[0];  // Pittsburgh, Charter North
+  assert(api.priceFor(S, 'club-07', 'club-08', p, null) > api.priceFor(S, 'club-21', 'club-08', p, null), 'division rivals pay more');
+});
+
+test('in-season trades keep both clubs at 53', () => {
+  const { api, S } = owned(703);
+  for (let i = 0; i < 9; i++) api.advance(S);
+  for (const t of api.clubs) assert.equal(api.rosterCount(S, t.id), 53, t.id);
+  assert(S.league.transactions.length > 0);
 });
 
 // ---- Save files ------------------------------------------------------------

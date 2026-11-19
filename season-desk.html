@@ -502,7 +502,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=12;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=13;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -1343,18 +1343,33 @@ function resolveOffer(S,accept){
 // stadium.knowledge  facts and who knows each one: the shared record that
 //                 leaks, press and owner memory will build on
 // ---------------------------------------------------------------------------
+// Cities without a club. Every open market is a broadcast market; those marked
+// relocation also have officials and stadium sites a club could move to.
 const OPEN_MARKETS=[
-  {id:'san-antonio',name:'San Antonio',region:'Texas',country:'US',metro:2.7,potential:72,lat:29.42,lon:-98.49},
-  {id:'columbus',name:'Columbus',region:'Ohio',country:'US',metro:2.2,potential:66,lat:39.96,lon:-83.0},
-  {id:'oklahoma-city',name:'Oklahoma City',region:'Oklahoma',country:'US',metro:1.5,potential:52,lat:35.47,lon:-97.52},
-  {id:'mexico-city',name:'Mexico City',region:'Mexico',country:'MX',metro:22,potential:95,lat:19.43,lon:-99.13},
-  {id:'toronto',name:'Toronto',region:'Ontario',country:'CA',metro:6.7,potential:90,lat:43.65,lon:-79.38},
-  {id:'portland',name:'Portland',region:'Oregon',country:'US',metro:2.5,potential:68,lat:45.52,lon:-122.68},
-  {id:'st-louis',name:'St. Louis',region:'Missouri',country:'US',metro:2.8,potential:64,lat:38.63,lon:-90.2},
-  {id:'san-diego',name:'San Diego',region:'California',country:'US',metro:3.3,potential:74,lat:32.72,lon:-117.16},
+  {id:'san-antonio',name:'San Antonio',region:'Texas',country:'US',metro:2.7,potential:72,lat:29.42,lon:-98.49,relocation:true},
+  {id:'columbus',name:'Columbus',region:'Ohio',country:'US',metro:2.2,potential:66,lat:39.96,lon:-83.0,relocation:true},
+  {id:'oklahoma-city',name:'Oklahoma City',region:'Oklahoma',country:'US',metro:1.5,potential:52,lat:35.47,lon:-97.52,relocation:true},
+  {id:'mexico-city',name:'Mexico City',region:'Mexico',country:'MX',metro:22,potential:95,lat:19.43,lon:-99.13,relocation:true,cityTitle:'Head of Government',regionTitle:'Tourism Secretary'},
+  {id:'toronto',name:'Toronto',region:'Ontario',country:'CA',metro:6.7,potential:90,lat:43.65,lon:-79.38,relocation:true},
+  {id:'portland',name:'Portland',region:'Oregon',country:'US',metro:2.5,potential:68,lat:45.52,lon:-122.68,relocation:true},
+  {id:'st-louis',name:'St. Louis',region:'Missouri',country:'US',metro:2.8,potential:64,lat:38.63,lon:-90.2,relocation:true},
+  {id:'san-diego',name:'San Diego',region:'California',country:'US',metro:3.3,potential:74,lat:32.72,lon:-117.16,relocation:true},
+  {id:'montreal',name:'Montreal',region:'Quebec',country:'CA',metro:4.3,potential:84,lat:45.50,lon:-73.57,relocation:true},
+  {id:'monterrey',name:'Monterrey',region:'Nuevo León',country:'MX',metro:5.3,potential:80,lat:25.69,lon:-100.32,relocation:true},
+  {id:'guadalajara',name:'Guadalajara',region:'Jalisco',country:'MX',metro:5.3,potential:76,lat:20.67,lon:-103.35,relocation:true},
+  {id:'vancouver',name:'Vancouver',region:'British Columbia',country:'CA',metro:2.7,potential:78,lat:49.28,lon:-123.12,relocation:true},
+  {id:'orlando',name:'Orlando',region:'Florida',country:'US',metro:2.8,potential:70,lat:28.54,lon:-81.38,relocation:true},
+  {id:'austin',name:'Austin',region:'Texas',country:'US',metro:2.5,potential:76,lat:30.27,lon:-97.74,relocation:true},
+  {id:'sacramento',name:'Sacramento',region:'California',country:'US',metro:2.4,potential:62,lat:38.58,lon:-121.49,relocation:true},
+  {id:'salt-lake-city',name:'Salt Lake City',region:'Utah',country:'US',metro:1.3,potential:58,lat:40.76,lon:-111.89},
+  {id:'hampton-roads',name:'Hampton Roads',region:'Virginia',country:'US',metro:1.8,potential:55,lat:36.85,lon:-76.29},
+  {id:'milwaukee',name:'Milwaukee',region:'Wisconsin',country:'US',metro:1.6,potential:50,lat:43.04,lon:-87.91},
+  {id:'calgary',name:'Calgary',region:'Alberta',country:'CA',metro:1.6,potential:60,lat:51.05,lon:-114.07},
+  {id:'raleigh',name:'Raleigh',region:'North Carolina',country:'US',metro:1.5,potential:56,lat:35.78,lon:-78.64},
 ];
-const CITY_TITLE={US:'Mayor',CA:'Mayor',MX:'Head of Government'};
-const REGION_TITLE={US:'Governor',CA:'Premier',MX:'Tourism Secretary'};
+const RELOCATION_MARKETS=OPEN_MARKETS.filter(m=>m.relocation);
+const CITY_TITLE={US:'Mayor',CA:'Mayor',MX:'Mayor'};
+const REGION_TITLE={US:'Governor',CA:'Premier',MX:'Governor'};
 const SITE_KINDS={
   downtown:{names:['Downtown rail yards','Riverfront district','Convention district','Warehouse district'],acres:[22,40],transit:'Strong',parking:[7,13],seats:[60000,68000],offer:[.85,1.05],infra:[50,120]},
   edge:{names:['North interchange site','Airport corridor site','East fairgrounds site','South beltway site'],acres:[90,170],transit:'Limited',parking:[18,30],seats:[68000,78000],offer:[1.0,1.3],infra:[90,200]},
@@ -1377,11 +1392,12 @@ const between=(r,[lo,hi])=>lo+r()*(hi-lo);
 const round5=n=>Math.round(n/5)*5;
 const personName=r=>givenNames[randInt(r,givenNames.length)]+' '+surnames[randInt(r,surnames.length)];
 
-function makeWorld(r,completed){
-  const markets=OPEN_MARKETS.map(m=>({...m,officials:[
-    {id:m.id+'-city',title:CITY_TITLE[m.country],name:personName(r),warmth:35+randInt(r,40)},
-    {id:m.id+'-region',title:REGION_TITLE[m.country],name:personName(r),warmth:30+randInt(r,40)}]}));
-  const sites=markets.flatMap(m=>Object.entries(SITE_KINDS).map(([kind,k])=>{
+// A relocation market's officials and its two competing site offers.
+function worldMarket(r,m,completed){
+  const market={...m,officials:[
+    {id:m.id+'-city',title:m.cityTitle??CITY_TITLE[m.country],name:personName(r),warmth:35+randInt(r,40)},
+    {id:m.id+'-region',title:m.regionTitle??REGION_TITLE[m.country],name:personName(r),warmth:30+randInt(r,40)}]};
+  const sites=Object.entries(SITE_KINDS).map(([kind,k])=>{
     const estimate=round5(between(r,k.infra));
     const issue=r()<.45?SITE_ISSUES[randInt(r,SITE_ISSUES.length)]:null;
     return {id:m.id+'-'+kind,marketId:m.id,kind,name:k.names[randInt(r,k.names.length)],
@@ -1392,7 +1408,12 @@ function makeWorld(r,completed){
       infraEstimate:estimate,infraTrue:round5(estimate*between(r,[.85,1.35])+(issue?issue.cost:0)),
       issue,infraKnown:false,issueKnown:false,
       expiresWeek:Math.min(REGULAR_WEEKS,completed+4+randInt(r,9)),status:'open'};
-  }));
+  });
+  return {market,sites};
+}
+function makeWorld(r,completed){
+  const built=RELOCATION_MARKETS.map(m=>worldMarket(r,m,completed));
+  const markets=built.map(b=>b.market),sites=built.flatMap(b=>b.sites);
   const leases=Object.fromEntries(clubs.map(t=>{
     const opened=1962+randInt(r,56),age=2026-opened;
     return [t.id,{stadium:t.market+' '+['Memorial Stadium','Municipal Stadium','Stadium','Field','Coliseum'][randInt(r,5)],
@@ -1928,9 +1949,12 @@ const HOME_COORDS={buffalo:[42.89,-78.88],miami:[25.76,-80.19],'new-england':[42
   'los-angeles':[34.05,-118.24],dallas:[32.78,-96.80],philadelphia:[39.95,-75.17],washington:[38.91,-77.04],'green-bay':[44.51,-88.01],
   chicago:[41.88,-87.63],detroit:[42.33,-83.05],minnesota:[44.98,-93.27],atlanta:[33.75,-84.39],carolina:[35.23,-80.84],
   'new-orleans':[29.95,-90.07],'tampa-bay':[27.95,-82.46],arizona:[33.45,-112.07],'san-francisco':[37.77,-122.42],seattle:[47.61,-122.33]};
-// Placeholder initial rights; the bible leaves the real list open.
+// Placeholder initial rights; the bible leaves the real list open. Markets
+// missing here start unclaimed.
 const INITIAL_RIGHTS={columbus:'club-07','san-antonio':'club-09','oklahoma-city':'club-17','mexico-city':'club-29',
-  toronto:'club-01',portland:'club-32','st-louis':'club-14','san-diego':'club-30'};
+  toronto:'club-01',portland:'club-32','st-louis':'club-14','san-diego':'club-30',
+  montreal:'club-03',orlando:'club-28',sacramento:'club-31','salt-lake-city':'club-13','hampton-roads':'club-20',
+  milwaukee:'club-23',raleigh:'club-26'};
 const OWNER_STYLES=['old guard','operator','maverick'];
 const possessive=n=>n+(n.endsWith('s')?'’':'’s');
 const VOTE_THRESHOLD=24;  // three quarters of 32 clubs
@@ -1951,11 +1975,20 @@ function nearestClubs(marketId,n){
 function makeLeague(r){
   const owners=Object.fromEntries(clubs.map(t=>[t.id,{name:personName(r),style:OWNER_STYLES[randInt(r,3)],
     tradition:round2(r()-.5),subsidy:round2(r()*1.2-.6),sponsorAffinity:round2(r()*.6-.3),relation:randInt(r,26)-5,memory:[]}]));
-  const markets=Object.fromEntries(OPEN_MARKETS.map(m=>{
-    const holder=INITIAL_RIGHTS[m.id],second=nearestClubs(m.id,3).find(id=>id!==holder);
-    return [m.id,{holder,fee:round1(1.5+randInt(r,6)*.5),signedSeason:0,fans:{[holder]:45+randInt(r,16),[second]:20+randInt(r,16)}}];
-  }));
+  const markets=Object.fromEntries(OPEN_MARKETS.map(m=>[m.id,leagueMarket(r,m)]));
   return {owners,markets,contest:null,meeting:null,news:[],promises:[],planeNoted:false};
+}
+// Broadcast control and fan preference for one open market. A held market's
+// holder has the most fans and the next-nearest club a following; in an
+// unclaimed market the two nearest clubs split a smaller following.
+function leagueMarket(r,m){
+  const holder=INITIAL_RIGHTS[m.id]??null;
+  if(!holder){
+    const [a,b]=nearestClubs(m.id,2);
+    return {holder:null,fee:0,signedSeason:0,fans:{[a]:14+randInt(r,12),[b]:10+randInt(r,12)}};
+  }
+  const second=nearestClubs(m.id,3).find(id=>id!==holder);
+  return {holder,fee:round1(1.5+randInt(r,6)*.5),signedSeason:0,fans:{[holder]:45+randInt(r,16),[second]:20+randInt(r,16)}};
 }
 const adValue=(marketId,share)=>round1(share/100*openMarket(marketId).metro*4);
 const holdsOpenMarket=(S,clubId)=>Object.values(S.league.markets).some(m=>m.holder===clubId);
@@ -1970,7 +2003,7 @@ function news(S,text){const s=cur(S);S.league.news.push({season:s.number,week:s.
 function ensureContest(S){
   if(!S.club||S.league.contest)return;
   const s=cur(S),home=clubCoords(S.club);
-  const target=OPEN_MARKETS.filter(m=>S.league.markets[m.id].holder!==S.club)
+  const target=OPEN_MARKETS.filter(m=>{const h=S.league.markets[m.id].holder;return h&&h!==S.club;})
     .sort((a,b)=>milesBetween(home,[a.lat,a.lon])-milesBetween(home,[b.lat,b.lon]))[0];
   const M=S.league.markets[target.id];
   if(!(S.club in M.fans))M.fans[S.club]=8;
@@ -2209,10 +2242,23 @@ function drawMap(canvas,S){
   for(const p of pts){
     ctx.beginPath();ctx.arc(p.x,p.y,p.open?4:3,0,Math.PI*2);ctx.fillStyle=p.open?bg:fg;ctx.fill();ctx.strokeStyle=p.open?fg:bg;ctx.lineWidth=1.5;ctx.stroke();
     if(p.id===contested||p.id===home){ctx.beginPath();ctx.setLineDash(p.id===contested?[3,3]:[]);ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.strokeStyle=fg;ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);}
-    if(p.open||p.id===home){
-      ctx.lineWidth=3;ctx.strokeStyle=bg;ctx.strokeText(p.label,p.x+8,p.y-9);ctx.fillStyle=fg;ctx.fillText(p.label,p.x+8,p.y-9);
-    }
   }
+  ctx.lineJoin='round';
+  for(const l of mapLabels(pts,t=>ctx.measureText(t).width,home)){
+    ctx.lineWidth=3;ctx.strokeStyle=bg;ctx.strokeText(l.p.label,l.x,l.y);ctx.fillStyle=fg;ctx.fillText(l.p.label,l.x,l.y);
+  }
+}
+// Places city labels: above right of the dot if there is room, else the first
+// of below right, above left or below left that overlaps no earlier label.
+function mapLabels(pts,measure,home=null){
+  const placed=[],hit=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+  for(const p of pts.filter(p=>p.open||p.id===home)){
+    const w=measure(p.label);
+    const spots=[[p.x+8,p.y-9],[p.x+8,p.y+10],[p.x-8-w,p.y-9],[p.x-8-w,p.y+10]].map(([x,y])=>({p,x,y,box:{x:x-2,y:y-7,w:w+4,h:14}}));
+    const fits=l=>l.box.x>=0&&l.box.x+l.box.w<=MAP.w&&l.box.y>=0&&l.box.y+l.box.h<=MAP.h&&!placed.some(q=>hit(l.box,q.box));
+    placed.push(spots.find(fits)??spots[0]);
+  }
+  return placed;
 }
 
 // ---------------------------------------------------------------------------
@@ -4432,7 +4478,23 @@ const migrations={
   9:migrateV9,
   10:migrateV10,
   11:migrateV11,
+  12:migrateV12,
 };
+// v12 -> v13: twelve more open markets. Each gets a broadcast record; the
+// relocation markets also get officials and site offers, open from now.
+function migrateV12(old){
+  const r=rngFor(old.rng),t=now(old),known=new Set(old.world.markets.map(m=>m.id));
+  for(const m of OPEN_MARKETS)if(!old.league.markets[m.id])old.league.markets[m.id]=leagueMarket(r,m);
+  for(const m of RELOCATION_MARKETS){
+    if(known.has(m.id))continue;
+    const {market,sites}=worldMarket(r,m,0);
+    for(const site of sites)site.expiresWeek=t+6+randInt(r,14);
+    old.world.markets.push(market);old.world.sites.push(...sites);
+  }
+  old.schemaVersion=13;
+  (old.migrations??=[]).push({from:12,to:13,at:new Date().toISOString()});
+  return old;
+}
 // v11 -> v12: prospect traits and histories, the college wire, the owner's scouting.
 function migrateV11(old){
   const r=rngFor(old.rng);

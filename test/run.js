@@ -19,7 +19,8 @@ const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
 const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
 const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
 const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
-const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
+const NAMES = ['OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -213,7 +214,7 @@ test('a club will not sell its only kicker for a pick, but will take a kicker ba
 
 test('ordinary depth trades still go through', () => {
   const { api } = load();
-  const S = api.newSave(43); S.club = 'club-06';
+  const S = api.newSave(44); S.club = 'club-06';
   const wr = S.rosters['club-32'].filter(p => p.pos === 'WR').sort((a, b) => a.rating - b.rating)[0];
   api.tradeQuote(S, 'club-32', wr.id);
   assert.equal(S.offer.status, 'opening');
@@ -232,8 +233,8 @@ test('v2 save upgrades with markets, sites and leases, and nothing else changes'
   const old = JSON.parse(v2Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.equal(S.world.markets.length, 8);
-  assert.equal(S.world.sites.length, 16);
+  assert.equal(S.world.markets.length, 15);
+  assert.equal(S.world.sites.length, 30);
   assert.equal(Object.keys(S.world.leases).length, 32);
   assert(S.world.sites.every(x => x.expiresWeek > old.seasons[0].completed), 'deadlines start after the current week');
   const without = (v, keys) => JSON.parse(JSON.stringify(v, (k, x) => (keys.includes(k) ? undefined : x)));
@@ -350,7 +351,9 @@ test('v3 save upgrades with finances, and stadium talks survive', () => {
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.stadium, old.stadium);
-  assert.deepEqual(S.world, old.world);
+  assert.deepEqual(S.world.markets.slice(0, old.world.markets.length), old.world.markets);
+  assert.deepEqual(S.world.sites.slice(0, old.world.sites.length), old.world.sites);
+  assert.deepEqual(S.world.leases, old.world.leases);
   assert.equal(S.finance.ledger.length, 0);
   assert(S.finance.projects.every(p => p.status === 'proposed'));
   api.playWeek(S);
@@ -626,7 +629,7 @@ test('owning out-of-market rights shows up in the books', () => {
 test('voronoi cells: one per market, each contains its own city, and they tile the map', () => {
   const { api } = load();
   const pts = api.mapPoints(api.save), cells = api.voronoiCells(pts.map(p => [p.x, p.y]), 760, 590);
-  assert.equal(cells.length, 38);
+  assert.equal(cells.length, 50);
   const area = poly => Math.abs(poly.reduce((a, [x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x * y2 - x2 * y; }, 0)) / 2;
   const inside = (poly, [px, py]) => poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) >= -1e-6; }) || poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) <= 1e-6; });
   pts.forEach((p, i) => assert(inside(cells[i], [p.x, p.y]), p.id));
@@ -1217,7 +1220,7 @@ test('firing pays out the contract and installs an interim; interviews talk abou
 test('the February review checks promises against what happened', () => {
   const { api, S } = owned(407);
   api.fireStaff(S, 'hc');
-  const c = S.staff.market.hc.find(x => true);
+  const c = S.staff.market.hc.find(x => x.style.lineup !== 'merit'); // merit coaches may call QB an open competition
   api.interview(S, 'hc', c.id); api.hire(S, 'hc', c.id);
   c.commitments.push({ type: 'needPosition', pos: 'LS' }); // a request the GM will not fill
   api.jumpTo(S, 23);
@@ -1560,6 +1563,52 @@ test('v11 save upgrades to v12: prospect traits, a wire, and the owner’s scout
   assert(S.draft.prospects.every(p => p.workEthic && p.durability && p.athletic && Array.isArray(p.notes) && ['JR', 'SR'].includes(p.year)));
   assert.deepEqual(S.draft.wire, []);
   assert(S.scouting.points >= 2 && S.scouting.assign === 'gm');
+});
+
+test('v12 save upgrades to v13: twelve more open markets, nothing else moves', () => {
+  const { api } = load();
+  const old = JSON.parse(v12Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(Object.keys(S.league.markets).length, 20);
+  for (const [id, M] of Object.entries(old.league.markets)) assert.deepEqual(S.league.markets[id], M, id);
+  assert.deepEqual(S.league.contest, old.league.contest);
+  assert.deepEqual(S.world.markets.slice(0, 8), old.world.markets);
+  assert.deepEqual(S.world.sites.slice(0, 16), old.world.sites);
+  const added = S.world.sites.slice(16);
+  assert.equal(added.length, 14, 'two sites in each of the seven new relocation markets');
+  assert(added.every(x => x.status === 'open' && x.expiresWeek > api.cur(S).tick));
+  assert(!S.world.markets.some(m => m.id === 'milwaukee'), 'TV-only markets have no stadium sites');
+  api.playWeek(S);
+});
+
+test('open markets: twenty broadcast markets, some unclaimed, the bigger ones open to relocation', () => {
+  const { api, S } = owned(901);
+  assert.equal(api.OPEN_MARKETS.length, 20);
+  assert.equal(S.world.markets.length, api.RELOCATION_MARKETS.length);
+  assert.equal(S.world.sites.length, 2 * api.RELOCATION_MARKETS.length);
+  const unclaimed = Object.entries(S.league.markets).filter(([, M]) => M.holder === null).map(([id]) => id).sort();
+  assert.deepEqual(unclaimed, ['austin', 'calgary', 'guadalajara', 'monterrey', 'vancouver']);
+  for (const id of unclaimed) assert.equal(Object.keys(S.league.markets[id].fans).length, 2, id + ': the two nearest clubs have a following');
+  assert.deepEqual(S.world.markets.find(m => m.id === 'monterrey').officials.map(o => o.title), ['Mayor', 'Governor']);
+  assert.deepEqual(S.world.markets.find(m => m.id === 'mexico-city').officials.map(o => o.title), ['Head of Government', 'Tourism Secretary']);
+  for (const t of api.clubs) {
+    const T = api.newSave(901); T.club = t.id; api.ensureContest(T);
+    assert(T.league.contest.holder, t.id + ' contests a held market');
+  }
+  const before = { ...S.league.markets.austin.fans };
+  for (let i = 0; i < 4; i++) api.playWeek(S);
+  assert(Object.keys(before).some(id => S.league.markets.austin.fans[id] > before[id]), 'fans grow in an unclaimed market');
+  assert.match(api.leagueView(), /Unclaimed/);
+});
+
+test('map labels do not overlap', () => {
+  const { api } = load();
+  const boxes = api.mapLabels(api.mapPoints(api.save), s => s.length * 6.5).map(l => l.box);
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const [a, b] = [boxes[i], boxes[j]];
+    assert(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y, 'labels ' + i + ' and ' + j + ' overlap');
+  }
 });
 
 test('the college wire runs all fall: varied items, prospect histories, moving stock', () => {

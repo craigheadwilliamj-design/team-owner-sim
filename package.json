@@ -5,7 +5,9 @@
   "scripts": {
     "test": "node test/run.js",
     "build": "node scripts/build.js",
-    "check": "node scripts/build.js --check"
+    "check": "node scripts/build.js --check",
+    "calibrate": "node scripts/calibrate.js",
+    "pbp": "node scripts/calibrate.js --pbp"
   },
   "engines": {
     "node": ">=20"

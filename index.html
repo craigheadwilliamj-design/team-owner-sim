@@ -111,11 +111,44 @@ footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
 #status{flex:1 1 260px;min-width:0}
 #importPrompt{flex-basis:100%;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;color:var(--fg);font-size:1rem}
 #importPrompt[hidden],[hidden]{display:none!important}
+.bug{display:flex;align-items:stretch;flex-wrap:wrap;gap:0;background:#11181a;color:#fff;border-radius:6px;overflow:hidden;font-variant-numeric:tabular-nums;max-width:720px;margin:0 0 10px;position:sticky;top:0;z-index:2}
+.bug .live{background:#c8302a;color:#fff;font-weight:700;letter-spacing:.1em;font-size:.75rem;padding:0 10px;display:flex;align-items:center;animation:livePulse 2s ease-in-out infinite}
+@keyframes livePulse{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.bug .live{animation:none}}
+.bugteam{display:flex;align-items:center;gap:8px;background:var(--team);border-bottom:4px solid var(--team2);padding:6px 10px;min-width:9.5rem;flex:1 1 9.5rem;text-shadow:0 1px 2px #000a}
+.bugteam .abbr{font-weight:700;letter-spacing:.06em}
+.bugteam b{font:700 1.6rem system-ui,sans-serif;margin-left:auto}
+.bugteam .to{display:flex;gap:3px}
+.bugteam .to i{width:9px;height:4px;background:#fff4;border-radius:1px}
+.bugteam .to i.on{background:#ffd45a}
+.bugteam .poss{color:#ffd45a;font-size:.8rem}
+.bugclock,.bugdown{display:flex;align-items:center;padding:6px 12px;font-weight:700;white-space:nowrap}
+.bugdown{background:#ffd45a;color:#11181a;min-width:5.5rem;justify-content:center}
+.bugdown:empty{display:none}
+svg.field{display:block;width:100%;height:auto;border-radius:6px;max-width:1240px}
+svg.field.vertical{height:min(64vh,900px);width:auto;max-width:100%;margin:0 auto}
+.field .yd10{stroke:#ffffffc0;stroke-width:3}.field .yd5{stroke:#ffffff60;stroke-width:2}
+.field .num{fill:#ffffffd0;font:700 30px system-ui,sans-serif;text-anchor:middle;dominant-baseline:middle}
+.field.vertical .num{font-size:26px}
+.field .ez{fill:#fff;font:700 52px system-ui,sans-serif;dominant-baseline:middle;text-anchor:middle;dominant-baseline:middle;letter-spacing:.2em;paint-order:stroke;stroke:#0006;stroke-width:4}
+.field .los{stroke:#3d8bff;stroke-width:5}.field .ltg{stroke:#ffd45a;stroke-width:5}
+.field .bar{fill:#fff;font:700 24px system-ui,sans-serif;dominant-baseline:middle;paint-order:stroke;stroke:#000b;stroke-width:5}
+.field .inc{fill:none;stroke-width:4}
+.field .ball{fill:#8a4b22;stroke:#fff;stroke-width:2}
+.nowplay{font-size:1.15rem;min-height:3.4em;margin:12px 0 0}
+.nowplay small{letter-spacing:.04em}
+.speeds{display:inline-flex;gap:4px}
+.speeds [aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+ol.pbp{list-style:none;padding:0;margin:0;max-height:28rem;overflow-y:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px}
+ol.pbp li{display:block;padding:8px 12px}
+ol.pbp li.note{color:var(--muted);font-style:italic}
+.boxscore{max-width:520px}
+#watchLive{font-weight:700;padding:14px 20px}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
 </style>
 </head>
 <body>
-<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><button id="advance"></button><div id="jump"></div></div></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -479,7 +512,6 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 const SCHEMA_VERSION=12;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
-const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
 const league=JSON.parse(document.querySelector('#seed').textContent);
@@ -659,30 +691,477 @@ function personnel(players,coach=null){
   return {chart,passing,rushing,coverage,pressure,runDefense,kick:q.K,punt:q.P,snap:q.LS,
     offense:Math.round(.62*passing+.38*rushing),defense:Math.round(.62*(.58*coverage+.42*pressure)+.38*runDefense)};
 }
-function drive(attack,defense,home,r){
-  const pass=r()<(attack.passRate??.62);
-  const matchup=pass?attack.passing-(.58*defense.coverage+.42*defense.pressure):attack.rushing-defense.runDefense;
-  const advantage=matchup*.009+(home?.014:0)+(75-defense.punt)*.0006;
-  const td=Math.min(.55,Math.max(.035,.225+advantage+((attack.gameday??65)-65)*.0004));
-  const kickSkill=.93*attack.kick+.07*attack.snap;
-  if(r()<td)return r()<Math.min(.995,.945+(kickSkill-75)*.002)?7:6;
-  if(r()<.23&&r()<Math.max(.5,Math.min(.97,.83+(kickSkill-75)*.009)))return 3;
-  return 0;
+
+// ---------------------------------------------------------------------------
+// Play-by-play engine
+//
+// playGame plays a whole game snap by snap: four 15-minute quarters, downs and
+// distance, field position, a running clock with timeouts and the two-minute
+// warning, kicks, penalties, turnovers and overtime. A game takes well under a
+// millisecond, so every game in the league can go through it. Pass {log:true}
+// to keep the plays for a broadcast; the result is the same either way.
+//
+// yl is the ball's distance from the offense's own goal line (0-100).
+// Sides are 0 (home) and 1 (away).
+// ---------------------------------------------------------------------------
+const QUARTER_SECONDS=900,OT_SECONDS=600;
+// The owner's most recent game, with its plays, for the broadcast. Kept in memory only:
+// it is gone after a reload or the next game, and never part of the save.
+let broadcastGame=null;
+function keepBroadcast(S,g,result,label){
+  broadcastGame={season:cur(S).number,label,home:g.home,away:g.away,neutral:!!g.neutral,score:[...result.score],ot:!!result.ot,plays:result.plays,box:result.box};
 }
-// Eleven drives each. A tie goes to overtime: each side is guaranteed one
-// possession, then the next score wins. Still level after OT_DRIVES is a tie.
-function simulate(home,away,r,neutral=false){
-  let h=0,a=0;
-  for(let d=0;d<11;d++)h+=drive(home,away,!neutral,r);
-  for(let d=0;d<11;d++)a+=drive(away,home,false,r);
-  if(h!==a)return {score:[h,a]};
-  const homeFirst=r()<.5,ot=[0,0];
-  for(let n=0;n<OT_DRIVES;n++){
-    const homeBall=(n%2===0)===homeFirst;
-    ot[homeBall?0:1]+=homeBall?drive(home,away,!neutral,r):drive(away,home,false,r);
-    if(n>=1&&ot[0]!==ot[1])break;
+const clampTo=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
+const gauss=r=>Math.sqrt(-2*Math.log(1-r()))*Math.cos(2*Math.PI*r());
+const expo=(r,mean)=>-Math.log(1-r())*mean;
+function pickWeighted(r,items,weights){
+  const live=items.map((x,i)=>[x,x?weights[i]:0]),total=live.reduce((a,[,w])=>a+w,0);
+  let roll=r()*total;
+  for(const [x,w] of live){if((roll-=w)<0)return x;}
+  return items.find(Boolean)??null;
+}
+// Talent scales unit-rating gaps; home field is worth a little on every snap.
+const TALENT=.7,HOME_EDGE=1.3;
+const homeEdge=(G,o)=>G.homeSide<0?0:G.homeSide===o?HOME_EDGE:-HOME_EDGE;
+const shortName=p=>p?p.name.replace(/^(\S)\S*\s+/,'$1. '):'the ball carrier';
+// Field-goal make probability: about 95% from 33 yards, 70% from 50, for an average kicker.
+const fgCenter=kick=>59+((kick??75)-75)*.25;
+const fgChance=(dist,kick)=>1/(1+Math.exp((dist-fgCenter(kick))/8.1));
+// Starters by slot. Slots stay fixed (null when nobody healthy is left) so that
+// WR1 always lines up across from CB1.
+function castFor(u){
+  const up=pos=>(u.chart?.[pos]??[]).filter(p=>!p.out),slots=(pos,n)=>Array.from({length:n},(_,i)=>up(pos)[i]??null);
+  const [cb,sf,lb]=[slots('CB',2),slots('S',2),slots('LB',3)];
+  return {QB:up('QB')[0]??null,RB:slots('RB',2),WR:slots('WR',3),TE:up('TE')[0]??null,K:up('K')[0]??null,P:up('P')[0]??null,
+    rush:[...slots('DE',2),...slots('DT',2),...lb],cover:[...cb,...sf,...lb]};
+}
+// Individual players. A unit's ratings set the level of every play; the players
+// involved move one play up or down from there. Each edge is measured against what
+// the team gets on average, so stars stand out without changing team totals.
+const STAR=.8;            // how much a featured player's rating gap counts, in unit-rating points
+const STAR_SPREAD=24;     // a player 24 points better than his group draws e times the looks
+const ratingOf=p=>p?.rating??EMERGENCY_RATING;
+// Pass targets for one offense against one defense: who sees the ball, and who covers him.
+function routeTree(off,def){
+  const slots=[[off.WR[0],27,def.cover[0]],[off.WR[1],22,def.cover[1]],[off.WR[2],15,def.cover[2]],[off.TE,19,def.cover[3]],[off.RB[0],17,def.cover[4]]].filter(([p])=>p);
+  if(!slots.length)return [];
+  const mean=slots.reduce((a,[p])=>a+p.rating,0)/slots.length,covMean=slots.reduce((a,[,,c])=>a+ratingOf(c),0)/slots.length;
+  // Quarterbacks look to their best receivers and away from the best cover men.
+  const raw=slots.map(([p,base,cov])=>base*Math.exp((p.rating-mean)/STAR_SPREAD-(ratingOf(cov)-covMean)/(2*STAR_SPREAD))),total=raw.reduce((a,b)=>a+b,0);
+  const rows=slots.map(([p,,cov],i)=>({p,cov,w:raw[i]/total}));
+  const et=rows.reduce((a,x)=>a+x.w*x.p.rating,0),ec=rows.reduce((a,x)=>a+x.w*ratingOf(x.cov),0);
+  for(const x of rows)x.edge=STAR*((x.p.rating-et)-(ratingOf(x.cov)-ec));
+  return rows;
+}
+// Ball carriers: the backs share by rating; the quarterback keeps a fixed tenth and no edge.
+function backfield(off){
+  const backs=off.RB.map((p,i)=>[p,[75,15][i]]).filter(([p])=>p);
+  const mean=backs.length?backs.reduce((a,[p])=>a+p.rating,0)/backs.length:0;
+  const raw=backs.map(([p,base])=>base*Math.exp((p.rating-mean)/STAR_SPREAD)),total=raw.reduce((a,b)=>a+b,0);
+  const share=off.QB?(backs.length?.9:1):1;
+  const rows=backs.map(([p],i)=>({p,w:share*raw[i]/total}));
+  const er=rows.reduce((a,x)=>a+x.w*x.p.rating,0)/(rows.reduce((a,x)=>a+x.w,0)||1);
+  for(const x of rows)x.edge=STAR*(x.p.rating-er);
+  if(off.QB)rows.push({p:off.QB,w:1-share,edge:0});
+  return rows;
+}
+// Pass rushers and cover men get credit in proportion to how good they are.
+const byRating=players=>players.map(p=>p?Math.exp((p.rating-70)/12):0);
+const teamLine=()=>({plays:0,yards:0,passYards:0,rushYards:0,passAtt:0,comp:0,sacked:0,ints:0,fumblesLost:0,firstDowns:0,
+  third:[0,0],fourth:[0,0],penalties:0,penaltyYards:0,top:0,drives:0,punts:0,fga:0,fgm:0});
+function playGame(home,away,r,{neutral=false,playoff=false,log=false}={}){
+  const cast=[castFor(home),castFor(away)];
+  const G={u:[home,away],cast,routes:[routeTree(cast[0],cast[1]),routeTree(cast[1],cast[0])],backs:[backfield(cast[0]),backfield(cast[1])],homeSide:neutral?-1:0,playoff,
+    q:1,clock:QUARTER_SECONDS,score:[0,0],to:[3,3],off:0,yl:25,down:1,toGo:10,kick:null,freeKick:false,
+    over:false,ot:false,otFirst:-1,otDone:[0,0],team:[teamLine(),teamLine()],players:{},log:log?[]:null};
+  const opening=r()<.5?0:1;
+  G.secondHalf=1-opening;G.kick=1-opening;
+  for(let n=0;n<800&&!G.over;n++){
+    if(G.clock<=0)endPeriod(G,r);
+    else if(G.kick!==null)kickoff(G,r);
+    else playSnap(G,r);
   }
-  return {score:[h+ot[0],a+ot[1]],ot:true};
+  if(G.log&&G.log.at(-1)?.text!=='Final.')G.log.push({...preSnap(G),kind:'note',text:'Final in overtime.',score:[...G.score]});
+  const out={score:G.score,box:{teams:G.team,players:G.players}};
+  if(G.ot)out.ot=true;
+  if(log)out.plays=G.log;
+  return out;
+}
+// Log entries: kind 'play' for scrimmage plays, 'kick' for kickoffs, 'try' for the try after a touchdown, 'note' for the rest.
+// y and res describe a scrimmage play for the drive chart: yards the ball moved and how it ended.
+function say(G,pre,text,kind='play',play=null){
+  if(!G.log)return;
+  G.log.push({...pre,kind,text,score:[...G.score],...play});
+  if(G.warnPending){G.warnPending=false;G.log.push({...preSnap(G),kind:'note',text:'Two-minute warning.',score:[...G.score]});}
+}
+const preSnap=G=>G.log&&{q:G.q,clock:G.clock,off:G.off,down:G.down,toGo:G.toGo,yl:G.yl,to:[...G.to]};
+function credit(G,side,p,key,n=1){
+  if(!p)return;
+  const s=G.players[p.id]??={id:p.id,name:p.name,pos:p.pos,side};
+  s[key]=(s[key]??0)+n;
+}
+// Seconds come off the clock. A running clock stops at the two-minute warning.
+function tick(G,s,stopAtWarning){
+  const before=G.clock;
+  G.clock=Math.max(0,before-s);
+  let warned=false;
+  if((G.q===2||G.q===4)&&before>120&&G.clock<120){warned=true;if(stopAtWarning)G.clock=120;}
+  G.team[G.off].top+=before-G.clock;
+  if(warned){if(stopAtWarning)say(G,preSnap(G),'Two-minute warning.','note');else{G.stopped=true;G.warnPending=true;}}
+  return warned;
+}
+function endPeriod(G,r){
+  const pre=preSnap(G);
+  if(G.q===1||G.q===3){G.q++;G.clock=QUARTER_SECONDS;say(G,pre,'End of the '+(G.q===2?'first':'third')+' quarter.','note');return;}
+  if(G.q===2){
+    G.q=3;G.clock=QUARTER_SECONDS;G.to=[3,3];G.kick=1-G.secondHalf;G.freeKick=false;
+    say(G,pre,'Halftime.','note');return;
+  }
+  if(G.score[0]!==G.score[1]||(G.q>=5&&!G.playoff)){G.over=true;say(G,pre,'Final.','note');return;}
+  G.q++;G.ot=true;G.clock=G.playoff?QUARTER_SECONDS:OT_SECONDS;
+  if(G.q===5){
+    G.otFirst=r()<.5?0:1;G.kick=1-G.otFirst;G.to=[2,2];G.freeKick=false;
+    say(G,pre,'End of regulation. Overtime.','note');
+  }else{G.to=[2,2];say(G,pre,'End of the overtime period. Another one.','note');}
+}
+// Overtime: each side gets a possession, then the next score wins.
+function otDecided(G){
+  if(G.q<5||G.score[0]===G.score[1])return false;
+  const leader=G.score[0]>G.score[1]?0:1,first=G.otFirst,second=1-first;
+  return G.otDone[first]>=1&&(G.otDone[second]>=1||leader===second);
+}
+function settle(G){if(otDecided(G))G.over=true;return G.over;}
+function endPossession(G){if(G.q>=5)G.otDone[G.off]++;}
+function startPossession(G,side,yl){
+  G.off=side;G.yl=clampTo(Math.round(yl),1,99);G.down=1;G.toGo=Math.min(10,100-G.yl);G.team[side].drives++;
+}
+function kickoff(G,r){
+  const k=G.kick,recv=1-k,K=G.cast[k].K,lead=G.score[k]-G.score[recv],pre=preSnap(G),free=G.freeKick;
+  G.kick=null;G.freeKick=false;G.off=recv;
+  if(!free&&G.q>=4&&lead<0&&(G.clock<=150||(lead<-8&&G.clock<=300))){
+    tick(G,4,false);
+    if(r()<.12){
+      startPossession(G,k,45);
+      say(G,pre,shortName(K)+' onside kick. Recovered by the kicking team!','kick');
+    }else{
+      startPossession(G,recv,55);
+      say(G,pre,shortName(K)+' onside kick, recovered by the receiving team.','kick');
+    }
+    return;
+  }
+  if(!free&&r()<clampTo(.6+((G.u[k].kick??70)-70)*.01,.4,.85)){
+    startPossession(G,recv,30);
+    say(G,pre,shortName(K)+' kicks off. Touchback.','kick');
+    return;
+  }
+  tick(G,6,false);
+  if(r()<.003){
+    G.off=recv;say(G,pre,'Kickoff returned all the way for a touchdown!','kick');
+    endPossession(G);touchdown(G,r,recv);return;
+  }
+  const yl=clampTo(Math.round((free?38:25)+gauss(r)*7),5,60);
+  startPossession(G,recv,yl);
+  say(G,pre,(free?'Free kick':shortName(K)+' kicks off')+', returned to the '+yl+'.','kick');
+}
+function touchdown(G,r,side){
+  G.score[side]+=6;
+  if(settle(G))return;
+  const lead=G.score[side]-G.score[1-side],pre=preSnap(G);
+  if(G.q>=4&&G.clock<=600&&[-2,-5,-10,1,5].includes(lead)){
+    const good=r()<.48;
+    if(good)G.score[side]+=2;
+    say(G,pre,'Two-point try '+(good?'is good.':'fails.'),'try');
+  }else{
+    const K=G.cast[side].K,good=r()<fgChance(33,G.u[side].kick);
+    credit(G,side,K,'xpa');
+    if(good){G.score[side]++;credit(G,side,K,'xpm');}
+    say(G,pre,'Extra point '+(good?'is good.':'is no good!'),'try');
+  }
+  if(settle(G))return;
+  G.kick=side;
+}
+function safety(G){
+  const o=G.off;
+  endPossession(G);
+  G.score[1-o]+=2;
+  if(settle(G))return;
+  G.kick=o;G.freeKick=true;
+}
+function changeOfPossession(G,yl){
+  const d=1-G.off;
+  endPossession(G);
+  if(settle(G))return;
+  startPossession(G,d,yl);
+}
+// The ball moves y yards on a scrimmage play the offense keeps.
+function advanceBall(G,r,y){
+  const T=G.team[G.off],wasThird=G.down===3,wasFourth=G.down===4;
+  G.yl+=y;T.yards+=y;
+  if(G.yl>=100){
+    if(wasThird)T.third[1]++;if(wasFourth)T.fourth[1]++;
+    return 'td';
+  }
+  if(G.yl<=0)return 'safety';
+  if(y>=G.toGo){
+    G.down=1;G.toGo=Math.min(10,100-G.yl);T.firstDowns++;
+    if(wasThird)T.third[1]++;if(wasFourth)T.fourth[1]++;
+    return 'first';
+  }
+  G.toGo-=y;G.down++;
+  if(G.down>4){changeOfPossession(G,100-G.yl);return 'downs';}
+  return 'down';
+}
+function situation(G){
+  const o=G.off,lead=G.score[o]-G.score[1-o],late=G.q===4,ot=G.q>=5;
+  const hurry=(G.q===2&&G.clock<=120)||((late||ot)&&(lead<-16?G.clock<=720:lead<-8?G.clock<=480:lead<0?G.clock<=300:lead===0&&G.clock<=120));
+  const milk=late&&lead>0&&G.clock<=360;
+  return {o,d:1-o,lead,late,ot,hurry,milk,toGoal:100-G.yl,fgDist:117-G.yl};
+}
+function kneelWins(G){
+  const snaps=5-G.down,stops=Math.min(G.to[1-G.off],snaps);
+  return G.clock<=snaps*42-stops*40;
+}
+function playSnap(G,r){
+  const s=situation(G),{o,lead,late,ot}=s,pre=preSnap(G),reach=fgCenter(G.u[o].kick)-2.5;
+  const T=G.team[o];
+  G.stopped=false;
+  if((late&&lead>0&&G.yl>2&&kneelWins(G))||(G.q===2&&G.clock<=35&&G.yl<35&&G.to[o]===0)){
+    T.plays++;T.rushYards--;credit(G,o,G.cast[o].QB,'carries');credit(G,o,G.cast[o].QB,'rushYards',-1);tick(G,2,false);
+    const res=advanceBall(G,r,-1);
+    say(G,pre,shortName(G.cast[o].QB)+' takes a knee.','play',{y:-1,res:'kneel'});
+    if(res!=='downs')afterPlay(G,r,s,false);
+    return;
+  }
+  const halfEnd=G.q===2||G.q===4||ot,lastPlay=halfEnd&&G.clock<=8;
+  if(lastPlay&&s.fgDist<=reach+6&&(G.q===2||(lead<=0&&lead>=-3)))return fieldGoal(G,r,pre);
+  // In overtime, once a field goal would win, take it.
+  if(ot&&lead===0&&G.otDone[G.otFirst]>=1&&G.down>=3&&s.fgDist<=reach-8)return fieldGoal(G,r,pre);
+  if(lastPlay&&(G.q===2?s.toGoal<=55:lead<0))return hailMary(G,r,pre);
+  if(G.down===4){
+    const choice=fourthDown(G,r,s,reach);
+    if(choice==='punt')return punt(G,r,pre);
+    if(choice==='fg')return fieldGoal(G,r,pre);
+    T.fourth[0]++;
+  }
+  if(G.down===3)T.third[0]++;
+  const pen=r();
+  if(pen<.085)return penalty(G,r,s,pre,pen);
+  let pr=(G.u[o].passRate??.62)-.08;
+  if(G.down===1)pr-=.1;else if(G.down===2&&G.toGo>=8)pr+=.08;else if(G.down>=3)pr=G.toGo>=5?.88:G.toGo<=2?.35:.65;
+  if(s.toGoal<=3)pr=Math.min(pr,.45);
+  if(G.q>=3&&lead<=-14)pr+=.1;
+  if(G.q>=3&&lead>=14)pr-=.1;
+  if(s.hurry)pr=Math.max(pr,.82);
+  if(s.milk)pr=Math.min(pr,.25);
+  if(r()<pr)passPlay(G,r,s,pre);else runPlay(G,r,s,pre);
+}
+function fourthDown(G,r,s,reach){
+  const {lead,late,ot,toGoal,fgDist}=s;
+  if(lead<0&&(late||ot)){
+    const oneScore=-lead<=3;
+    if(oneScore&&fgDist<=reach+3&&(ot||G.clock<=120))return 'fg';
+    if(ot||G.clock<=(oneScore?150:360))return 'go';
+  }
+  if(lead>0&&late&&G.clock<=300)return fgDist<=reach-2?'fg':'punt';
+  const bold=((G.u[s.o].gameday??65)-65)*.01;
+  let go=0;
+  if(G.toGo<=1)go=G.yl>=45?.55:G.yl>=30?.25:.05;
+  else if(G.toGo<=3&&G.yl>=55)go=.2;
+  if(toGoal<=2&&G.toGo<=2)go=.5;
+  if(go&&r()<go+bold)return 'go';
+  if(fgDist<=reach-1)return 'fg';
+  if(G.yl>=62&&G.toGo<=5)return 'go';
+  return 'punt';
+}
+// After a play the offense keeps: the clock runs unless something stopped it.
+function afterPlay(G,r,s,stopped,outOfBounds=false){
+  if(G.stopped){G.stopped=false;return;}
+  if(G.clock<=0||stopped||G.over)return;
+  const critical=(G.q===2&&G.clock<=120)||(G.q>=4&&G.clock<=300);
+  if(outOfBounds&&critical)return;
+  const o=G.off,d=1-o,lead=G.score[o]-G.score[d];
+  if(s.hurry&&G.to[o]>0&&G.clock<=(G.q===2?110:150)){G.to[o]--;say(G,preSnap(G),'Timeout.','note');return;}
+  if(G.q>=4&&lead>0&&G.to[d]>0&&G.clock<=240&&G.clock>20){G.to[d]--;say(G,preSnap(G),'Timeout, defense.','note');return;}
+  if(s.hurry&&G.to[o]===0&&G.clock<=40&&G.clock>10&&G.down<=3&&G.down>1){
+    tick(G,8,true);say(G,preSnap(G),shortName(G.cast[o].QB)+' spikes it to stop the clock.','play',{y:0,res:'inc'});G.down++;return;
+  }
+  let runoff=s.hurry?12+randInt(r,7):s.milk?36+randInt(r,5):28+randInt(r,13);
+  if(outOfBounds)runoff-=10;
+  tick(G,runoff,true);
+}
+function penalty(G,r,s,pre,roll){
+  const T=G.team[G.off];
+  T.penalties++;
+  tick(G,3,false);
+  let text,y;
+  if(roll<.03){
+    y=-Math.min(5,Math.floor(G.yl/2));G.yl+=y;G.toGo-=y;text='False start, '+-y+' yards.';
+  }else if(roll<.056){
+    y=-Math.min(10,Math.floor(G.yl/2));G.yl+=y;G.toGo-=y;text='Holding on the offense, '+-y+' yards. Replay the down.';
+  }else{
+    // Defensive penalties are charged to the offense's line for simplicity of the box score.
+    const big=roll>=.074;
+    y=Math.min(big?10+randInt(r,16):5,Math.floor((100-G.yl)/2));
+    T.penalties--;G.team[1-G.off].penalties++;G.team[1-G.off].penaltyYards+=y;
+    G.yl+=y;
+    if(big||y>=G.toGo){G.down=1;G.toGo=Math.min(10,100-G.yl);T.firstDowns++;}
+    else G.toGo-=y;
+    text=big?'Pass interference on the defense, '+y+' yards. Automatic first down.':'Offside on the defense, '+y+' yards.';
+    say(G,pre,text,'play',{y,res:'pen'});
+    afterPlay(G,r,s,false,true);
+    return;
+  }
+  T.penaltyYards+=-y;
+  if(G.down===3)T.third[0]--;
+  if(G.down===4)T.fourth[0]--;
+  say(G,pre,text,'play',{y,res:'pen'});
+  afterPlay(G,r,s,false,true);
+}
+function passPlay(G,r,s,pre){
+  const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o],qb=C.QB;
+  let m=(U.passing-(.58*D.coverage+.42*D.pressure))*TALENT+homeEdge(G,o);
+  T.plays++;
+  if(r()<clampTo(.058-m*.0016+(s.hurry?.01:0),.03,.13)){
+    const loss=3+randInt(r,7),who=pickWeighted(r,G.cast[d].rush,byRating(G.cast[d].rush).map((w,i)=>w*[3,3,2,2,1,1,1][i]));
+    T.sacked++;credit(G,o,qb,'sacked');credit(G,d,who,'sacks');
+    tick(G,5,false);
+    if(r()<.04){
+      T.fumblesLost++;credit(G,o,qb,'fumblesLost');
+      say(G,pre,shortName(qb)+' is sacked by '+shortName(who)+' and fumbles! The defense recovers.','play',{y:-loss,res:'fumble'});
+      G.yl-=loss;
+      if(G.yl<=0){endPossession(G);G.off=d;touchdown(G,r,d);return;}
+      changeOfPossession(G,100-G.yl);return;
+    }
+    const res=advanceBall(G,r,-loss);T.passYards-=loss;
+    if(res==='safety'){say(G,pre,shortName(qb)+' is sacked in the end zone by '+shortName(who)+'. Safety!','play',{y:-loss,res:'safety'});safety(G);return;}
+    say(G,pre,shortName(qb)+' is sacked by '+shortName(who)+' for a loss of '+loss+'.','play',{y:-loss,res:'sack'});
+    if(res!=='downs')afterPlay(G,r,s,false);
+    return;
+  }
+  T.passAtt++;credit(G,o,qb,'att');
+  const route=pickWeighted(r,G.routes[o],G.routes[o].map(x=>x.w)),target=route?.p??null,edge=route?.edge??0;
+  m+=edge;
+  credit(G,o,target,'targets');credit(G,d,route?.cov,'targeted');
+  if(r()<clampTo(.023-m*.0007,.008,.05)){
+    const air=8+randInt(r,15),spot=G.yl+air,who=route?.cov??pickWeighted(r,G.cast[d].cover,byRating(G.cast[d].cover));
+    T.ints++;credit(G,o,qb,'ints');credit(G,d,who,'defInts');
+    tick(G,6,false);
+    if(spot>=100){say(G,pre,shortName(qb)+' is intercepted in the end zone by '+shortName(who)+'. Touchback.','play',{y:100-G.yl,res:'int'});changeOfPossession(G,20);return;}
+    if(r()<.06){
+      say(G,pre,shortName(qb)+' is intercepted by '+shortName(who)+', who takes it all the way back!','play',{y:air,res:'int'});
+      endPossession(G);G.off=d;touchdown(G,r,d);return;
+    }
+    const back=Math.round(expo(r,9));
+    say(G,pre,shortName(qb)+' is intercepted by '+shortName(who)+(back?', returned '+back+(back===1?' yard.':' yards.'):'.'),'play',{y:air,res:'int'});
+    changeOfPossession(G,Math.min(99,100-spot+back));return;
+  }
+  const deep=s.toGoal;
+  if(r()<clampTo(.665+m*.007-(G.down>=3&&G.toGo>=10?.05:0),.45,.82)){
+    let y=Math.round(2.5+expo(r,6.5)+m*.06);
+    if(r()<clampTo(.06+edge*.003,.02,.12))y+=12+Math.round(expo(r,13));
+    // Routes are run past the sticks on third down, and often on second and long.
+    if(r()<(G.down>=3?.36:G.down===2&&G.toGo>=4?.42:G.down===1?.12:0))y=Math.max(y,G.toGo+randInt(r,4)-1);
+    y=Math.max(-2,Math.min(y,deep));
+    T.comp++;T.passYards+=y;credit(G,o,qb,'comp');credit(G,o,qb,'passYards',y);credit(G,o,target,'rec');credit(G,o,target,'recYards',y);credit(G,d,route?.cov,'yardsAllowed',y);
+    tick(G,5+randInt(r,4),false);
+    if(y<deep&&r()<.006){
+      T.fumblesLost++;credit(G,o,target,'fumblesLost');
+      G.yl+=y;T.yards+=y;
+      say(G,pre,shortName(qb)+' to '+shortName(target)+' for '+y+', but he fumbles! The defense recovers.','play',{y,res:'fumble'});
+      changeOfPossession(G,100-G.yl);return;
+    }
+    const res=advanceBall(G,r,y);
+    if(res==='td'){
+      credit(G,o,qb,'passTd');credit(G,o,target,'recTd');
+      say(G,pre,shortName(qb)+' finds '+shortName(target)+' for a '+y+'-yard touchdown!','play',{y,res:'td'});
+      endPossession(G);touchdown(G,r,o);return;
+    }
+    const oob=r()<(s.hurry?.35:.12);
+    say(G,pre,shortName(qb)+' complete to '+shortName(target)+' for '+y+(y===1?' yard':' yards')+(res==='first'?', first down':'')+(oob?', out of bounds':'')+'.','play',{y,res:'gain'});
+    if(res!=='downs')afterPlay(G,r,s,false,oob);
+    return;
+  }
+  tick(G,5,false);
+  const res=advanceBall(G,r,0);
+  say(G,pre,shortName(qb)+' pass incomplete'+(target?', intended for '+shortName(target):'')+'.','play',{y:0,res:'inc'});
+  if(res==='downs')return;
+}
+function runPlay(G,r,s,pre){
+  const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o];
+  const run=pickWeighted(r,G.backs[o],G.backs[o].map(x=>x.w)),carrier=run?.p??null,edge=run?.edge??0;
+  const m=(U.rushing-D.runDefense)*TALENT+homeEdge(G,o)+edge;
+  T.plays++;
+  let y=Math.round(3.35+m*.06+gauss(r)*2.6);
+  if(r()<clampTo(.07+edge*.003,.02,.14))y+=6+Math.round(expo(r,11));
+  y=Math.min(y,s.toGoal);
+  credit(G,o,carrier,'carries');credit(G,o,carrier,'rushYards',y);T.rushYards+=y;
+  tick(G,5+randInt(r,4),false);
+  if(y<s.toGoal&&r()<.009){
+    T.fumblesLost++;credit(G,o,carrier,'fumblesLost');
+    G.yl+=y;T.yards+=y;
+    say(G,pre,shortName(carrier)+' runs for '+y+' and fumbles! The defense recovers.','play',{y,res:'fumble'});
+    if(G.yl<=0){endPossession(G);G.off=d;touchdown(G,r,d);return;}
+    changeOfPossession(G,100-G.yl);return;
+  }
+  const res=advanceBall(G,r,y);
+  if(res==='td'){
+    credit(G,o,carrier,'rushTd');
+    say(G,pre,shortName(carrier)+(y===1?' plunges in from the 1':' runs it in from '+y+' yards out')+'. Touchdown!','play',{y,res:'td'});
+    endPossession(G);touchdown(G,r,o);return;
+  }
+  if(res==='safety'){say(G,pre,shortName(carrier)+' is dropped in the end zone. Safety!','play',{y,res:'safety'});safety(G);return;}
+  const oob=r()<(s.hurry?.2:.05);
+  say(G,pre,shortName(carrier)+(y>0?' runs for '+y+(y===1?' yard':' yards'):y===0?' is stopped for no gain':' is stopped for a loss of '+-y)+(res==='first'?', first down':'')+(oob?', out of bounds':'')+'.','play',{y,res:'gain'});
+  if(res!=='downs')afterPlay(G,r,s,false,oob);
+}
+function hailMary(G,r,pre){
+  const o=G.off,C=G.cast[o],T=G.team[o],to=100-G.yl;
+  T.plays++;T.passAtt++;credit(G,o,C.QB,'att');tick(G,8,false);
+  const roll=r(),target=pickWeighted(r,C.WR,[3,2,2]);
+  if(to<=55&&roll<.07){
+    T.comp++;T.passYards+=to;credit(G,o,C.QB,'comp');credit(G,o,C.QB,'passYards',to);credit(G,o,C.QB,'passTd');
+    credit(G,o,target,'rec');credit(G,o,target,'recYards',to);credit(G,o,target,'recTd');
+    G.yl=100;T.yards+=to;
+    say(G,pre,'Hail Mary from '+shortName(C.QB)+'... caught by '+shortName(target)+' in the end zone! Touchdown!','play',{y:to,res:'td'});
+    endPossession(G);touchdown(G,r,o);return;
+  }
+  if(roll<.25){
+    T.ints++;credit(G,o,C.QB,'ints');
+    say(G,pre,'Hail Mary from '+shortName(C.QB)+' is intercepted.','play',{y:Math.min(to,50),res:'int'});
+    changeOfPossession(G,20);return;
+  }
+  const res=advanceBall(G,r,0);
+  say(G,pre,'Hail Mary from '+shortName(C.QB)+' falls incomplete.','play',{y:0,res:'inc'});
+  if(res==='downs')return;
+}
+function fieldGoal(G,r,pre){
+  const o=G.off,T=G.team[o],K=G.cast[o].K,dist=117-G.yl,good=r()<fgChance(dist,G.u[o].kick);
+  T.fga++;credit(G,o,K,'fga');
+  tick(G,5,false);
+  if(good){
+    T.fgm++;credit(G,o,K,'fgm');
+    say(G,pre,shortName(K)+' '+dist+'-yard field goal is good.','play',{y:100-G.yl,res:'fg'});
+    endPossession(G);G.score[o]+=3;
+    if(settle(G))return;
+    G.kick=o;return;
+  }
+  say(G,pre,shortName(K)+' '+dist+'-yard field goal is no good.','play',{y:100-G.yl,res:'miss'});
+  changeOfPossession(G,Math.max(20,107-G.yl));
+}
+function punt(G,r,pre){
+  const o=G.off,P=G.cast[o].P,T=G.team[o];
+  T.punts++;
+  const gross=Math.round(44+((G.u[o].punt??70)-75)*.15+gauss(r)*6),land=G.yl+gross;
+  credit(G,o,P,'punts');credit(G,o,P,'puntYards',gross);
+  tick(G,7,false);
+  if(land>=100){say(G,pre,shortName(P)+' punts into the end zone. Touchback.','play',{y:100-G.yl,res:'punt'});changeOfPossession(G,20);return;}
+  if(r()<.004){
+    say(G,pre,shortName(P)+' punts '+gross+' yards, and it is returned for a touchdown!','play',{y:gross,res:'punt'});
+    endPossession(G);G.off=1-o;touchdown(G,r,1-o);return;
+  }
+  const fair=land>=88||r()<.45,back=fair?0:Math.max(0,Math.round(8+gauss(r)*6));
+  say(G,pre,shortName(P)+' punts '+gross+' yards'+(fair?', fair catch.':back?', returned '+back+'.':', no return.'),'play',{y:gross,res:'punt'});
+  changeOfPossession(G,100-land+back);
 }
 
 // ---------------------------------------------------------------------------
@@ -723,9 +1202,10 @@ function playWeek(S){
   const units=Object.fromEntries(clubs.map(t=>[t.id,clubUnits(S,t.id)]));
   const games=s.weeks[s.completed];
   for(const g of games){
-    const result=simulate(units[g.home],units[g.away],r);
+    const mine=g.home===S.club||g.away===S.club,result=playGame(units[g.home],units[g.away],r,{log:mine});
     g.score=result.score;
     if(result.ot)g.ot=true;
+    if(mine)keepBroadcast(S,g,result,'Week '+(s.completed+1));
   }
   s.completed++;
   s.tick=s.completed;
@@ -1872,15 +2352,10 @@ function postseasonGames(P){
   const [a,b]=winners(2);return [{...game(a,b),neutral:true}];
 }
 // Playoff games cannot end tied: overtime continues until someone scores more.
-function simulatePlayoff(home,away,neutral,r){
-  const result=simulate(home,away,r,neutral);
-  let [h,a]=result.score,ot=!!result.ot;
-  for(let n=0;h===a&&n<40;n++){
-    ot=true;
-    if(n%2===0)h+=drive(home,away,!neutral,r);else a+=drive(away,home,false,r);
-  }
-  if(h===a)h+=3;
-  return {score:[h,a],ot};
+function simulatePlayoff(home,away,neutral,r,log=false){
+  const result=playGame(home,away,r,{neutral,playoff:true,log});
+  if(result.score[0]===result.score[1])result.score[0]+=3; // only if a game somehow outlasts the snap limit
+  return result;
 }
 function playPostseasonRound(S,r){
   const s=cur(S);
@@ -1889,8 +2364,9 @@ function playPostseasonRound(S,r){
   const units=Object.fromEntries(clubs.map(t=>[t.id,clubUnits(S,t.id)]));
   const games=postseasonGames(P);
   for(const g of games){
-    const result=simulatePlayoff(units[g.home],units[g.away],!!g.neutral,r);
+    const mine=g.home===S.club||g.away===S.club,result=simulatePlayoff(units[g.home],units[g.away],!!g.neutral,r,mine);
     g.score=result.score;if(result.ot)g.ot=true;
+    if(mine)keepBroadcast(S,g,result,ROUND_NAMES[round]);
   }
   P.rounds.push({name:ROUND_NAMES[round],games});
   creditRecords(S,games);
@@ -4571,7 +5047,7 @@ function ownershipDesk(){
   const playoffGames=(s.postseason?.rounds??[]).flatMap(round=>round.games.filter(g=>g.home===id||g.away===id).map(g=>({g,name:round.name})));
   const lastPlayoff=playoffGames.at(-1);
   const last=lastPlayoff?esc(lastPlayoff.name+' · '+(lastPlayoff.g.home===id||lastPlayoff.g.neutral?'vs. ':'at ')+teamName(lastPlayoff.g.home===id?lastPlayoff.g.away:lastPlayoff.g.home)+' · '+resultText(lastPlayoff.g,id)):fixture(games.filter(x=>x.g.score).pop());
-  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+'</div>'+
+  const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+(broadcastGame?.season===s.number?' <button id="watchLast">Watch the broadcast</button>':'')+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
     depthCard(S)+staffCard(S)+comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
   const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
@@ -4632,6 +5108,163 @@ function rosterView(){
         section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>';
 }
+// ---------------------------------------------------------------------------
+// The broadcast: the owner's game, presented live from its play log.
+// The result is already decided when the week is played; the broadcast only
+// reveals it, play by play, on the game clock.
+// ---------------------------------------------------------------------------
+const bc={i:0,playing:false,speed:1,timer:null,showLog:false};
+const BC_PACE={play:1700,kick:1200,try:1100,note:900};
+const bcClock=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+const bcQuarter=q=>q<=4?['1st','2nd','3rd','4th'][q-1]:q===5?'OT':(q-4)+'OT';
+const bcDown=p=>['1st','2nd','3rd','4th'][p.down-1]+' & '+(p.yl+p.toGo>=100?'Goal':p.toGo);
+const bcTeam=(B,side)=>byId.get(side===0?B.home:B.away);
+function bcSpot(B,p){
+  if(p.yl===50)return '50';
+  return p.yl<50?bcTeam(B,p.off).abbr+' '+p.yl:bcTeam(B,1-p.off).abbr+' '+(100-p.yl);
+}
+// Can the next advance put the owner's club on the field?
+function canWatch(S){
+  const s=cur(S),id=S.club;
+  if(!id)return false;
+  if(s.completed<s.weeks.length)return s.weeks[s.completed].some(g=>g.home===id||g.away===id);
+  if(s.tick>=22)return false;
+  const P=s.postseason,seeds=P?.seeds??seedsFor(S),seed=seedIndex(seeds,id);
+  if(seed<0||(P&&!playoffStatus(S,id)?.alive))return false;
+  return !(seed===0&&!(P?.rounds.length));
+}
+function startBroadcast(){bc.i=0;bc.playing=true;tab='Game';}
+function stopBroadcastTimer(){if(bc.timer){clearTimeout(bc.timer);bc.timer=null;}}
+function scheduleBroadcast(){
+  stopBroadcastTimer();
+  const B=broadcastGame;
+  if(!B||!bc.playing||tab!=='Game')return;
+  if(bc.i>=B.plays.length){bc.playing=false;drawBroadcast();return;}
+  const p=B.plays[bc.i-1];
+  let wait=bc.i===0?600:BC_PACE[p.kind]??1200;
+  if(p&&(p.res==='td'||p.res==='fg'))wait+=1400;
+  bc.timer=setTimeout(()=>{bc.timer=null;bc.i++;drawBroadcast();scheduleBroadcast();},wait/bc.speed);
+}
+// The drive in progress: its scrimmage plays up to what has been shown.
+function bcDrive(plays,i){
+  let start=0,off=null;
+  for(let k=0;k<i;k++){
+    const p=plays[k];
+    if(p.kind==='kick'){start=k+1;off=null;}
+    else if(p.kind==='play'){if(off!==null&&p.off!==off)start=k;off=p.off;}
+  }
+  return plays.slice(start,i).filter(p=>p.kind==='play');
+}
+const BC_LABEL={td:'TD',inc:'INC',int:'INT',fumble:'FUM',pen:'PEN',punt:'PUNT',fg:'FG',miss:'NO GOOD',sack:'SACK',safety:'SAFETY',kneel:'KNEEL'};
+// Horizontal on wide screens; vertical (home end zone at the bottom) on phones.
+// "along" runs goal line to goal line (0-1200 with end zones), "across" sideline to sideline.
+function bcField(B,shown,next){
+  const vertical=typeof window.matchMedia==='function'&&window.matchMedia('(max-width: 640px)').matches;
+  const L=1200,D=540,W=vertical?D:L,H=vertical?L:D;
+  const pt=(a,c)=>vertical?[c,L-a]:[a,c];
+  const box=(a0,a1,c0,c1,attrs,inner='')=>{const [x0,y0]=pt(a0,c0),[x1,y1]=pt(a1,c1);
+    return '<rect x="'+Math.min(x0,x1)+'" y="'+Math.min(y0,y1)+'" width="'+Math.abs(x1-x0)+'" height="'+Math.abs(y1-y0)+'" '+attrs+'>'+inner+'</rect>';};
+  const cross=(a,cls)=>{const [x0,y0]=pt(a,0),[x1,y1]=pt(a,D);return '<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y1+'" class="'+cls+'"/>';};
+  const text=(a,c,cls,t,extra='')=>{const [x,y]=pt(a,c);return '<text x="'+x+'" y="'+y+'" class="'+cls+'" '+extra+'>'+esc(t)+'</text>';};
+  const A=(off,yl)=>100+10*(off===0?yl:100-yl);
+  const home=bcTeam(B,0),away=bcTeam(B,1),drive=bcDrive(B.plays,shown);
+  let svg='<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#2f6b3c"/>';
+  for(let k=1;k<10;k+=2)svg+=box(100+k*100,200+k*100,0,D,'fill="#367644"');
+  svg+=box(0,100,0,D,'fill="'+esc(home.primary)+'"')+box(1100,1200,0,D,'fill="'+esc(away.primary)+'"');
+  if(vertical)svg+=text(50,D/2,'ez',home.abbr)+text(1150,D/2,'ez',away.abbr);
+  else{
+    const ez=(t,a,rot)=>{const [x,y]=pt(a,D/2);return '<text x="'+x+'" y="'+y+'" transform="rotate('+rot+' '+x+' '+y+')" class="ez">'+esc(t.abbr)+'</text>';};
+    svg+=ez(home,50,-90)+ez(away,1150,90);
+  }
+  for(let yd=0;yd<=100;yd+=5)svg+=cross(100+yd*10,yd%10?'yd5':'yd10');
+  for(let yd=10;yd<=90;yd+=10){const n=String(yd>50?100-yd:yd);svg+=text(100+yd*10,vertical?34:40,'num',n)+text(100+yd*10,vertical?D-34:D-16,'num',n);}
+  if(next?.kind==='play'){
+    svg+=cross(A(next.off,next.yl),'los');
+    if(next.yl+next.toGo<100)svg+=cross(A(next.off,next.yl+next.toGo),'ltg');
+  }
+  const top=vertical?70:60,rows=Math.max(9,drive.length),rh=(D-top-100)/rows,bh=Math.min(30,rh*.7);
+  const motion=!(typeof window.matchMedia==='function'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  drive.forEach((p,k)=>{
+    const t=bcTeam(B,p.off),dir=p.off===0?1:-1,a=A(p.off,p.yl),b=A(p.off,clampTo(p.yl+(p.y??0),0,100));
+    const c=top+k*rh+(rh-bh)/2,len=Math.max(Math.abs(b-a),4),lo=Math.min(a,b);
+    const fill=p.res==='pen'?'#e8c547':['sack','int','fumble','safety','miss'].includes(p.res)?'#c8463c':['punt','fg'].includes(p.res)?'#d9ddd6':esc(t.primary);
+    const stroke=['punt','fg','pen','sack','int','fumble','safety','miss'].includes(p.res)?'#1a1a1a':esc(t.secondary);
+    let grow='';
+    if(k===drive.length-1&&motion){
+      // Grow from the line of scrimmage toward where the play ended.
+      const [sx,sy]=pt(a,c),[ex,ey]=pt(lo,c),[fx,fy]=pt(lo+len,c);
+      grow=vertical?'<animate attributeName="y" from="'+sy+'" to="'+Math.min(ey,fy)+'" dur=".45s" fill="freeze"/><animate attributeName="height" from="0" to="'+len+'" dur=".45s" fill="freeze"/>'
+        :'<animate attributeName="x" from="'+sx+'" to="'+ex+'" dur=".45s" fill="freeze"/><animate attributeName="width" from="0" to="'+len+'" dur=".45s" fill="freeze"/>';
+    }
+    if(p.res==='inc'){const [x,y]=pt(a,c+bh/2);svg+='<circle cx="'+x+'" cy="'+y+'" r="'+bh/3+'" class="inc" stroke="'+esc(t.primary)+'"/>';}
+    else svg+=box(lo,lo+len,c,c+bh,'rx="4" fill="'+fill+'" stroke="'+stroke+'" stroke-width="3"',grow);
+    const label=BC_LABEL[p.res]??((p.y>0?'+':'')+p.y);
+    const tip=p.res==='inc'?a:b,size=vertical?22:label.length*15+12,room=dir>0?1180-tip:tip-20,inside=room<size;
+    if(vertical)svg+=text(inside?tip-dir*16:tip+dir*18,c+bh/2,'bar',label,'text-anchor="middle"');
+    else svg+=text(inside?tip-dir*8:tip+dir*10,c+bh/2,'bar',label,'text-anchor="'+((dir>0)!==inside?'start':'end')+'"');
+  });
+  if(next?.kind==='play'){const [x,y]=pt(A(next.off,next.yl),D-(vertical?72:66));svg+='<ellipse cx="'+x+'" cy="'+y+'" rx="'+(vertical?8:14)+'" ry="'+(vertical?14:8)+'" class="ball"/>';}
+  const last=B.plays[shown-1],at=next?.kind==='play'?bcTeam(B,next.off).abbr+' ball at '+bcSpot(B,next):'';
+  const label='Field. '+home.abbr+' defends the '+(vertical?'bottom':'left')+' end zone. '+(at||(last?last.text:''));
+  return '<svg viewBox="0 0 '+W+' '+H+'" class="field'+(vertical?' vertical':'')+'" role="img" aria-label="'+esc(label)+'">'+svg+'</svg>';
+}
+function bcBug(B,shown,next){
+  const last=B.plays[shown-1],score=last?last.score:[0,0],done=shown>=B.plays.length;
+  const state=next??last;
+  let clock;
+  if(done)clock='Final'+(B.ot?' · OT':'');
+  else if(last?.text==='Halftime.')clock='Halftime';
+  else if(last?.kind==='note'&&last.text.startsWith('End of the'))clock='End '+bcQuarter(last.q);
+  else clock=bcQuarter(state?.q??1)+' · '+bcClock(state?.clock??QUARTER_SECONDS);
+  const side=i=>{
+    const t=bcTeam(B,i),poss=!done&&next?.kind==='play'&&next.off===i,to=state?.to?.[i]??3;
+    return '<div class="bugteam" style="--team:'+esc(t.primary)+';--team2:'+esc(t.secondary)+'"><span class="abbr">'+esc(t.abbr)+'</span>'+
+      '<span class="to" aria-label="'+to+' timeouts left">'+[0,1,2].map(n=>'<i'+(n<to?' class="on"':'')+'></i>').join('')+'</span>'+
+      '<b>'+score[i]+'</b><span class="poss"'+(poss?'':' hidden')+' aria-label="Has the ball">◀</span></div>';
+  };
+  const down=!done&&next?.kind==='play'?esc(bcDown(next)):'';
+  return '<div class="bug" role="status">'+(done?'':'<span class="live">LIVE</span>')+side(1)+side(0)+'<div class="bugclock">'+esc(clock)+'</div><div class="bugdown">'+down+'</div></div>';
+}
+function bcLine(B,p){
+  const head=p.kind==='play'?bcTeam(B,p.off).abbr+' · '+bcDown(p)+' at '+bcSpot(B,p):'';
+  return '<small>'+esc(bcQuarter(p.q)+' '+bcClock(p.clock)+(head?' · '+head:''))+'</small>'+esc(p.text);
+}
+function bcBox(B){
+  const T=B.box.teams,teams=[1,0].map(i=>bcTeam(B,i));
+  const row=(label,f)=>'<tr><th>'+label+'</th>'+[1,0].map(i=>'<td>'+esc(String(f(T[i])))+'</td>').join('')+'</tr>';
+  const leaders=i=>{
+    const ps=Object.values(B.box.players).filter(p=>p.side===i),top=k=>ps.filter(p=>p[k]).sort((a,b)=>b[k]-a[k])[0];
+    const q=top('att'),rb=top('rushYards'),wr=top('recYards'),def=ps.filter(p=>p.sacks||p.defInts).sort((a,b)=>(b.sacks??0)+2*(b.defInts??0)-(a.sacks??0)-2*(a.defInts??0))[0];
+    return [q&&q.name+' '+(q.comp??0)+'/'+q.att+', '+(q.passYards??0)+' yds, '+(q.passTd??0)+' TD, '+(q.ints??0)+' INT',
+      rb&&rb.name+' '+rb.carries+' car, '+rb.rushYards+' yds'+(rb.rushTd?', '+rb.rushTd+' TD':''),
+      wr&&wr.name+' '+wr.rec+' rec, '+wr.recYards+' yds'+(wr.recTd?', '+wr.recTd+' TD':''),
+      def&&def.name+' '+[def.sacks&&def.sacks+(def.sacks===1?' sack':' sacks'),def.defInts&&def.defInts+' INT'].filter(Boolean).join(', ')].filter(Boolean);
+  };
+  return '<h2>Box score</h2><div class="wide"><table class="boxscore"><thead><tr><th></th>'+teams.map(t=>'<th>'+esc(t.abbr)+'</th>').join('')+'</tr></thead><tbody>'+
+    row('Total yards',x=>x.yards)+row('Passing',x=>x.passYards)+row('Rushing',x=>x.rushYards)+row('Completions',x=>x.comp+'/'+x.passAtt)+
+    row('First downs',x=>x.firstDowns)+row('Third down',x=>x.third[1]+'/'+x.third[0])+row('Sacks allowed',x=>x.sacked)+row('Turnovers',x=>x.ints+x.fumblesLost)+
+    row('Penalties',x=>x.penalties+'–'+x.penaltyYards)+row('Possession',x=>bcClock(x.top))+'</tbody></table></div>'+
+    '<div class="tables">'+[1,0].map(i=>'<section><h3>'+esc(teamName(i===0?B.home:B.away))+'</h3><ul>'+leaders(i).map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul></section>').join('')+'</div>';
+}
+function broadcastInner(){
+  const B=broadcastGame;
+  const shown=Math.min(bc.i,B.plays.length),next=B.plays[shown],last=B.plays[shown-1],done=shown>=B.plays.length;
+  const speeds=[1,2,4].map(n=>'<button data-bcspeed="'+n+'" aria-pressed="'+(bc.speed===n)+'">'+n+'×</button>').join('');
+  const controls=done?'<button id="bcBack">Back to the desk</button>':
+    (bc.playing?'<button id="bcPause">Pause</button>':'<button id="bcPlay">Resume</button><button id="bcNext">Next play</button>')+
+    '<span class="speeds" role="group" aria-label="Speed">'+speeds+'</span><button id="bcEnd">Skip to the final</button>';
+  const now=last?bcLine(B,last):'<small>'+esc(B.label)+'</small>Kickoff is coming up.';
+  const log=bc.showLog?'<ol class="pbp" reversed>'+B.plays.slice(0,shown).map(p=>'<li class="'+p.kind+'">'+bcLine(B,p)+'</li>').reverse().join('')+'</ol>':'';
+  return bcBug(B,shown,next)+bcField(B,shown,next)+'<p class="nowplay" aria-live="polite">'+now+'</p>'+
+    '<div class="controls">'+controls+'<label><input type="checkbox" id="bcLog"'+(bc.showLog?' checked':'')+'> Play-by-play</label></div>'+log+(done?bcBox(B):'');
+}
+function broadcastView(){
+  const B=broadcastGame;
+  if(!B)return heading('GAME DAY','No game on')+'<p>Your club has not played since the page opened.</p><button data-tab="Owner desk">Back to the desk</button>';
+  const away=teamName(B.away),home=teamName(B.home);
+  return heading(B.label.toUpperCase(),away+(B.neutral?' vs. ':' at ')+home)+'<div id="broadcast">'+broadcastInner()+'</div>';
+}
+function drawBroadcast(){const el=$('#broadcast');if(el&&broadcastGame)el.innerHTML=broadcastInner();}
 const TABS=['Owner desk','Depth chart','Staff','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
 function draw(){
@@ -4641,6 +5274,9 @@ function draw(){
   const prompt=$('#importPrompt');
   prompt.hidden=!pendingImport;
   prompt.innerHTML=pendingImport?'<span>'+esc('Replace your current season ('+describeSave(save)+') with the one you loaded ('+describeSave(pendingImport)+')?')+'</span><button id="importYes">Replace season</button><button id="importNo">Keep current season</button>':'';
+  const live=$('#watchLive');
+  live.hidden=!canWatch(save);
+  if(tab!=='Game')stopBroadcastTimer();
   const next=$('#advance');
   next.disabled=!save.club;
   next.textContent=!save.club?'Choose a club':advanceLabel(save);
@@ -4648,7 +5284,8 @@ function draw(){
   $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
   $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
   $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='Depth chart'?depthView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():'';
+  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='Depth chart'?depthView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():tab==='Game'?broadcastView():'';
+  if(tab==='Game')scheduleBroadcast();
   if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
@@ -4699,6 +5336,18 @@ document.addEventListener('click',e=>{
   if(b.id==='withdrawBid'){withdrawBid(save);commit();}
   if(b.dataset.call||b.dataset.promise){callOwner(save,b.dataset.call??b.dataset.promise,!!b.dataset.promise);commit();}
   if(b.id==='importNo'){pendingImport=null;draw();}
+  if(b.id==='watchLive'&&save.club&&canWatch(save)){
+    const before=broadcastGame;advance(save);viewed=latestView();
+    if(broadcastGame!==before)startBroadcast();else tab='Owner desk';
+    commit();window.scrollTo(0,0);
+  }
+  if(b.id==='watchLast'&&broadcastGame){startBroadcast();draw();window.scrollTo(0,0);}
+  if(b.id==='bcPause'){bc.playing=false;stopBroadcastTimer();drawBroadcast();}
+  if(b.id==='bcPlay'){bc.playing=true;drawBroadcast();scheduleBroadcast();}
+  if(b.id==='bcNext'&&broadcastGame){bc.i=Math.min(broadcastGame.plays.length,bc.i+1);drawBroadcast();}
+  if(b.id==='bcEnd'&&broadcastGame){bc.i=broadcastGame.plays.length;bc.playing=false;stopBroadcastTimer();drawBroadcast();}
+  if(b.dataset.bcspeed){bc.speed=Number(b.dataset.bcspeed);drawBroadcast();scheduleBroadcast();}
+  if(b.id==='bcBack'){tab='Owner desk';draw();}
   if(b.id==='advance'&&save.club){advance(save);viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();}
   if(b.id==='jumpGo'&&save.club){jumpTo(save,Number($('#jumpTarget').value));viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();window.scrollTo(0,0);}
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
@@ -4755,6 +5404,7 @@ document.addEventListener('click',e=>{
   if(b.id==='gmFinish'){gmFinishDraft(save,false);commit();}
 });
 app.onchange=e=>{
+  if(e.target.id==='bcLog'){bc.showLog=e.target.checked;drawBroadcast();return;}
   if(e.target.id==='tradePlayer'||e.target.id==='tradePick'){
     const q=save.offer;
     if(q){q[e.target.id==='tradePlayer'?'draftOut':'draftPick']=e.target.value;commit();}

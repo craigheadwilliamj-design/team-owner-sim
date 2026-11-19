@@ -90,6 +90,8 @@ figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
 .owners td{vertical-align:top}
 .calls{min-width:9.5rem}
 .calls button{padding:4px 8px;font-size:.85rem;margin:0 4px 4px 0}
+.wirehead{background:none;color:var(--muted);padding:12px 0 4px;letter-spacing:.06em}
+.board td:nth-child(6),.board td:nth-child(7){font-variant-numeric:tabular-nums}
 .commitments{margin:4px 0 0;padding:0}
 .commitments li{padding:6px 0;border-bottom:1px solid var(--rule-soft);display:block}
 .commitments li:last-child{border:0}
@@ -467,7 +469,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=11;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=12;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const OT_DRIVES=6;           // Overtime possessions before a game is recorded as a tie.
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
@@ -697,6 +699,7 @@ function newSave(seed=newSeed()){
   makeCap(S,r);
   makeStaffAll(S,r);
   initDepth(S,r);
+  initScouting(S);
   return S;
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
@@ -737,7 +740,7 @@ function finishMedicalWeek(S,units,r,games){
     for(const p of shuffled(r,active)){
       const depth=units[t.id].chart[p.pos],starters=startersAt(p.pos);
       const starter=depth.indexOf(p)<starters;
-      if(r()>(starter?.024:.006)*(t.id===S.club?injuryFactor(S):1))continue;
+      if(r()>(starter?.024:.006)*(t.id===S.club?injuryFactor(S):1)*(p.durability?1.3-p.durability/250:1))continue;
       const healthy=S.rosters[t.id].filter(other=>other.pos===p.pos&&!other.out);
       if(healthy.length<=starters)continue;
       p.out=r()<.12?IR_THRESHOLD+randInt(r,11):1+randInt(r,5);
@@ -1973,7 +1976,8 @@ function makeDraft(r,season){
     return {id:'d'+season+'-'+(i+1),name:personName(r),pos,college:COLLEGES[randInt(r,COLLEGES.length)],age:21+randInt(r,3),
       rating,potential,grade:Math.round(.55*potential+.45*rating+randInt(r,9)-4+(DRAFT_POSITION_VALUE[pos]??0))};
   }).sort((a,b)=>b.grade-a.grade);
-  return {season,status:'scouting',prospects,order:[],pick:0,picks:[]};
+  for(const p of prospects)enrichProspect(r,p);
+  return {season,status:'scouting',prospects,order:[],pick:0,picks:[],wire:[],nextClass:[]};
 }
 function draftOrder(S){
   const s=cur(S),table=standings(S).flat(),P=s.postseason;
@@ -2015,7 +2019,7 @@ function makePick(S,prospectId,by){
   if(!p)return false;
   D.picks.push({overall:slot.overall,round:slot.round,club:slot.owner,origin:slot.origin,prospectId:p.id,name:p.name,pos:p.pos,college:p.college,by});
   const terms=rookieTerms(S,slot.overall);
-  S.rosters[slot.owner].push({id:'r'+D.season+'-'+slot.overall,name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,
+  S.rosters[slot.owner].push({id:'r'+D.season+'-'+slot.overall,name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,...(p.workEthic?rookieFrom(p):{}),
     drafted:{season:D.season,round:slot.round,overall:slot.overall,college:p.college},contract:{...makeContract(S,terms,'rookie'),option:slot.round===1}});
   if(slot.owner===S.club)payBonus(S,terms.bonus,'club');
   D.pick++;
@@ -2052,12 +2056,15 @@ function completeDraft(S){
     const need=positions.map(([pos])=>pos).find(pos=>needAt(S,id,pos)>0);
     const i=need?pool.findIndex(p=>p.pos===need):0;
     const p=pool.splice(i<0?0:i,1)[0];
-    S.rosters[id].push({id:'u'+D.season+'-'+p.id.split('-')[1],name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,undrafted:{season:D.season,college:p.college},contract:makeContract(S,minimumTerms(S,3),'minimum')});
+    S.rosters[id].push({id:'u'+D.season+'-'+p.id,name:p.name,pos:p.pos,rating:p.rating,age:p.age,potential:p.potential,...(p.workEthic?rookieFrom(p):{}),undrafted:{season:D.season,college:p.college},contract:makeContract(S,minimumTerms(S,3),'minimum')});
   }
   S.draftHistory.push({season:D.season,picks:D.picks.map(x=>({overall:x.overall,round:x.round,club:x.club,name:x.name,pos:x.pos,college:x.college}))});
   S.picks=defaultPicks();
   const mine=D.picks.filter(x=>x.club===S.club);
-  record(S,'draftDone',{picks:mine.map(x=>({overall:x.overall,round:x.round,name:x.name,pos:x.pos,college:x.college,by:x.by}))});
+  const seen=x=>{const p=D.prospects.find(y=>y.id===x.prospectId);if(!p||!((S.scouting?.levels?.[p.id]??0)>0||S.scouting?.watch?.includes(p.id)))return null;
+    const good=p.notes.filter(n=>!/Returned|Struggled|flagged/.test(n.text));
+    return (good.find(n=>n.week>=1&&n.week<=BOWL_WEEKS)??good[0])?.text??null;};
+  record(S,'draftDone',{picks:mine.map(x=>({overall:x.overall,round:x.round,name:x.name,pos:x.pos,college:x.college,by:x.by,seen:seen(x)}))});
   const first=D.picks[0];
   news(S,teamName(first.club)+' take '+first.pos+' '+first.name+' of '+first.college+' first overall');
 }
@@ -2074,6 +2081,7 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
   expireProposals(S);
   processTradeTalk(S,r);
   processLeagueTrades(S,r);
+  processCollege(S,r);
   autoHire(S);
   processStadium(S,r);
   processLeague(S,r,regularIndex);
@@ -2164,9 +2172,16 @@ function rollover(S,r){
   S.offer=null;
   if(S.depth){S.depth.overrides=0;S.depth.warned=false;}
   fillRosters(S,r);
+  // Filling a hole can push a club past 53; staff trim the weakest backup.
+  for(const t of clubs)while(S.practice&&rosterCount(S,t.id)>53&&rosterMovesByStaff(S,t.id)){const cut=weakestBackup(S,t.id);if(!cut)break;releasePlayer(S,t.id,cut.id);}
   for(const t of clubs)comply(S,t.id,true); // after filling, so the opener is always cap-compliant
   prunePool(S);
+  const back=S.draft.nextClass??[];
   S.draft=makeDraft(r,next.number);
+  for(const p of back){p.year='SR';p.age++;p.rating=Math.min(99,p.rating+2+randInt(r,4));p.injured=false;p.startGrade=p.grade;S.draft.prospects.push(p);}
+  S.draft.prospects.sort((a,b)=>b.grade-a.grade);
+  if(S.scouting){const ids=new Set(S.draft.prospects.map(p=>p.id));
+    S.scouting.levels=Object.fromEntries(Object.entries(S.scouting.levels).filter(([id])=>ids.has(id)));S.scouting.watch=S.scouting.watch.filter(id=>ids.has(id));}
   news(S,'Season '+next.number+' kicks off');
   afterTick(S,r);
 }
@@ -2215,7 +2230,7 @@ function calendarEventText(S,e){
       (e.revived.length?'Lapsed stadium offers are back with new terms: '+e.revived.join(', ')+'. ':'')+'Our lease has '+e.leaseYears+' year'+(e.leaseYears===1?'':'s')+' left.';
     case 'draftOpen':return 'Draft week. We pick at '+(e.picks.length?e.picks.map(n=>'#'+n).join(', '):'no spots, after our trades')+'. I will run the board unless you want it.';
     case 'draftUnattended':return 'You were not in the room, so I made the last '+e.picks+' picks of the draft.';
-    case 'draftDone':return 'The draft is done. Our class: '+(e.picks.length?e.picks.map(p=>'#'+p.overall+' '+p.pos+' '+p.name+' ('+p.college+')'+(p.by==='owner'?', your call':'')).join('; '):'no picks this year')+'. Undrafted free agents fill out the camp roster.';
+    case 'draftDone':return 'The draft is done. Our class: '+(e.picks.length?e.picks.map(p=>'#'+p.overall+' '+p.pos+' '+p.name+' ('+p.college+')'+(p.by==='owner'?', your call':'')+(p.seen?'. You followed him: '+p.seen.replace(/\.$/,''):'')).join('; '):'no picks this year')+'. Undrafted free agents fill out the camp roster.';
     case 'calendarNote':return e.text;
     case 'finalCuts':return 'Final cuts are in: we released '+e.count+' player'+(e.count===1?'':'s')+' to get to 53'+(e.names.length?', including '+e.names.map(p=>p.pos+' '+p.name).join(', '):'')+'.';
   }
@@ -2224,15 +2239,35 @@ function calendarEventText(S,e){
 
 // ---- Draft view ----------------------------------------------------------------
 function draftView(){
-  const S=save,D=S.draft,s=cur();
-  let html=heading('DRAFT','Class of season '+D.season);
-  const mineOwned=S.picks.filter(p=>p.owner===S.club).sort((a,b)=>a.round-b.round);
+  const S=save,D=S.draft,watch=new Set(S.scouting?.watch??[]);
+  const lvl=p=>S.scouting?.levels?.[p.id]??0,dots=p=>'●'.repeat(lvl(p))+'○'.repeat(3-lvl(p));
   const grade=p=>S.club?perceivedGrade(S,S.club,p):p.grade;
-  const row=(p,action)=>'<tr><td>'+esc(p.name)+'</td><td>'+esc(p.pos)+'</td><td>'+esc(p.college)+'</td><td>'+p.age+'</td><td>'+grade(p)+'</td><td>'+(action??'')+'</td></tr>';
-  const table=(rows,extra)=>'<div class="wide"><table><thead><tr><th>Prospect</th><th>Pos.</th><th>College</th><th>Age</th><th>GM grade</th><th>'+(extra??'')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  const trend=p=>{const d=p.grade-(p.startGrade??p.grade);return d>=3?'↑'+d:d<=-3?'↓'+(-d):'–';};
+  const name=p=>(watch.has(p.id)?'★ ':'')+p.name;
+  const actions=p=>(D.status==='scouting'&&S.club&&lvl(p)<3?'<button data-scoutp="'+esc(p.id)+'"'+(S.scouting.points<1?' disabled':'')+'>Scout</button>':'')+
+    (S.club?'<button data-watch="'+esc(p.id)+'">'+(watch.has(p.id)?'Unwatch':'Watch')+'</button>':'')+'<button data-profile="'+esc(p.id)+'">Profile</button>';
+  const table=(list,extra)=>'<div class="wide"><table class="board"><thead><tr><th>#</th><th>Prospect</th><th>Pos.</th><th>College</th><th>Yr</th><th>Consensus</th><th>Your grade</th><th>Scouted</th><th>Trend</th><th></th></tr></thead><tbody>'+
+    list.map(p=>'<tr><td>'+(D.prospects.indexOf(p)+1)+'</td><td>'+esc(name(p))+(p.injured?'<small>Injured this season</small>':'')+'</td><td>'+esc(p.pos)+'</td><td>'+esc(p.college)+'</td><td>'+esc(p.year??'')+'</td><td>'+p.grade+'</td><td>'+grade(p)+'</td><td>'+dots(p)+'</td><td>'+trend(p)+'</td><td class="calls">'+(extra?extra(p):'')+actions(p)+'</td></tr>').join('')+'</tbody></table></div>';
+  let html=heading('DRAFT AND SCOUTING','Class of season '+D.season);
+  const prof=draftUi.profile&&[...D.prospects,...(D.nextClass??[])].find(p=>p.id===draftUi.profile);
+  if(prof)html+='<div class="confirm negotiation"><div><strong>'+esc(prof.pos+' '+prof.name+', '+prof.college+' ('+(prof.year??'')+', age '+prof.age+')')+'</strong><small>'+esc('Consensus grade '+prof.grade+(D.combineDone||prof.athletic&&D.status!=='scouting'?' · Combine athleticism '+prof.athletic:''))+'</small></div>'+
+    '<ul class="commitments">'+(prof.notes.length?prof.notes.map(n=>'<li>'+esc(shortLabel(n.week)+': '+n.text)+'</li>').join(''):'<li>No headlines yet.</li>')+'</ul>'+
+    (S.club?'<p>'+esc(scoutingReport(S,prof).join(' '))+'</p>':'')+'<div class="controls"><button id="closeProfile">Close</button></div></div>';
+  const mineOwned=S.club?S.picks.filter(p=>p.owner===S.club).sort((a,b)=>a.round-b.round):[];
   if(D.status==='scouting'){
-    html+='<p>'+esc('The draft is '+weekLabel(MILESTONES.draft)+'. '+(S.club?'You hold '+(mineOwned.length?mineOwned.map(pickLabel).join(', '):'no picks')+'. ':'')+'Order follows the final standings and playoff results, worst first. The GM grades blend what a player is now with what scouts think he can become.')+'</p>'+
-      '<h2>Top of the board</h2>'+table([...D.prospects.slice(0,60)].sort((a,b)=>grade(b)-grade(a)).slice(0,30).map(p=>row(p)).join(''));
+    const scouted=Object.values(S.scouting?.levels??{}).filter(Boolean).length;
+    if(S.club)html+='<div class="units"><div><small>Scouting points</small><b>'+S.scouting.points+'</b>this week, '+pointsPerWeek(S)+' a week</div>'+
+      '<div><small>Prospects scouted</small><b>'+scouted+'</b>'+watch.size+' on your watch list</div>'+
+      '<div><small>Projected first pick</small><b>#'+projectedSlot(S)+'</b>on today’s standings</div>'+
+      '<div><small>Your picks</small><b>'+mineOwned.length+'</b>'+esc(mineOwned.slice(0,3).map(pickLabel).join(', ')+(mineOwned.length>3?'…':''))+'</div></div>';
+    html+='<p>'+esc('The draft is '+weekLabel(MILESTONES.draft)+'. The consensus grade moves with the college wire; your GM grade starts from the truth, pulled toward the hype and blurred by his scouting. Each scouting visit cuts through both: the first sharpens the grade, the second reveals work ethic and durability, the third tells you whether he is overrated.')+'</p>'+
+      (S.club?'<div class="controls"><label>Scouting assignments <select id="scoutAssign">'+option('gm','The GM spends what I leave',S.scouting.assign!=='owner')+option('owner','I assign them all',S.scouting.assign==='owner')+'</select></label></div>':'');
+    const weeks=[...D.wire].reverse().filter(w=>w.items.length).slice(0,draftUi.allWire?40:3);
+    html+='<h2>College wire</h2>'+(weeks.length?weeks.map(w=>'<h3 class="wirehead">'+esc(capital(weekLabel(w.week)))+'</h3><ul>'+w.items.map(it=>'<li>'+(it.pid&&watch.has(it.pid)?'<strong>★ '+esc(it.text)+'</strong>':esc(it.text))+(it.pid?' <button data-profile="'+esc(it.pid)+'">Profile</button>':'')+'</li>').join('')+'</ul>').join('')+
+      (D.wire.length>3?'<div class="controls"><button id="toggleWire">'+(draftUi.allWire?'Show the latest weeks':'Show every week')+'</button></div>':''):'<p>The college season starts with Week 1. The wire follows the class all fall.</p>');
+    const top=D.prospects.slice(0,40),extraWatch=D.prospects.filter(p=>watch.has(p.id)&&!top.includes(p));
+    html+='<h2>Big board</h2>'+table(top)+(extraWatch.length?'<h2>Also on your watch list</h2>'+table(extraWatch):'');
+    if(D.nextClass?.length)html+='<p>'+esc(D.nextClass.length+' juniors went back to school and will be in next year’s class.')+'</p>';
     return html;
   }
   if(D.status==='live'){
@@ -2241,10 +2276,10 @@ function draftView(){
     if(mine){
       const gm=bestFor(S,S.club,avail);
       html+='<p>'+esc('Your pick. The GM would take '+gm.pos+' '+gm.name+' of '+gm.college+'.')+'</p><div class="controls"><button id="gmPick">Let the GM pick</button><button id="gmFinish">Let the GM run the rest</button></div>'+
-        table([...avail.slice(0,50)].sort((a,b)=>grade(b)-grade(a)).slice(0,25).map(p=>row(p,'<button data-draft="'+esc(p.id)+'">Draft</button>')).join(''));
+        table([...avail.slice(0,60)].sort((a,b)=>Number(watch.has(b.id))-Number(watch.has(a.id))||grade(b)-grade(a)).slice(0,25),p=>'<button data-draft="'+esc(p.id)+'">Draft</button>');
     }else html+='<div class="controls"><button id="simToMine">'+(D.order.slice(D.pick).some(x=>x.owner===S.club)?'Sim to our next pick':'Sim to the end')+'</button><button id="gmFinish">Let the GM run the rest</button></div>';
     const recent=[...D.picks].reverse().slice(0,10);
-    if(recent.length)html+='<h2>Latest picks</h2><ul>'+recent.map(x=>'<li><strong>#'+x.overall+'</strong> '+esc(byId.get(x.club).abbr+' · '+x.pos+' '+x.name+', '+x.college)+'</li>').join('')+'</ul>';
+    if(recent.length)html+='<h2>Latest picks</h2><ul>'+recent.map(x=>'<li><strong>#'+x.overall+'</strong> '+esc(byId.get(x.club).abbr+' · '+x.pos+' '+x.name+', '+x.college)+(watch.has(x.prospectId)?' ★':'')+'</li>').join('')+'</ul>';
     return html;
   }
   const last=S.draftHistory.at(-1);
@@ -2256,6 +2291,7 @@ function draftView(){
   }
   return html;
 }
+const draftUi={profile:null,allWire:false};
 
 
 // ---------------------------------------------------------------------------
@@ -2891,13 +2927,7 @@ function clubUnits(S,id){
 // An average development coach (about 70) leaves growth where it was; the best add about 7%.
 const devFactor=(S,id)=>{const hc=S.staff?.clubs?.[id]?.hc;return hc?.72+hc.ratings.development/250:1;};
 // What a GM thinks a prospect is worth: the consensus grade, blurred by his scouting.
-function perceivedGrade(S,id,p){
-  const gm=S.staff?.clubs?.[id]?.gm;
-  if(!gm)return p.grade;
-  let h=0;for(const ch of id+p.id)h=(h*33+ch.charCodeAt(0))%100003;
-  const noise=(h%2001)/1000-1;
-  return Math.round(.55*p.potential+.45*p.rating+(DRAFT_POSITION_VALUE[p.pos]??0)+noise*(95-gm.ratings.scouting)/6);
-}
+
 const approachFor=(S,id)=>id===S.club&&S.staff.directives.approach!=='gm'?S.staff.directives.approach:gmOf(S,id).philosophy;
 const focusFor=(S,id)=>id===S.club?FOCUS_GROUPS[S.staff.directives.focus]??[]:[];
 const tradeFactor=S=>S?.staff?.clubs&&S.club?1.12-gmOf(S,S.club).ratings.negotiation*.0016:1.04;
@@ -3351,6 +3381,7 @@ function manageRoster(S,r){
       if(ps){promote(S,id,ps.id);if(id===S.club)notes.push('promoted '+ps.pos+' '+ps.name+' from the practice squad');}
       else{signMinimum(S,id,short.pos,r);const p=S.rosters[id].at(-1);if(id===S.club)notes.push('signed '+p.pos+' '+p.name);}
     }
+    if(practiceOf(S,id).length<PRACTICE_LIMIT)fillPractice(S,id,r); // keep the practice squad full
   }
   if(notes.length&&S.club)record(S,'rosterMoves',{notes});
 }
@@ -3402,7 +3433,7 @@ function depthView(){
   if(alerts.length)html+='<div class="confirm"><span>'+esc(alerts.join(' · '))+'</span></div>';
   const coachStarters=new Set(positions.flatMap(([pos,,n])=>coachOrder(S,id,pos).slice(0,n)));
   const row=(p,idx,n,len)=>{
-    const status=p.out?'Out · '+p.out+' wk':!actives.has(p.id)?'Inactive':idx<n?'Starter':'Backup';
+    const status=(p.out?'Out · '+p.out+' wk':!actives.has(p.id)?'Inactive':idx<n?'Starter':'Backup')+(p.drafted?.season===cur(S).number-1||p.drafted?.season===cur(S).number?' · rookie, '+p.drafted.college:'');
     const changed=idx<n&&!p.out&&!coachStarters.has(p.id);
     return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+esc(p.name)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
       (idx>0?'<button data-depth="'+esc(p.id)+':-1" aria-label="Move up">↑</button>':'')+(idx<len-1?'<button data-depth="'+esc(p.id)+':1" aria-label="Move down">↓</button>':'')+
@@ -3435,6 +3466,18 @@ const TRADE_DEADLINE=10,AUTO_HIRE_WEEKS=4;
 const tradeWindow=S=>{const t=now(S);return t<=TRADE_DEADLINE||t>=MILESTONES.leagueYear;};
 const picksOf=(S,id)=>S.picks.filter(p=>p.owner===id).sort((a,b)=>b.round-a.round);
 const pickWorth=k=>pickValues[k.round];
+// The cheapest one or two picks that cover a price without overpaying by more than about a quarter.
+function pickPackage(picks,need,slack=1.25){
+  const hi=need*slack+5,fits=v=>v>=need&&v<=hi;
+  const one=picks.filter(k=>fits(pickWorth(k))).sort((a,b)=>pickWorth(a)-pickWorth(b))[0];
+  if(one)return [one];
+  let best=null;
+  for(let i=0;i<picks.length;i++)for(let j=i+1;j<picks.length;j++){
+    const v=pickWorth(picks[i])+pickWorth(picks[j]);
+    if(fits(v)&&(!best||v<best.v))best={v,ks:[picks[i],picks[j]]};
+  }
+  return best?.ks??null;
+}
 const starterIds=(S,id)=>{const u=clubUnits(S,id),set=new Set();for(const [pos,,n] of positions)u.chart[pos].slice(0,n).forEach(p=>set.add(p.id));return set;};
 // Value a club puts on a player: talent plus contract surplus.
 const tradeValue=(S,p)=>playerValue(p)+contractSurplus(S,p);
@@ -3497,9 +3540,9 @@ function gmTradeIdea(S){
       const cap=tradeCap(S,seller,p,out);
       if(cap.buyer<0||cap.seller<0)continue;
       const need=termsNeeded(p,out,S,seller);
-      const pick=need===0?null:usable.find(k=>pickWorth(k)>=need&&pickWorth(k)<=need*1.25+5); // he will not propose an overpay
-      if(need>0&&!pick)continue;
-      return {buyer:id,seller,targetId:p.id,outId:out?.id??null,picks:pick?[{origin:pick.origin,round:pick.round}]:[],by:'gm'};
+      const pack=need===0?[]:pickPackage(usable,need); // he will not propose an overpay
+      if(!pack)continue;
+      return {buyer:id,seller,targetId:p.id,outId:out?.id??null,picks:pack.map(k=>({origin:k.origin,round:k.round})),by:'gm'};
     }
   }
   return null;
@@ -3548,7 +3591,7 @@ function proposeTrade(S,kind,T){
 // Weekly, inside the trade window.
 function processTradeTalk(S,r){
   if(!S.club||!tradeWindow(S)||!S.staff?.clubs)return;
-  if(r()<.2){
+  if(r()<.3){ // about three GM ideas in the fall window, seven in the spring
     const T=gmTradeIdea(S);
     if(T){if(needsCall(S,T))proposeTrade(S,'trade',T);else executeTrade(S,T);}
   }
@@ -3595,9 +3638,9 @@ function aiTradeIdea(S,r,buyer){
       if(sellerShort(S,seller,p,out))continue;
       if(capRoom(S,buyer)-capHit(p)+(out?capHit(out):0)<0||capRoom(S,seller)+capHit(p)-(out?capHit(out):0)<0)continue;
       const need=priceFor(S,buyer,seller,p,out);
-      const pick=need===0?null:picks.find(k=>pickWorth(k)>=need&&pickWorth(k)<=need*1.3+5);
-      if(need>0&&!pick)continue;
-      return {buyer,seller,targetId:p.id,outId:out?.id??null,picks:pick?[{origin:pick.origin,round:pick.round}]:[],by:'club'};
+      const pack=need===0?[]:pickPackage(picks,need,1.3);
+      if(!pack)continue;
+      return {buyer,seller,targetId:p.id,outId:out?.id??null,picks:pack.map(k=>({origin:k.origin,round:k.round})),by:'club'};
     }
   }
   return null;
@@ -3614,7 +3657,7 @@ function processLeagueTrades(S,r){
 }
 // During the season a club that takes on an extra player cuts its weakest backup.
 function trimAfterTrade(S,id){
-  if(now(S)>REGULAR_WEEKS)return; // camp rosters run large in the offseason
+  if(now(S)>REGULAR_WEEKS&&now(S)!==MILESTONES.cuts)return; // camp rosters run large, except once final cuts are in
   while(rosterCount(S,id)>53&&rosterMovesByStaff(S,id)){
     const cut=weakestBackup(S,id);if(!cut)break;
     releasePlayer(S,id,cut.id);
@@ -3626,6 +3669,7 @@ function trimAfterTrade(S,id){
     if(ps)promote(S,id,ps.id);else signMinimum(S,id,need,rngFor(S.rng));
     if(id===S.club)record(S,'rosterMoves',{notes:[(ps?'promoted '+ps.pos+' '+ps.name:'signed a replacement')+' to fill the spot after the trade']});
   }
+  if(rosterMovesByStaff(S,id)&&practiceOf(S,id).length<PRACTICE_LIMIT)fillPractice(S,id,rngFor(S.rng));
 }
 
 // ---- Auto-hire ----------------------------------------------------------------------
@@ -3654,6 +3698,199 @@ function tradeEventText(S,e){
     case 'tradeExpired':return e.text;
   }
   return '';
+}
+
+
+// ---------------------------------------------------------------------------
+// Scouting and the college wire
+//
+// prospect.year      JR or SR; juniors may return to school in January
+// prospect.athletic  revealed to everyone at the Combine
+// prospect.workEthic how much of his potential he will reach (hidden)
+// prospect.durability how often he will get hurt (hidden)
+// prospect.notes     his college story, kept after the draft
+// prospect.grade     the consensus grade, moved by the wire (hype)
+// draft.wire         weekly college wire items for this class
+// draft.nextClass    juniors who went back to school
+// scouting           the owner's scouting levels, points, watch list
+// ---------------------------------------------------------------------------
+const COLLEGE_WEEKS=14,BOWL_WEEKS=18,DECLARE_TICK=21,SENIOR_BOWL_TICK=24,COMBINE_TICK=26;
+function enrichProspect(r,p){
+  const hidden=p.potential-p.rating;
+  return Object.assign(p,{year:r()<.35?'JR':'SR',athletic:Math.max(40,Math.min(99,Math.round(60+hidden*.8+randInt(r,25)-8))),
+    workEthic:30+randInt(r,70),durability:35+randInt(r,65),notes:[],startGrade:p.grade,injured:false,doubt:false});
+}
+// The value a perfectly informed scout would put on him.
+const trueGrade=p=>.55*p.potential+.45*p.rating+(DRAFT_POSITION_VALUE[p.pos]??0)+((p.workEthic??65)-65)*.08;
+const scoutLevel=(S,id,p)=>id===S.club?(S.scouting?.levels?.[p.id]??0):0;
+// What a club's GM thinks: the truth, pulled toward the hype and blurred by
+// his scouting. Scouting a prospect strips both away.
+function perceivedGrade(S,id,p){
+  const gm=S.staff?.clubs?.[id]?.gm;
+  if(!gm)return p.grade;
+  let h=0;for(const ch of id+p.id)h=(h*33+ch.charCodeAt(0))%100003;
+  const noise=(h%2001)/1000-1,level=scoutLevel(S,id,p),truth=trueGrade(p);
+  const hype=(p.grade-truth)*.6*(1-level/3);
+  return Math.round(truth+hype+noise*(95-gm.ratings.scouting)/6*(1-level/3.5));
+}
+function note(S,p,text){p.notes.push({season:cur(S).number,week:now(S),text});}
+
+// ---- The college wire ------------------------------------------------------------------
+const pick1=(r,a)=>a[randInt(r,a.length)];
+function bigGame(r,p,opp){
+  const n=k=>k+randInt(r,k),T={
+    QB:[()=>'threw for '+n(280)+' yards and '+(3+randInt(r,3))+' touchdowns against '+opp,()=>'led a fourth-quarter comeback against '+opp,()=>'completed '+(24+randInt(r,8))+' of '+(30+randInt(r,8))+' passes against '+opp],
+    RB:[()=>'ran for '+n(150)+' yards and '+(2+randInt(r,2))+' scores against '+opp,()=>'broke an 80-yard touchdown run against '+opp,()=>'carried '+opp+' tacklers for '+n(120)+' yards after contact'],
+    WR:[()=>'caught '+(8+randInt(r,6))+' passes for '+n(140)+' yards against '+opp,()=>'had a 70-yard catch-and-run against '+opp,()=>'beat '+possessive(opp)+' top corner for two touchdowns'],
+    TE:[()=>'caught '+(7+randInt(r,5))+' passes for '+n(90)+' yards against '+opp,()=>'caught the winning touchdown against '+opp],
+    OT:[()=>'shut out '+possessive(opp)+' best pass rusher',()=>'did not allow a pressure against '+opp],
+    OG:[()=>'paved the way for 280 rushing yards against '+opp,()=>'graded out perfect against '+opp],
+    C:[()=>'ran the line calls in a shutout of '+possessive(opp)+' front',()=>'anchored a line that allowed no sacks against '+opp],
+    DE:[()=>'had '+(3+randInt(r,2))+' sacks against '+opp,()=>'forced two fumbles against '+opp,()=>'lived in '+possessive(opp)+' backfield all game'],
+    DT:[()=>'blew up '+possessive(opp)+' run game with '+(2+randInt(r,2))+' tackles for loss',()=>'collapsed the pocket all day against '+opp],
+    LB:[()=>'made '+(12+randInt(r,6))+' tackles against '+opp,()=>'returned an interception for a touchdown against '+opp,()=>'had '+(2+randInt(r,2))+' sacks on blitzes against '+opp],
+    CB:[()=>'picked off '+opp+' twice',()=>'held '+possessive(opp)+' top receiver to one catch',()=>'broke up four passes against '+opp],
+    S:[()=>'had an interception and a forced fumble against '+opp,()=>'made '+(10+randInt(r,5))+' tackles from deep against '+opp],
+    K:[()=>'made all '+(4+randInt(r,2))+' field goals against '+opp,()=>'hit a 56-yard winner against '+opp],
+    P:[()=>'pinned '+opp+' inside the 10 five times'],LS:[()=>'was perfect on snaps against '+opp]}[p.pos]??[()=>'starred against '+opp];
+  return T[randInt(r,T.length)]();
+}
+function collegeWeek(S,r){
+  const D=S.draft,t=now(S);
+  if(!D||D.status!=='scouting')return;
+  const items=[],pool=D.prospects.slice(0,140).filter(p=>!p.injured);
+  const watch=new Set(S.scouting?.watch??[]);
+  const bowl=t>COLLEGE_WEEKS;
+  const used=new Set(),usedPos=new Set();
+  for(let n=0;n<(bowl?3:4);n++){
+    const fresh=pool.filter(x=>!used.has(x.id)&&!usedPos.has(x.pos));
+    if(!fresh.length)break;
+    const p=r()<.3&&watch.size?fresh.find(x=>watch.has(x.id)&&r()<.5)??pick1(r,fresh):pick1(r,fresh);
+    used.add(p.id);usedPos.add(p.pos);
+    const opp=pick1(r,COLLEGES.filter(c=>c!==p.college)),roll=r();
+    if(roll<.04&&!bowl){
+      p.injured=true;p.grade-=6;note(S,p,'Season-ending injury against '+opp+'.');
+      items.push({pid:p.id,kind:'injury',text:p.pos+' '+p.name+' ('+p.college+') is out for the season after an injury against '+opp+'.'});
+    }else if(roll<.14&&p.athletic<65&&p.rating>=60){
+      p.doubt=true;p.grade+=1;note(S,p,'Big production; scouts doubt it translates.');
+      items.push({pid:p.id,kind:'doubt',text:p.pos+' '+p.name+' ('+p.college+') keeps piling up numbers, but scouts question whether his game translates to the pros.'});
+    }else if(roll<.8){
+      const line=bigGame(r,p,opp),bump=1+randInt(r,3);
+      p.grade+=bump;note(S,p,capital(line)+(bowl?' in a bowl game':'')+'.');
+      items.push({pid:p.id,kind:'rise',text:p.pos+' '+p.name+' ('+p.college+') '+line+(bowl?' in a bowl game':'')+'.'});
+    }else{
+      const drop=1+randInt(r,2);p.grade-=drop;note(S,p,'Struggled against '+opp+'.');
+      items.push({pid:p.id,kind:'fall',text:p.pos+' '+p.name+' ('+p.college+') struggled against '+opp+'; his stock is slipping.'});
+    }
+  }
+  const [a,b]=[pick1(r,COLLEGES),pick1(r,COLLEGES)];
+  if(a!==b&&!bowl)items.push({kind:'score',text:'Elsewhere: '+a+' '+(17+randInt(r,25))+', '+b+' '+(3+randInt(r,20))+'.'});
+  D.wire.push({season:cur(S).number,week:t,items});
+  D.prospects.sort((x,y)=>y.grade-x.grade);
+}
+// January: some juniors go back to school and join next year's class.
+function declarations(S,r){
+  const D=S.draft,items=[];
+  D.prospects.forEach((p,i)=>{
+    if(p.year!=='JR')return;
+    const back=i>90?r()<.55:r()<.1;
+    if(!back)return;
+    p.returning=true;note(S,p,'Returned to '+p.college+' for his senior season.');
+    if(i<60||S.scouting?.watch?.includes(p.id))items.push({pid:p.id,kind:'return',text:p.pos+' '+p.name+' will return to '+p.college+' for his senior season.'});
+  });
+  const back=D.prospects.filter(p=>p.returning);
+  D.nextClass.push(...back.map(p=>({...p,returning:false})));
+  D.prospects=D.prospects.filter(p=>!p.returning);
+  const stars=D.prospects.filter(p=>p.year==='JR').slice(0,3);
+  if(stars.length)items.push({kind:'declare',text:'Declared early: '+stars.map(p=>p.pos+' '+p.name+' ('+p.college+')').join(', ')+'.'});
+  D.wire.push({season:cur(S).number,week:now(S),items});
+}
+function seniorBowl(S,r){
+  const D=S.draft,items=[];
+  for(const p of D.prospects.filter(x=>x.year==='SR').slice(0,80).filter(()=>r()<.08).slice(0,4)){
+    p.grade+=2;note(S,p,'Stood out at the Senior Bowl.');
+    items.push({pid:p.id,kind:'rise',text:p.pos+' '+p.name+' ('+p.college+') was the talk of Senior Bowl week.'});
+  }
+  D.wire.push({season:cur(S).number,week:now(S),items});
+  D.prospects.sort((x,y)=>y.grade-x.grade);
+}
+// The Combine: athleticism becomes public, and injured prospects get their medical.
+function combine(S){
+  const D=S.draft,items=[];
+  D.combineDone=true;
+  for(const p of D.prospects.slice(0,160)){
+    const shift=Math.round((p.athletic-70)*.12);
+    p.grade+=shift;
+    if(p.injured){const ok=p.durability>=55;p.grade+=ok?4:-2;note(S,p,ok?'Medical recheck at the Combine came back clean.':'Teams flagged his medical at the Combine.');
+      if(ok)items.push({pid:p.id,kind:'rise',text:p.pos+' '+p.name+'’s medical came back clean; teams that wrote him off are taking another look.'});}
+    if(Math.abs(shift)>=3){note(S,p,shift>0?'Tested as an elite athlete at the Combine.':'Tested poorly at the Combine.');
+      items.push({pid:p.id,kind:shift>0?'rise':'fall',text:p.pos+' '+p.name+' ('+p.college+') '+(shift>0?'tested as an elite athlete':'tested poorly')+' at the Combine.'});}
+  }
+  D.wire.push({season:cur(S).number,week:now(S),items:items.slice(0,8)});
+  D.prospects.sort((x,y)=>y.grade-x.grade);
+}
+function processCollege(S,r){
+  const t=now(S);
+  if(!S.draft?.wire||S.draft.status!=='scouting')return;
+  if(t>=1&&t<=BOWL_WEEKS)collegeWeek(S,r);
+  if(t===DECLARE_TICK)declarations(S,r);
+  if(t===SENIOR_BOWL_TICK)seniorBowl(S,r);
+  if(t===COMBINE_TICK)combine(S);
+  scoutingWeek(S);
+}
+
+// ---- Scouting -------------------------------------------------------------------------
+const pointsPerWeek=S=>S.club?Math.min(4,2+Math.floor(gmOf(S,S.club).ratings.scouting/30)):3;
+function projectedSlot(S){
+  const table=standings(S).flat().map(r=>({id:r.id,pct:(r.w+.5*r.t)/(r.w+r.l+r.t||1)})).sort((a,b)=>a.pct-b.pct);
+  return Math.max(1,table.findIndex(x=>x.id===S.club)+1);
+}
+function scoutProspect(S,pid){
+  const p=S.draft.prospects.find(x=>x.id===pid),L=S.scouting.levels;
+  if(!p||S.draft.status!=='scouting')return 'unavailable';
+  if((L[pid]??0)>=3)return 'maxed';
+  if(S.scouting.points<1)return 'noPoints';
+  S.scouting.points--;L[pid]=(L[pid]??0)+1;
+  return 'ok';
+}
+function toggleWatch(S,pid){
+  const W=S.scouting.watch;
+  S.scouting.watch=W.includes(pid)?W.filter(x=>x!==pid):[...W,pid];
+}
+// The GM spends leftover points around the owner's projected pick, focus first.
+function gmScout(S){
+  const slot=projectedSlot(S),focus=focusFor(S,S.club),watch=new Set(S.scouting.watch);
+  const targets=S.draft.prospects.map((p,i)=>({p,i})).filter(({p,i})=>(S.scouting.levels[p.id]??0)<3&&(watch.has(p.id)||i>=slot-8&&i<=slot+24))
+    .sort((a,b)=>Number(watch.has(b.p.id))-Number(watch.has(a.p.id))||Number(focus.includes(b.p.pos))-Number(focus.includes(a.p.pos))||a.i-b.i);
+  for(const {p} of targets){if(S.scouting.points<1)break;scoutProspect(S,p.id);}
+}
+function scoutingWeek(S){
+  const t=now(S);
+  if(!S.club||!S.scouting||t<1||t>=MILESTONES.draft)return;
+  if(S.scouting.assign!=='owner'&&S.scouting.points>0)gmScout(S);
+  S.scouting.points=pointsPerWeek(S);
+}
+function setScoutAssign(S,v){if(['gm','owner'].includes(v))S.scouting.assign=v;}
+function initScouting(S){S.scouting={levels:{},watch:[],points:pointsPerWeek(S),assign:'gm'};}
+// What the owner's scouts can say, by how often they have seen him.
+function scoutingReport(S,p){
+  const level=S.scouting.levels[p.id]??0,out=[];
+  if(level>=1)out.push('Your GM grade: '+perceivedGrade(S,S.club,p)+' (consensus '+p.grade+').');
+  if(level>=2){
+    out.push('Work ethic: '+(p.workEthic>=75?'relentless':p.workEthic>=55?'solid':'a concern')+'.');
+    out.push('Durability: '+(p.durability>=75?'never misses time':p.durability>=55?'normal wear':'injury-prone')+'.');
+  }
+  if(level>=3){const gap=trueGrade(p)-p.grade;out.push(gap>=4?'Our scouts think the league is underrating him.':gap<=-4?'Our scouts think he is overrated.':'Our scouts agree with the consensus.');
+    if(p.doubt)out.push(gap>=0?'The doubts about his game translating are wrong.':'The doubts about his game translating are right.');}
+  if(!level)out.push('Not scouted yet.');
+  return out;
+}
+
+// ---- Turning prospects into players -------------------------------------------------------
+// Work ethic decides how much of his potential he will reach.
+function rookieFrom(p){
+  const reach=.6+p.workEthic/250;
+  return {potential:Math.round(p.rating+(p.potential-p.rating)*reach),durability:p.durability,collegeNotes:p.notes.slice(-3)};
 }
 
 // ---------------------------------------------------------------------------
@@ -3718,7 +3955,18 @@ const migrations={
   8:migrateV8,
   9:migrateV9,
   10:migrateV10,
+  11:migrateV11,
 };
+// v11 -> v12: prospect traits and histories, the college wire, the owner's scouting.
+function migrateV11(old){
+  const r=rngFor(old.rng);
+  for(const p of old.draft.prospects)if(p.workEthic===undefined)enrichProspect(r,p);
+  old.draft.wire??=[];old.draft.nextClass??=[];
+  initScouting(old);
+  old.schemaVersion=12;
+  (old.migrations??=[]).push({from:11,to:12,at:new Date().toISOString()});
+  return old;
+}
 // v10 -> v11: GM trade authority, and a clock on open jobs for auto-hire.
 function migrateV10(old){
   old.staff.directives.tradeAuthority??='all';
@@ -3912,6 +4160,7 @@ function validateSave(S){
   else if(Object.values(S.rosters??{}).flat().some(p=>!p?.contract||![p.contract.salary,p.contract.prorated].every(Number.isFinite)||!isInt(p.contract.yearsLeft,1,10)))fail('A player contract is invalid.');
   if(!S.staff?.clubs||!clubs.every(t=>S.staff.clubs[t.id]?.hc?.ratings&&S.staff.clubs[t.id]?.gm?.ratings)||!S.staff.directives||!Array.isArray(S.staff.proposals)||!S.staff.market||!Array.isArray(S.staff.openings))fail('Coach and front-office records are missing.');
   if(!S.depth||!S.depth.order||!Array.isArray(S.depth.inactive)||!Array.isArray(S.depth.active)||!S.irReturns||!S.practice||!clubs.every(t=>Array.isArray(S.practice[t.id])&&S.practice[t.id].length<=PRACTICE_LIMIT&&S.practice[t.id].every(p=>p.contract)))fail('Depth chart or practice-squad records are missing.');
+  if(!S.scouting||!S.scouting.levels||!Array.isArray(S.scouting.watch)||!Array.isArray(S.draft?.wire)||!Array.isArray(S.draft?.nextClass))fail('Scouting records are missing.');
   if(!S.draft||!Array.isArray(S.draft.prospects)||!['scouting','live','done'].includes(S.draft.status)||!isInt(S.draft.pick,0))fail('The draft class is missing.');
   if(!Array.isArray(S.history)||!Array.isArray(S.draftHistory))fail('Season history is missing.');
   const Lg=S.league;
@@ -4357,6 +4606,11 @@ document.addEventListener('click',e=>{
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
   if(b.id==='gmPick'&&save.draft.order[save.draft.pick]?.owner===save.club){aiPick(save);commit();}
   if(b.id==='simToMine'){simToMyPick(save);commit();}
+  if(b.dataset.scoutp){scoutProspect(save,b.dataset.scoutp);commit();}
+  if(b.dataset.watch){toggleWatch(save,b.dataset.watch);commit();}
+  if(b.dataset.profile){draftUi.profile=b.dataset.profile;if(tab!=='Draft')tab='Draft';draw();window.scrollTo?.(0,0);}
+  if(b.id==='closeProfile'){draftUi.profile=null;draw();}
+  if(b.id==='toggleWire'){draftUi.allWire=!draftUi.allWire;draw();}
   const contractNotice={capShort:'That does not fit under the cap. Clear room first.',ownerShort:'You do not have that much cash on hand.',unavailable:'That move is no longer available.',invalid:'Those terms are not valid.'};
   if(b.dataset.extend){const res=extendPlayer(save,b.dataset.extend,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
   if(b.dataset.restructure){const res=restructure(save,b.dataset.restructure,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
@@ -4413,6 +4667,7 @@ app.onchange=e=>{
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
   if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
   if(e.target.id==='gmHandles'){setGmHandles(save,e.target.value==='gm');commit();return;}
+  if(e.target.id==='scoutAssign'){setScoutAssign(save,e.target.value);commit();return;}
   const dirKeys={dirFocus:'focus',dirApproach:'approach',dirApproval:'approvalOver',rosterMoves:'rosterMoves',dirTrades:'tradeAuthority'};
   if(dirKeys[e.target.id]){setDirective(save,dirKeys[e.target.id],e.target.value);commit();return;}
   if(e.target.id==='bonusFunding'){contractsUi.funding=e.target.value;return;}

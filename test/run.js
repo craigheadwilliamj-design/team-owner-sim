@@ -18,6 +18,7 @@ const v7Save = fs.readFileSync(path.join(FIX, 'v7-save.json'), 'utf8');
 const v8Save = fs.readFileSync(path.join(FIX, 'v8-save.json'), 'utf8');
 const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
 const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
+const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
 const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
@@ -25,7 +26,7 @@ const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgr
   'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
-  'restructure', 'restructureSavings', 'releaseCost', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
+  'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'live:()=>({save,saveMessage})'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
@@ -836,7 +837,7 @@ test('five seasons stay stable: ratings, ages and roster sizes', () => {
 test('draft and playoff views render', () => {
   const { api } = load();
   const S = api.save; S.club = 'club-06';
-  assert.match(api.draftView(), /Top of the board/);
+  assert.match(api.draftView(), /Big board/);
   regular(api, S);
   api.advance(S);
   api.jumpTo(S, 34);
@@ -1224,6 +1225,7 @@ test('the February review checks promises against what happened', () => {
 test('approvals: big GM signings wait for the owner, and approving sends the offer', () => {
   const { api, S } = owned(408);
   api.setDirective(S, 'approvalOver', 2);
+  api.setDirective(S, 'approach', 'win-now'); // so the GM chases veterans too
   api.jumpTo(S, 27);
   let P; for (let i = 0; i < 10 && !P; i++) { api.advance(S); P = S.staff.proposals.find(x => x.kind === 'fa' && S.fa.pool.some(p => p.id === x.playerId)); }
   assert(P, 'the GM asked first');
@@ -1443,6 +1445,7 @@ test('the GM brings trade ideas, and approving one makes the trade', () => {
 test('with authority, the GM trades on his own; first-round picks and starters still need a call under the middle setting', () => {
   const { api, S } = owned(602);
   api.setDirective(S, 'tradeAuthority', 'none');
+  api.setDirective(S, 'approach', 'win-now'); // a rebuilding GM rightly refuses to buy veterans with early picks
   assert(advanceUntil(api, S, () => S.events.some(e => (e.type === 'trade' || e.type === 'tradeAway') && e.by === 'gm'), 80), 'the GM made a deal'); // AI clubs compete for targets now
   api.setDirective(S, 'tradeAuthority', 'big');
   const seller = S.rosters['club-17'][0];
@@ -1534,6 +1537,92 @@ test('in-season trades keep both clubs at 53', () => {
   for (let i = 0; i < 9; i++) api.advance(S);
   for (const t of api.clubs) assert.equal(api.rosterCount(S, t.id), 53, t.id);
   assert(S.league.transactions.length > 0);
+});
+
+
+// ---- Scouting and the college wire --------------------------------------------
+test('v11 save upgrades to v12: prospect traits, a wire, and the owner’s scouting', () => {
+  const { api } = load();
+  const S = api.upgrade(JSON.parse(v11Save)).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert(S.draft.prospects.every(p => p.workEthic && p.durability && p.athletic && Array.isArray(p.notes) && ['JR', 'SR'].includes(p.year)));
+  assert.deepEqual(S.draft.wire, []);
+  assert(S.scouting.points >= 2 && S.scouting.assign === 'gm');
+});
+
+test('the college wire runs all fall: varied items, prospect histories, moving stock', () => {
+  const { api, S } = owned(801);
+  for (let i = 0; i < 8; i++) api.advance(S);
+  assert.equal(S.draft.wire.length, 8);
+  for (const w of S.draft.wire) { const ids = w.items.filter(x => x.pid).map(x => x.pid); assert.equal(new Set(ids).size, ids.length, 'one item per prospect per week'); }
+  const featured = S.draft.prospects.filter(p => p.notes.length);
+  assert(featured.length >= 15);
+  assert(featured.some(p => p.grade !== p.startGrade));
+});
+
+test('scouting: points each week, three visits per prospect, and the truth replaces the hype', () => {
+  const { api, S } = owned(802);
+  api.setScoutAssign(S, 'owner');
+  const p = S.draft.prospects[30];
+  p.grade = Math.round(api.trueGrade(p)) + 12; // the wire has hyped him
+  const before = Math.abs(api.perceivedGrade(S, 'club-06', p) - api.trueGrade(p));
+  S.scouting.points = 5;
+  for (let i = 0; i < 3; i++) assert.equal(api.scoutProspect(S, p.id), 'ok');
+  assert.equal(api.scoutProspect(S, p.id), 'maxed');
+  const after = Math.abs(api.perceivedGrade(S, 'club-06', p) - api.trueGrade(p));
+  assert(after < before, `error ${before.toFixed(1)} -> ${after.toFixed(1)}`);
+  assert(api.perceivedGrade(S, 'club-07', p) > api.trueGrade(p) + 3, 'unscouted rivals still believe the hype');
+  assert(api.scoutingReport(S, p).some(t => /overrated/.test(t)));
+  S.scouting.points = 0;
+  assert.equal(api.scoutProspect(S, S.draft.prospects[31].id), 'noPoints');
+  api.advance(S);
+  assert.equal(S.scouting.points, api.pointsPerWeek(S), 'points refresh weekly');
+});
+
+test('the GM spends leftover scouting points unless the owner keeps them', () => {
+  const gm = owned(803); gm.api.advance(gm.S); gm.api.advance(gm.S);
+  assert(Object.keys(gm.S.scouting.levels).length > 0);
+  const me = owned(803); me.api.setScoutAssign(me.S, 'owner'); me.api.advance(me.S); me.api.advance(me.S);
+  assert.equal(Object.keys(me.S.scouting.levels).length, 0);
+});
+
+test('January declarations send juniors back to school; they return as seniors next year', () => {
+  const { api, S } = owned(804);
+  api.jumpTo(S, 21);
+  const back = S.draft.nextClass;
+  assert(back.length > 0 && back.every(p => p.year === 'JR' && p.notes.some(n => /Returned/.test(n.text))));
+  assert(!S.draft.prospects.some(p => back.some(b => b.id === p.id)));
+  api.jumpTo(S, 26);
+  assert(S.draft.combineDone);
+  assert(S.draft.wire.some(w => w.week === 26));
+  api.jumpTo(S, 51);
+  const returned = S.draft.prospects.filter(p => back.some(b => b.id === p.id));
+  assert.equal(returned.length, back.length);
+  assert(returned.every(p => p.year === 'SR'));
+});
+
+test('drafted players keep their college story, and work ethic shapes their ceiling', () => {
+  const { api, S } = owned(805);
+  const lazy = { rating: 60, potential: 85, workEthic: 30, durability: 50, notes: [] }, driven = { ...lazy, workEthic: 95 };
+  assert(api.rookieFrom(driven).potential > api.rookieFrom(lazy).potential);
+  api.jumpTo(S, 33);
+  for (const p of S.draft.prospects.slice(0, 40)) api.toggleWatch(S, p.id);
+  api.jumpTo(S, 35);
+  const rookies = S.rosters['club-06'].filter(p => p.drafted?.season === 1);
+  assert(rookies.length && rookies.every(p => Array.isArray(p.collegeNotes) && p.durability));
+  const e = S.events.find(x => x.type === 'draftDone');
+  if (e.picks.some(x => x.seen)) assert.match(api.describeEvent(e, S), /You followed him/);
+});
+
+test('draft page shows the wire, the board and a prospect profile', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 3; i++) api.advance(S);
+  const p = S.draft.prospects.find(x => x.notes.length);
+  api.draftUi.profile = p.id;
+  const html = api.draftView();
+  assert(html.includes('College wire') && html.includes('Big board') && html.includes('data-scoutp') && html.includes(p.notes[0].text.slice(0, 20)));
+  assert(!/<script|onerror/i.test(html));
 });
 
 // ---- Save files ------------------------------------------------------------

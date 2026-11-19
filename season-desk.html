@@ -713,22 +713,57 @@ function pickWeighted(r,items,weights){
   return items.find(Boolean)??null;
 }
 // Talent scales unit-rating gaps; home field is worth a little on every snap.
-const TALENT=.66,HOME_EDGE=1.3;
+const TALENT=.7,HOME_EDGE=1.3;
 const homeEdge=(G,o)=>G.homeSide<0?0:G.homeSide===o?HOME_EDGE:-HOME_EDGE;
 const shortName=p=>p?p.name.replace(/^(\S)\S*\s+/,'$1. '):'the ball carrier';
 // Field-goal make probability: about 95% from 33 yards, 70% from 50, for an average kicker.
 const fgCenter=kick=>59+((kick??75)-75)*.25;
 const fgChance=(dist,kick)=>1/(1+Math.exp((dist-fgCenter(kick))/8.1));
+// Starters by slot. Slots stay fixed (null when nobody healthy is left) so that
+// WR1 always lines up across from CB1.
 function castFor(u){
-  const up=pos=>(u.chart?.[pos]??[]).filter(p=>!p.out);
-  return {QB:up('QB')[0]??null,RB:up('RB').slice(0,2),WR:up('WR').slice(0,3),TE:up('TE')[0]??null,K:up('K')[0]??null,P:up('P')[0]??null,
-    rush:[...up('DE').slice(0,2),...up('DT').slice(0,2),...up('LB').slice(0,3)],
-    cover:[...up('CB').slice(0,2),...up('S').slice(0,2),...up('LB').slice(0,3)]};
+  const up=pos=>(u.chart?.[pos]??[]).filter(p=>!p.out),slots=(pos,n)=>Array.from({length:n},(_,i)=>up(pos)[i]??null);
+  const [cb,sf,lb]=[slots('CB',2),slots('S',2),slots('LB',3)];
+  return {QB:up('QB')[0]??null,RB:slots('RB',2),WR:slots('WR',3),TE:up('TE')[0]??null,K:up('K')[0]??null,P:up('P')[0]??null,
+    rush:[...slots('DE',2),...slots('DT',2),...lb],cover:[...cb,...sf,...lb]};
 }
+// Individual players. A unit's ratings set the level of every play; the players
+// involved move one play up or down from there. Each edge is measured against what
+// the team gets on average, so stars stand out without changing team totals.
+const STAR=.8;            // how much a featured player's rating gap counts, in unit-rating points
+const STAR_SPREAD=24;     // a player 24 points better than his group draws e times the looks
+const ratingOf=p=>p?.rating??EMERGENCY_RATING;
+// Pass targets for one offense against one defense: who sees the ball, and who covers him.
+function routeTree(off,def){
+  const slots=[[off.WR[0],27,def.cover[0]],[off.WR[1],22,def.cover[1]],[off.WR[2],15,def.cover[2]],[off.TE,19,def.cover[3]],[off.RB[0],17,def.cover[4]]].filter(([p])=>p);
+  if(!slots.length)return [];
+  const mean=slots.reduce((a,[p])=>a+p.rating,0)/slots.length,covMean=slots.reduce((a,[,,c])=>a+ratingOf(c),0)/slots.length;
+  // Quarterbacks look to their best receivers and away from the best cover men.
+  const raw=slots.map(([p,base,cov])=>base*Math.exp((p.rating-mean)/STAR_SPREAD-(ratingOf(cov)-covMean)/(2*STAR_SPREAD))),total=raw.reduce((a,b)=>a+b,0);
+  const rows=slots.map(([p,,cov],i)=>({p,cov,w:raw[i]/total}));
+  const et=rows.reduce((a,x)=>a+x.w*x.p.rating,0),ec=rows.reduce((a,x)=>a+x.w*ratingOf(x.cov),0);
+  for(const x of rows)x.edge=STAR*((x.p.rating-et)-(ratingOf(x.cov)-ec));
+  return rows;
+}
+// Ball carriers: the backs share by rating; the quarterback keeps a fixed tenth and no edge.
+function backfield(off){
+  const backs=off.RB.map((p,i)=>[p,[75,15][i]]).filter(([p])=>p);
+  const mean=backs.length?backs.reduce((a,[p])=>a+p.rating,0)/backs.length:0;
+  const raw=backs.map(([p,base])=>base*Math.exp((p.rating-mean)/STAR_SPREAD)),total=raw.reduce((a,b)=>a+b,0);
+  const share=off.QB?(backs.length?.9:1):1;
+  const rows=backs.map(([p],i)=>({p,w:share*raw[i]/total}));
+  const er=rows.reduce((a,x)=>a+x.w*x.p.rating,0)/(rows.reduce((a,x)=>a+x.w,0)||1);
+  for(const x of rows)x.edge=STAR*(x.p.rating-er);
+  if(off.QB)rows.push({p:off.QB,w:1-share,edge:0});
+  return rows;
+}
+// Pass rushers and cover men get credit in proportion to how good they are.
+const byRating=players=>players.map(p=>p?Math.exp((p.rating-70)/12):0);
 const teamLine=()=>({plays:0,yards:0,passYards:0,rushYards:0,passAtt:0,comp:0,sacked:0,ints:0,fumblesLost:0,firstDowns:0,
   third:[0,0],fourth:[0,0],penalties:0,penaltyYards:0,top:0,drives:0,punts:0,fga:0,fgm:0});
 function playGame(home,away,r,{neutral=false,playoff=false,log=false}={}){
-  const G={u:[home,away],cast:[castFor(home),castFor(away)],homeSide:neutral?-1:0,playoff,
+  const cast=[castFor(home),castFor(away)];
+  const G={u:[home,away],cast,routes:[routeTree(cast[0],cast[1]),routeTree(cast[1],cast[0])],backs:[backfield(cast[0]),backfield(cast[1])],homeSide:neutral?-1:0,playoff,
     q:1,clock:QUARTER_SECONDS,score:[0,0],to:[3,3],off:0,yl:25,down:1,toGo:10,kick:null,freeKick:false,
     over:false,ot:false,otFirst:-1,otDone:[0,0],team:[teamLine(),teamLine()],players:{},log:log?[]:null};
   const opening=r()<.5?0:1;
@@ -942,7 +977,7 @@ function afterPlay(G,r,s,stopped,outOfBounds=false){
   if(s.hurry&&G.to[o]===0&&G.clock<=40&&G.clock>10&&G.down<=3&&G.down>1){
     tick(G,8,true);say(G,preSnap(G),shortName(G.cast[o].QB)+' spikes it to stop the clock.','play',{y:0,res:'inc'});G.down++;return;
   }
-  let runoff=s.hurry?12+randInt(r,7):s.milk?36+randInt(r,5):25+randInt(r,13);
+  let runoff=s.hurry?12+randInt(r,7):s.milk?36+randInt(r,5):28+randInt(r,13);
   if(outOfBounds)runoff-=10;
   tick(G,runoff,true);
 }
@@ -976,10 +1011,10 @@ function penalty(G,r,s,pre,roll){
 }
 function passPlay(G,r,s,pre){
   const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o],qb=C.QB;
-  const m=(U.passing-(.58*D.coverage+.42*D.pressure))*TALENT+homeEdge(G,o);
+  let m=(U.passing-(.58*D.coverage+.42*D.pressure))*TALENT+homeEdge(G,o);
   T.plays++;
   if(r()<clampTo(.058-m*.0016+(s.hurry?.01:0),.03,.13)){
-    const loss=3+randInt(r,7),who=pickWeighted(r,G.cast[d].rush,[3,3,2,2,1,1,1]);
+    const loss=3+randInt(r,7),who=pickWeighted(r,G.cast[d].rush,byRating(G.cast[d].rush).map((w,i)=>w*[3,3,2,2,1,1,1][i]));
     T.sacked++;credit(G,o,qb,'sacked');credit(G,d,who,'sacks');
     tick(G,5,false);
     if(r()<.04){
@@ -996,10 +1031,11 @@ function passPlay(G,r,s,pre){
     return;
   }
   T.passAtt++;credit(G,o,qb,'att');
-  const target=pickWeighted(r,[C.WR[0],C.WR[1],C.WR[2],C.TE,C.RB[0]],[30,22,14,18,16]);
-  credit(G,o,target,'targets');
+  const route=pickWeighted(r,G.routes[o],G.routes[o].map(x=>x.w)),target=route?.p??null,edge=route?.edge??0;
+  m+=edge;
+  credit(G,o,target,'targets');credit(G,d,route?.cov,'targeted');
   if(r()<clampTo(.023-m*.0007,.008,.05)){
-    const air=8+randInt(r,15),spot=G.yl+air,who=pickWeighted(r,G.cast[d].cover,[3,3,2,2,1,1,1]);
+    const air=8+randInt(r,15),spot=G.yl+air,who=route?.cov??pickWeighted(r,G.cast[d].cover,byRating(G.cast[d].cover));
     T.ints++;credit(G,o,qb,'ints');credit(G,d,who,'defInts');
     tick(G,6,false);
     if(spot>=100){say(G,pre,shortName(qb)+' is intercepted in the end zone by '+shortName(who)+'. Touchback.','play',{y:100-G.yl,res:'int'});changeOfPossession(G,20);return;}
@@ -1014,11 +1050,11 @@ function passPlay(G,r,s,pre){
   const deep=s.toGoal;
   if(r()<clampTo(.665+m*.007-(G.down>=3&&G.toGo>=10?.05:0),.45,.82)){
     let y=Math.round(2.5+expo(r,6.5)+m*.06);
-    if(r()<.06)y+=12+Math.round(expo(r,13));
+    if(r()<clampTo(.06+edge*.003,.02,.12))y+=12+Math.round(expo(r,13));
     // Routes are run past the sticks on third down, and often on second and long.
     if(r()<(G.down>=3?.36:G.down===2&&G.toGo>=4?.42:G.down===1?.12:0))y=Math.max(y,G.toGo+randInt(r,4)-1);
     y=Math.max(-2,Math.min(y,deep));
-    T.comp++;T.passYards+=y;credit(G,o,qb,'comp');credit(G,o,qb,'passYards',y);credit(G,o,target,'rec');credit(G,o,target,'recYards',y);
+    T.comp++;T.passYards+=y;credit(G,o,qb,'comp');credit(G,o,qb,'passYards',y);credit(G,o,target,'rec');credit(G,o,target,'recYards',y);credit(G,d,route?.cov,'yardsAllowed',y);
     tick(G,5+randInt(r,4),false);
     if(y<deep&&r()<.006){
       T.fumblesLost++;credit(G,o,target,'fumblesLost');
@@ -1044,11 +1080,11 @@ function passPlay(G,r,s,pre){
 }
 function runPlay(G,r,s,pre){
   const {o,d}=s,U=G.u[o],D=G.u[d],C=G.cast[o],T=G.team[o];
-  const carrier=pickWeighted(r,[C.RB[0],C.RB[1],C.QB],[75,15,10]);
-  const m=(U.rushing-D.runDefense)*TALENT+homeEdge(G,o);
+  const run=pickWeighted(r,G.backs[o],G.backs[o].map(x=>x.w)),carrier=run?.p??null,edge=run?.edge??0;
+  const m=(U.rushing-D.runDefense)*TALENT+homeEdge(G,o)+edge;
   T.plays++;
   let y=Math.round(3.35+m*.06+gauss(r)*2.6);
-  if(r()<.07)y+=6+Math.round(expo(r,11));
+  if(r()<clampTo(.07+edge*.003,.02,.14))y+=6+Math.round(expo(r,11));
   y=Math.min(y,s.toGoal);
   credit(G,o,carrier,'carries');credit(G,o,carrier,'rushYards',y);T.rushYards+=y;
   tick(G,5+randInt(r,4),false);
@@ -5190,10 +5226,11 @@ function bcBox(B){
   const row=(label,f)=>'<tr><th>'+label+'</th>'+[1,0].map(i=>'<td>'+esc(String(f(T[i])))+'</td>').join('')+'</tr>';
   const leaders=i=>{
     const ps=Object.values(B.box.players).filter(p=>p.side===i),top=k=>ps.filter(p=>p[k]).sort((a,b)=>b[k]-a[k])[0];
-    const q=top('att'),rb=top('rushYards'),wr=top('recYards');
+    const q=top('att'),rb=top('rushYards'),wr=top('recYards'),def=ps.filter(p=>p.sacks||p.defInts).sort((a,b)=>(b.sacks??0)+2*(b.defInts??0)-(a.sacks??0)-2*(a.defInts??0))[0];
     return [q&&q.name+' '+(q.comp??0)+'/'+q.att+', '+(q.passYards??0)+' yds, '+(q.passTd??0)+' TD, '+(q.ints??0)+' INT',
       rb&&rb.name+' '+rb.carries+' car, '+rb.rushYards+' yds'+(rb.rushTd?', '+rb.rushTd+' TD':''),
-      wr&&wr.name+' '+wr.rec+' rec, '+wr.recYards+' yds'+(wr.recTd?', '+wr.recTd+' TD':'')].filter(Boolean);
+      wr&&wr.name+' '+wr.rec+' rec, '+wr.recYards+' yds'+(wr.recTd?', '+wr.recTd+' TD':''),
+      def&&def.name+' '+[def.sacks&&def.sacks+(def.sacks===1?' sack':' sacks'),def.defInts&&def.defInts+' INT'].filter(Boolean).join(', ')].filter(Boolean);
   };
   return '<h2>Box score</h2><div class="wide"><table class="boxscore"><thead><tr><th></th>'+teams.map(t=>'<th>'+esc(t.abbr)+'</th>').join('')+'</tr></thead><tbody>'+
     row('Total yards',x=>x.yards)+row('Passing',x=>x.passYards)+row('Rushing',x=>x.rushYards)+row('Completions',x=>x.comp+'/'+x.passAtt)+

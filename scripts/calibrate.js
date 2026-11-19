@@ -19,7 +19,14 @@ function unitPool(leagues) {
   const pool = [];
   for (let n = 0; n < leagues; n++) {
     const S = api.newSave(1000 + n);
-    for (const t of api.clubs) pool.push({ id: t.id, abbr: t.abbr, u: api.clubUnits(S, t.id) });
+    for (const t of api.clubs) {
+      const u = api.clubUnits(S, t.id), c = u.chart, first = (pos, n) => c[pos].filter(p => !p.out).slice(0, n);
+      // Each featured player's rating against his group: pass targets, backs, cover men.
+      const groups = [[...first('WR', 3), ...first('TE', 1), ...first('RB', 1)], first('RB', 2), [...first('CB', 2), ...first('S', 2), ...first('LB', 3)]];
+      const rel = new Map();
+      for (const g of groups) { const mean = g.reduce((a, p) => a + p.rating, 0) / g.length; for (const p of g) if (!rel.has(p.id) || g === groups[1]) rel.set(p.id + (g === groups[1] ? '/rb' : ''), p.rating - mean); }
+      pool.push({ id: t.id, abbr: t.abbr, u, rel, key: n + '/' + t.id });
+    }
   }
   return pool;
 }
@@ -58,7 +65,8 @@ const pool = unitPool(20);
 const r = api.rngFor({ seed: 99, state: 99 });
 const sum = {}, add = (k, v) => { sum[k] = (sum[k] ?? 0) + v; };
 const strength = x => x.u.offense + x.u.defense;
-const bins = new Map(); // strength gap -> [new wins, old wins, games]
+const bins = new Map(); // strength gap -> [new wins, games]
+const indiv = new Map(); // league/club/player -> accumulated stats and rating gap
 let homeWins = 0, ties = 0, ots = 0, decided = 0;
 const t0 = process.hrtime.bigint();
 let engineNs = 0n;
@@ -80,6 +88,11 @@ for (let n = 0; n < N; n++) {
   add('points', g.score[0] + g.score[1]);
   for (const p of Object.values(g.box.players)) {
     add('carries', p.carries ?? 0); add('passTd', p.passTd ?? 0); add('rushTd', p.rushTd ?? 0);
+    const team = p.side === 0 ? h : a, k = team.key + '/' + p.id;
+    const x = indiv.get(k) ?? { pos: p.pos, rel: team.rel.get(p.id), relRb: team.rel.get(p.id + '/rb'), games: 0 };
+    x.games++;
+    for (const f of ['targets', 'rec', 'recYards', 'carries', 'rushYards', 'targeted', 'yardsAllowed', 'defInts', 'sacks']) x[f] = (x[f] ?? 0) + (p[f] ?? 0);
+    indiv.set(k, x);
   }
   // Win rate of the stronger side by strength gap, both engines.
   const gap = Math.abs(strength(h) - strength(a)), key = Math.min(30, Math.floor(gap / 5) * 5);
@@ -126,4 +139,21 @@ console.log('gap'.padEnd(8) + 'engine'.padStart(8) + 'old'.padStart(8) + 'games'
 for (const [k, [nw, c]] of [...bins].sort((x, y) => x[0] - y[0])) {
   console.log((k + '-' + (k + 4) + (k === 30 ? '+' : '')).padEnd(8) + (100 * nw / c).toFixed(1).padStart(8) + OLD_CURVE[k].toFixed(1).padStart(8) + String(c).padStart(8));
 }
+function bucketTable(title, filter, relOf, cols) {
+  const edges = [-Infinity, -8, -3, 3, 8, Infinity], names = ['8+ worse', '3-8 worse', 'even', '3-8 better', '8+ better'];
+  console.log('\n' + title + ' (rating vs. his group)');
+  console.log(''.padEnd(12) + cols.map(([l]) => l.padStart(14)).join(''));
+  for (let b = 0; b < 5; b++) {
+    const xs = [...indiv.values()].filter(x => filter(x) && relOf(x) !== undefined && relOf(x) >= edges[b] && relOf(x) < edges[b + 1]);
+    if (!xs.length) continue;
+    const t = f => xs.reduce((s, x) => s + (x[f] ?? 0), 0);
+    console.log(names[b].padEnd(12) + cols.map(([, fn]) => fn(t).toFixed(2).padStart(14)).join('') + ('  n=' + xs.length).padStart(9));
+  }
+}
+bucketTable('Receivers', x => x.targets > 0 && x.rel !== undefined && ['WR', 'TE'].includes(x.pos), x => x.rel,
+  [['targets/gm', t => t('targets') / t('games')], ['catch %', t => 100 * t('rec') / t('targets')], ['yds/target', t => t('recYards') / t('targets')]]);
+bucketTable('Running backs', x => x.pos === 'RB' && x.carries > 0, x => x.relRb,
+  [['carries/gm', t => t('carries') / t('games')], ['yds/carry', t => t('rushYards') / t('carries')]]);
+bucketTable('Cover men', x => x.targeted > 0 && ['CB', 'S'].includes(x.pos), x => x.rel,
+  [['targeted/gm', t => t('targeted') / t('games')], ['yds/target', t => t('yardsAllowed') / t('targeted')], ['INT/100 tgt', t => 100 * t('defInts') / t('targeted')]]);
 console.log('\nEngine time: ' + (Number(engineNs) / 1e6 / N).toFixed(3) + ' ms per game (' + (Number(engineNs) / 1e6).toFixed(0) + ' ms for ' + N + '); whole run ' + elapsed.toFixed(0) + ' ms');

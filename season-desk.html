@@ -4251,6 +4251,7 @@ const embeddableJson=value=>JSON.stringify(value).replace(/</g,'\\u003c');
 const storage={
   get(k){try{return localStorage.getItem(k);}catch{return null;}},
   set(k,v){try{localStorage.setItem(k,v);return true;}catch{return false;}},
+  remove(k){try{localStorage.removeItem(k);}catch{}},
 };
 const embedded=(()=>{try{return JSON.parse($('#initialSeason').textContent,safeReviver);}catch{return null;}})();
 const embeddedVersion=(()=>{try{return embedded?detectVersion(embedded):0;}catch{return 0;}})();
@@ -4261,11 +4262,12 @@ const legacyKey=embeddedVersion>=2?null:'cgl.regular-season.v1.'+(embedded?.save
 const urlSeed=(()=>{try{const v=Number(new URLSearchParams(location.search).get('seed'));return isInt(v,1,4294967295)?v:undefined;}catch{return undefined;}})();
 
 const LOCAL_OK='Saved in this browser.';
-let save,saveMessage='';
+let save,saveMessage='',bootFrom='new';
 function boot(){
   const stored=storage.get(storageKey);
   const raw=stored??(legacyKey?storage.get(legacyKey):null);
   if(raw){
+    bootFrom='local';
     try{
       const {save:S,from}=upgrade(JSON.parse(raw));
       if(from<SCHEMA_VERSION){
@@ -4280,15 +4282,95 @@ function boot(){
     }
   }
   if(embedded){
-    try{return upgrade(embedded).save;}
+    try{const S=upgrade(embedded).save;bootFrom='embedded';return S;}
     catch(error){saveMessage+='The season in this file could not be opened because '+sentence(error.message)+' ';}
   }
   if(saveMessage)saveMessage+='A new season has started.';
   return newSave(urlSeed);
 }
+// ---------------------------------------------------------------------------
+// Where the season lives. IndexedDB holds a gzip-compressed copy (about a
+// ninth of the size, with far more room than browser storage). Browser
+// storage (localStorage) is the fallback when IndexedDB is missing or
+// refuses, and the source of older saves, which move over on first load.
+// ---------------------------------------------------------------------------
+const IDB_OK=typeof indexedDB!=='undefined';
+let idb=null,storeReady=!IDB_OK,idbWriting=false,idbPending=null;
+function openIdb(){
+  return new Promise(resolve=>{
+    let done=false;const finish=v=>{if(!done){done=true;resolve(v);}};
+    setTimeout(()=>finish(null),2500);
+    try{
+      const q=indexedDB.open('cgl',1);
+      q.onupgradeneeded=()=>q.result.createObjectStore('saves');
+      q.onsuccess=()=>finish(q.result);q.onerror=()=>finish(null);q.onblocked=()=>finish(null);
+    }catch{finish(null);}
+  });
+}
+function idbRequest(mode,fn){
+  return new Promise((resolve,reject)=>{
+    try{
+      const tx=idb.transaction('saves',mode),req=fn(tx.objectStore('saves'));
+      tx.oncomplete=()=>resolve(req?.result);tx.onerror=tx.onabort=()=>reject(tx.error);
+    }catch(e){reject(e);}
+  });
+}
+async function packSave(json){
+  if(typeof CompressionStream==='undefined')return {format:'json',data:json};
+  return {format:'gzip',data:await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).blob()};
+}
+async function unpackSave(rec){
+  return rec.format==='gzip'?await new Response(rec.data.stream().pipeThrough(new DecompressionStream('gzip'))).text():rec.data;
+}
+// One write at a time; the newest pending season wins.
+async function flushIdb(){
+  idbWriting=true;
+  while(idbPending){
+    const {json,meta}=idbPending;idbPending=null;
+    try{
+      const packed=await packSave(json);
+      await idbRequest('readwrite',st=>st.put({...packed,...meta,savedAt:Date.now()},storageKey));
+      if(storage.get(storageKey)!==null)storage.remove(storageKey); // the compressed copy replaces the big one
+    }catch{
+      idb=null;
+      if(!storage.set(storageKey,json)){saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';drawStatus();}
+    }
+  }
+  idbWriting=false;
+}
 function persist(){
-  if(!storage.set(storageKey,JSON.stringify(save)))saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';
+  if(!storeReady)return; // wait until we know where the season lives
+  const json=JSON.stringify(save);
+  if(idb){
+    idbPending={json,meta:{saveId:save.saveId,revision:save.revision??0,schemaVersion:SCHEMA_VERSION}};
+    if(!idbWriting)flushIdb();
+    if(!saveMessage)saveMessage=LOCAL_OK;
+    return;
+  }
+  if(!storage.set(storageKey,json))saveMessage='This browser is not keeping saves. Use Save a copy to keep your progress.';
   else if(!saveMessage)saveMessage=LOCAL_OK;
+}
+// On load: open IndexedDB, take whichever copy of the season is newer, then save.
+async function openStorage(){
+  idb=await openIdb();
+  if(idb){
+    try{
+      const rec=await idbRequest('readonly',st=>st.get(storageKey));
+      if(rec){
+        const {save:S,from}=upgrade(JSON.parse(await unpackSave(rec)));
+        const localRev=bootFrom==='local'?(save.revision??0):-1;
+        if((S.revision??0)>=localRev){
+          save=S;resetView();
+          saveMessage=from<SCHEMA_VERSION?'Upgraded your season from format v'+from+' to v'+SCHEMA_VERSION+'.':LOCAL_OK;
+        }
+      }
+    }catch(error){
+      idb=null; // leave the unreadable copy alone and save to browser storage instead
+      saveMessage='The saved season could not be opened because '+sentence(error.message)+' It was left untouched; this visit saves in browser storage. ';
+    }
+  }
+  storeReady=true;
+  persist();
 }
 function commit(){save.revision=(save.revision??0)+1;saveMessage='';persist();draw();}
 
@@ -4301,9 +4383,17 @@ const use=name=>{
   catch{return Promise.resolve(null);}
 };
 const downloadsReady=use('downloads');
-downloadsReady.then(d=>{for(const id of ['#copy','#save'])$(id).hidden=!d;});
+// Outside Claude (GitHub Pages, a local file) the page downloads files itself.
+const standalone=!window.claude;
+downloadsReady.then(d=>{for(const id of ['#copy','#save'])$(id).hidden=!(d||standalone);});
+function downloadDirect(filename,data){
+  const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 async function offerFile(filename,data){
   const d=await downloadsReady;
+  if(!d&&standalone){downloadDirect(filename,data);saveMessage='Saved '+filename+'.';draw();return;}
   if(!d){saveMessage='Saving files is not available in this view.';draw();return;}
   try{await d.save({filename,data});saveMessage='Saved '+filename+'.';}
   catch(e){
@@ -4729,5 +4819,11 @@ function start(data){
 }
 const hot=window.claude?.hot;
 try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}
-try{hot?.ready?hot.ready(start):start(hot?.data??{});}catch{start({});}
+// Draw once we know where the season lives (immediately when there is no IndexedDB).
+function begin(data){
+  if(storeReady)return start(data);
+  $('#status').textContent='Opening your season…';
+  openStorage().catch(()=>{storeReady=true;persist();}).finally(()=>start(data));
+}
+try{hot?.ready?hot.ready(begin):begin(hot?.data??{});}catch{begin({});}
 </script>

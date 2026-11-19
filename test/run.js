@@ -1636,7 +1636,8 @@ test('season files load as JSON, and old cgl-week HTML copies still load', () =>
 test('the page never relies on confirm() or a page-started download', () => {
   const html = fs.readFileSync(GAME, 'utf8');
   assert(!/\bconfirm\(/.test(html));
-  assert(!/\.download\s*=/.test(html));
+  const downloads = html.match(/\.download\s*=/g) ?? [];
+  assert(downloads.length <= 1 && /if\(!d&&standalone\)\{downloadDirect/.test(html), 'only a standalone page downloads files itself');
 });
 
 let failed = 0;

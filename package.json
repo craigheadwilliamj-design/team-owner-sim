@@ -1,0 +1,13 @@
+{
+  "name": "team-owner-sim",
+  "private": true,
+  "description": "Continental Gridiron League: a text-based pro football ownership simulator.",
+  "scripts": {
+    "test": "node test/run.js",
+    "build": "node scripts/build.js",
+    "check": "node scripts/build.js --check"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

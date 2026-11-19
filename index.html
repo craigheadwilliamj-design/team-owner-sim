@@ -1187,6 +1187,7 @@ function newSave(seed=newSeed()){
   makeStaffAll(S,r);
   initDepth(S,r);
   initScouting(S);
+  openRenewals(S);
   return S;
 }
 const snap=p=>({id:p.id,name:p.name,pos:p.pos,rating:p.rating});
@@ -1944,8 +1945,9 @@ function financesView(){
 // league.markets   broadcast control and fan preference for each open market.
 //                  Control and fans are separate: Cleveland can keep more
 //                  Columbus fans after Cincinnati wins the rights.
-// league.contest   the rights renewal the owner can fight for: the nearest
-//                  open market another club controls
+// league.contests  this season's rights renewals: open until the station
+//                  decides, then the bids and the winner
+// league.rules     league rules the owners have voted in (first refusal)
 // league.owners    the other 31 owners: style, traits, how they feel about
 //                  you, and what they remember
 // league.meeting   a vote the losing owner calls, which you can lobby
@@ -1984,20 +1986,24 @@ function makeLeague(r){
   const owners=Object.fromEntries(clubs.map(t=>[t.id,{name:personName(r),style:OWNER_STYLES[randInt(r,3)],
     tradition:round2(r()-.5),subsidy:round2(r()*1.2-.6),sponsorAffinity:round2(r()*.6-.3),relation:randInt(r,26)-5,memory:[]}]));
   const markets=Object.fromEntries(OPEN_MARKETS.map(m=>[m.id,leagueMarket(r,m)]));
-  return {owners,markets,contest:null,meeting:null,news:[],promises:[],planeNoted:false};
+  return {owners,markets,contests:[],rules:{firstRefusal:false},meeting:null,news:[],promises:[],planeNoted:false};
 }
 // Broadcast control and fan preference for one open market. A held market's
 // holder has the most fans and the next-nearest club a following; in an
-// unclaimed market the two nearest clubs split a smaller following.
+// unclaimed market the two nearest clubs split a smaller following. Initial
+// deals come up for renewal in seasons 1 to 4.
 function leagueMarket(r,m){
   const holder=INITIAL_RIGHTS[m.id]??null;
   if(!holder){
     const [a,b]=nearestClubs(m.id,2);
-    return {holder:null,fee:0,signedSeason:0,fans:{[a]:14+randInt(r,12),[b]:10+randInt(r,12)}};
+    return {holder:null,fee:0,signedSeason:0,renewal:1,fans:{[a]:14+randInt(r,12),[b]:10+randInt(r,12)}};
   }
-  const second=nearestClubs(m.id,3).find(id=>id!==holder);
-  return {holder,fee:round1(1.5+randInt(r,6)*.5),signedSeason:0,fans:{[holder]:45+randInt(r,16),[second]:20+randInt(r,16)}};
+  const second=nearestClubs(m.id,3).find(id=>id!==holder),fans={[holder]:45+randInt(r,16),[second]:20+randInt(r,16)};
+  return {holder,fee:startingFee(r,m.id,fans[holder]),signedSeason:0,renewal:1+randInt(r,4),fans};
 }
+// What a holder pays for rights at a given fan share: inside the station's range.
+const startingFee=(r,marketId,share)=>round1(Math.max(1,adValue(marketId,Math.max(15,share))*(.55+r()*.35)));
+
 const adValue=(marketId,share)=>round1(share/100*openMarket(marketId).metro*4);
 const holdsOpenMarket=(S,clubId)=>Object.values(S.league.markets).some(m=>m.holder===clubId);
 function remember(S,clubId,text,delta){
@@ -2007,33 +2013,44 @@ function remember(S,clubId,text,delta){
 }
 function news(S,text){const s=cur(S);S.league.news.push({season:s.number,week:s.tick,text});}
 
-// The rights fight starts once the owner has a club.
-function ensureContest(S){
-  if(!S.club||S.league.contest)return;
-  const s=cur(S),home=clubCoords(S.club);
-  const target=OPEN_MARKETS.filter(m=>{const h=S.league.markets[m.id].holder;return h&&h!==S.club;})
-    .sort((a,b)=>milesBetween(home,[a.lat,a.lon])-milesBetween(home,[b.lat,b.lon]))[0];
-  const M=S.league.markets[target.id];
-  if(!(S.club in M.fans))M.fans[S.club]=8;
-  const deadline=s.tick+4;
-  S.league.contest={marketId:target.id,holder:M.holder,deadlineWeek:deadline,status:'open',bid:null,lobbied:false};
+// Rights renewals. Every deal runs to a renewal season; that season, and every
+// season a market sits unclaimed, the station takes offers from Week 1 and
+// decides after RENEWAL_WINDOW weeks. The holder always bids to keep an AI-held
+// market; clubs with a following may challenge. The owner can bid on any of
+// them, including a market it holds, which it loses if it does not bid.
+const RENEWAL_WINDOW=4;
+const MATCH_MARGIN=1.25;  // first refusal: the holder matches offers up to a quarter above its own
+const FAN_GAIN_HOLDER=.6,FAN_GAIN_AIRS=.05,FAN_LOSS=.4;  // weekly, scaled by the market's potential
+function stationRange(S,marketId){
+  const M=S.league.markets[marketId],base=adValue(marketId,Math.max(15,...Object.values(M.fans)));
+  return [round1(Math.max(1,base*.55)),round1(Math.max(1.5,base*.9))]; // the station leaves the holder a margin
 }
-function stationRange(S){
-  const C=S.league.contest,M=S.league.markets[C.marketId],base=adValue(C.marketId,M.fans[C.holder]??40);
-  return [round1(Math.max(1,base*.8)),round1(base*1.3)];
+const bidCap=(S,marketId)=>Math.max(12,Math.ceil(stationRange(S,marketId)[1]*1.5));
+const bidStep=cap=>cap>40?1:.5;
+const contestFor=(S,marketId)=>S.league.contests.find(c=>c.marketId===marketId&&c.season===cur(S).number)??null;
+const openContests=S=>S.league.contests.filter(c=>c.status==='open');
+function openRenewals(S){
+  const s=cur(S),L=S.league;
+  if(s.tick>REGULAR_WEEKS-RENEWAL_WINDOW)return; // too late this season; they open next season
+  L.contests=L.contests.filter(c=>c.season===s.number);
+  for(const m of OPEN_MARKETS){
+    const M=L.markets[m.id];
+    if((M.holder&&M.renewal>s.number)||contestFor(S,m.id))continue;
+    L.contests.push({marketId:m.id,season:s.number,holder:M.holder,deadlineWeek:s.tick+RENEWAL_WINDOW,status:'open',bid:null,lobbied:false});
+  }
 }
-function submitBid(S,annual,years,lobby){
-  const C=S.league.contest,s=cur(S);
-  if(!C||C.status!=='open'||s.tick>=C.deadlineWeek)return 'closed';
-  if(!(annual>=1&&annual<=12)||![3,5,7].includes(years))return 'invalid';
+function submitBid(S,marketId,annual,years,lobby){
+  const C=contestFor(S,marketId),s=cur(S);
+  if(!S.club||!C||C.status!=='open'||s.tick>=C.deadlineWeek)return 'closed';
+  if(!(annual>=.5&&annual<=bidCap(S,marketId))||![3,5,7].includes(years))return 'invalid';
   C.bid={annual:round1(annual),years};
   if(lobby&&!C.lobbied){
     C.lobbied=true;
-    learn(S,{kind:'stationVisit',marketId:C.marketId},['owner','president','station']);
+    learn(S,{kind:'stationVisit',marketId},['owner','president','station']);
   }
   return 'ok';
 }
-function withdrawBid(S){const C=S.league.contest;if(C?.status==='open')C.bid=null;}
+function withdrawBid(S,marketId){const C=contestFor(S,marketId);if(C?.status==='open')C.bid=null;}
 
 // Kickoff windows decide whether two clubs' games compete for the same audience.
 function slotFor(weekIndex,g){
@@ -2043,7 +2060,8 @@ function slotFor(weekIndex,g){
   return v<3?'early':v<6?'late':'night';
 }
 function gameOf(S,weekIndex,clubId){return cur(S).weeks[weekIndex]?.find(g=>g.home===clubId||g.away===clubId)??null;}
-// Who a market sees in a given week.
+// Who a market sees in a given week: the holder's game always, others when
+// they are not in the holder's window. With no holder, every game airs.
 function coverage(S,marketId,weekIndex){
   const M=S.league.markets[marketId],H=M.holder,hg=H&&gameOf(S,weekIndex,H),hs=hg&&slotFor(weekIndex,hg);
   return Object.keys(M.fans).map(id=>{
@@ -2053,77 +2071,125 @@ function coverage(S,marketId,weekIndex){
     return {id,slot,airs:id===H||!hg||slot!==hs};
   });
 }
-function coverageText(S,weekIndex){
-  const C=S.league.contest;if(!C)return '';
+function coverageText(S,marketId,weekIndex){
   if(weekIndex>=cur(S).weeks.length)return 'No games until next season.';
-  const M=S.league.markets[C.marketId],name=openMarket(C.marketId).name,rows=coverage(S,C.marketId,weekIndex);
-  const me=rows.find(x=>x.id===S.club),H=M.holder,them=rows.find(x=>x.id===H);
-  if(!me?.slot)return 'You are off that week.';
-  if(H===S.club)return 'Your game airs in '+name+' in the '+me.slot+' window.';
-  if(!them?.slot)return byId.get(H).market+' is off, so your game airs in '+name+'.';
-  return me.airs?'Both games air in '+name+': '+byId.get(H).market+' '+them.slot+', yours '+me.slot+'.':
-    'Both games are in the '+me.slot+' window, so '+name+' sees '+byId.get(H).market+', not you.';
+  const M=S.league.markets[marketId],name=openMarket(marketId).name,H=M.holder,g=gameOf(S,weekIndex,S.club);
+  if(!g)return 'You are off that week.';
+  const mine=slotFor(weekIndex,g);
+  if(H===S.club)return 'Your game airs in '+name+' in the '+mine+' window.';
+  if(!H)return 'Nobody holds '+name+', so your game airs there in the '+mine+' window'+(S.club in M.fans?'.':', though nobody there follows you yet.');
+  const hg=gameOf(S,weekIndex,H);
+  if(!hg)return byId.get(H).market+' is off, so your game airs in '+name+'.';
+  const theirs=slotFor(weekIndex,hg);
+  return theirs!==mine?'Both games air in '+name+': '+byId.get(H).market+' '+theirs+', yours '+mine+'.':
+    'Both games are in the '+mine+' window, so '+name+' sees '+byId.get(H).market+', not you.';
+}
+// Fans follow what they can watch. The holder's games win fans, first from the
+// undecided and then from rival clubs; a club blacked out by the holder's game
+// loses some. Markets with more potential move faster. A nearby club never
+// drops below a local following: 20% next door, nothing past 300 miles.
+const fanFloor=(marketId,clubId)=>{const m=openMarket(marketId);return Math.max(0,Math.round(20-milesBetween([m.lat,m.lon],clubCoords(clubId))/15));};
+function shiftFans(S,marketId,wi){
+  const M=S.league.markets[marketId],k=openMarket(marketId).potential/70,rows=coverage(S,marketId,wi).filter(x=>x.slot);
+  const pool=()=>100-Object.values(M.fans).reduce((a,b)=>a+b,0);
+  const floor=id=>Math.min(M.fans[id],fanFloor(marketId,id));
+  for(const x of rows)if(!x.airs)M.fans[x.id]=round2(Math.max(floor(x.id),M.fans[x.id]-FAN_LOSS*k));
+  for(const x of rows){
+    if(!x.airs)continue;
+    let want=(x.id===M.holder?FAN_GAIN_HOLDER:FAN_GAIN_AIRS)*k;
+    const free=Math.min(want,Math.max(0,pool()-5));
+    M.fans[x.id]=round2(M.fans[x.id]+free);want-=free;
+    if(want<=0||x.id!==M.holder)continue;
+    const spare=id=>Math.max(0,M.fans[id]-floor(id)),others=Object.keys(M.fans).filter(id=>id!==x.id&&spare(id)>0),total=others.reduce((a,id)=>a+spare(id),0);
+    if(!total)continue;
+    const take=Math.min(want,total);
+    for(const id of others)M.fans[id]=round2(M.fans[id]-take*spare(id)/total);
+    M.fans[x.id]=round2(M.fans[x.id]+take);
+  }
 }
 
 // Runs after each played week.
 function processLeague(S,r,wi=null){
-  ensureContest(S);
+  openRenewals(S);
   const L=S.league,s=cur(S);
-  // Fans follow what they can watch, in weeks with regular-season games.
-  if(wi!==null)for(const [id,M] of Object.entries(L.markets)){
-    for(const row of coverage(S,id,wi)){
-      if(!row.slot)continue;
-      const growth=row.id===M.holder?.35:row.airs?.08:0;
-      const other=100-Object.values(M.fans).reduce((a,b)=>a+b,0);
-      M.fans[row.id]=round2(M.fans[row.id]+Math.min(growth,Math.max(0,other-5)));
-    }
-  }
+  if(wi!==null)for(const id of Object.keys(L.markets))shiftFans(S,id,wi);
   // Other owners hear about a personally funded plane through the finance committee.
   if(!L.planeNoted&&S.stadium.knowledge.some(f=>f.kind==='ownerFunding'&&f.project==='plane'&&f.knownBy.includes('league'))){
     L.planeNoted=true;
     for(const [id,o] of Object.entries(L.owners))if(id!==S.club&&o.subsidy<-.3)remember(S,id,'You paid for your team plane personally. Their players still fly charter.',-6);
   }
-  const C=L.contest;
-  if(C&&C.status==='open'&&s.tick>=C.deadlineWeek)decideContest(S,r);
+  const due=L.contests.filter(C=>C.status==='open'&&s.tick>=C.deadlineWeek);
+  for(const C of due)decideContest(S,C,r);
+  if(due.length)maybeCallMeeting(S,due);
   const V=L.meeting;
   if(V&&V.status==='scheduled'&&s.tick>=V.week)resolveVote(S);
 }
-function decideContest(S,r){
-  const L=S.league,C=L.contest,M=L.markets[C.marketId],name=openMarket(C.marketId).name,rival=C.holder,ro=L.owners[rival];
-  const [lo,hi]=stationRange(S);
-  const rivalBid={annual:round1(lo+(hi-lo)*(.25+r()*.6)*(ro.style==='maverick'?1.1:1)),years:5};
-  const score=(clubId,b)=>b.annual+b.years*.15+(M.fans[clubId]??0)*.03+(clubId===rival?.4:0)+(clubId===S.club&&C.lobbied?.8:0);
-  C.rivalBid=rivalBid;
-  const won=!!C.bid&&score(S.club,C.bid)>score(rival,rivalBid);
-  C.status='decided';C.winner=won?S.club:rival;
-  if(won){
-    Object.assign(M,{holder:S.club,fee:C.bid.annual,signedSeason:cur(S).number});
-    remember(S,rival,'You took the '+name+' broadcast rights from them.',-25);
-    record(S,'rightsWon',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
-    news(S,teamName(S.club)+' win '+name+' TV rights from '+teamName(rival));
-  }else if(C.bid){
-    M.fee=rivalBid.annual;
-    remember(S,rival,'You bid against them for '+name+'.',-5);
-    record(S,'rightsLost',{marketId:C.marketId,marketName:name,rival,bid:C.bid,rivalBid});
-    news(S,teamName(rival)+' hold on to '+name+' after a bidding fight with '+byId.get(S.club).market);
-  }else{
-    M.fee=rivalBid.annual;
-    record(S,'rightsRenewed',{marketId:C.marketId,marketName:name,rival});
+// What the AI clubs offer. Holders always bid; a challenger needs a following
+// and the nerve, which depends on its owner.
+function aiBids(S,C,r){
+  const M=S.league.markets[C.marketId],[lo,hi]=stationRange(S,C.marketId),bids={},holderFans=M.holder?M.fans[M.holder]??0:0;
+  for(const id of Object.keys(M.fans)){
+    if(id===S.club)continue;
+    const o=S.league.owners[id],holds=id===M.holder;
+    if(!holds){
+      const p=(M.holder?.35:.75)+(o.style==='maverick'?.25:o.style==='old guard'?-.15:0)+(M.holder&&M.fans[id]>=holderFans?.2:0);
+      if(M.fans[id]<10||r()>=p)continue;
+    }
+    const f=(holds?.2+r()*.6:.3+r()*.75)*(o.style==='maverick'?1.1:o.style==='old guard'?.95:1); // challengers have to want it
+    bids[id]={annual:round1(Math.max(1,lo+(hi-lo)*f)),years:holds?5:[3,5,7][randInt(r,3)]};
   }
-  scheduleMeeting(S);
+  return bids;
 }
-// The rival owner takes the fight to the owners' room.
-function scheduleMeeting(S){
-  const s=cur(S),L=S.league,C=L.contest;
-  if(!C.bid)return; // no fight, nothing to take to the owners
-  const week=s.tick+3;
-  L.meeting={week,sponsor:C.holder,marketId:C.marketId,status:'scheduled',callsLeft:MEETING_CALLS,lobby:{},revealed:{},playerVote:null,
-    reversal:C.winner===S.club};
+function decideContest(S,C,r){
+  const L=S.league,M=L.markets[C.marketId],name=openMarket(C.marketId).name,holder=M.holder,s=cur(S),me=S.club;
+  const bids=aiBids(S,C,r);
+  if(me&&C.bid)bids[me]=C.bid;
+  const score=(id,b)=>b.annual+b.years*.15+(M.fans[id]??0)*.015+(id===holder?.3:0)+(id===me&&C.lobbied?.8:0);
+  const ranked=Object.entries(bids).sort((a,b)=>score(...b)-score(...a));
+  let [winner,win]=ranked[0]??[null,null],matched=false;
+  const best=winner,bestBid=win;
+  if(winner&&holder&&winner!==holder&&L.rules.firstRefusal&&bids[holder]&&win.annual<=bids[holder].annual*MATCH_MARGIN){
+    winner=holder;win={annual:win.annual,years:bids[holder].years};matched=true;
+  }
+  Object.assign(C,{status:'decided',bids,winner,winningBid:win,matched});
+  if(winner){Object.assign(M,{holder:winner,fee:win.annual,signedSeason:s.number,renewal:s.number+win.years});M.fans[winner]??=0;}
+  else Object.assign(M,{holder:null,fee:0,signedSeason:s.number,renewal:s.number+1});
+  // Headlines when control changes hands, or a fight ends in a match.
+  if(matched)news(S,teamName(holder)+' match '+possessive(teamName(best))+' offer and keep '+name+' under first refusal');
+  else if(winner&&winner!==holder)news(S,holder?teamName(winner)+' win '+name+' TV rights from '+teamName(holder):teamName(winner)+' claim the unclaimed '+name+' TV rights');
+  else if(!winner&&holder)news(S,name+' TV rights go unclaimed after '+teamName(holder)+' let them lapse');
+  else if(winner&&me&&C.bid&&winner!==me)news(S,teamName(winner)+' hold on to '+name+' after a bidding fight with '+byId.get(me).market);
+  if(!me||(!C.bid&&holder!==me))return;
+  const rivalBid=ranked.find(([id])=>id!==me)?.[1]??null,rival=ranked.find(([id])=>id!==me)?.[0]??null;
+  const base={marketId:C.marketId,marketName:name,bid:C.bid,matched};
+  if(holder===me)record(S,winner===me?'rightsKept':'rightsLapsed',{...base,rival:winner===me?rival:winner,rivalBid:winner===me?rivalBid:win});
+  else if(winner===me){
+    if(holder)remember(S,holder,'You took the '+name+' broadcast rights from them.',-25);
+    record(S,'rightsWon',{...base,held:!!holder,rival:holder??rival,rivalBid:holder?bids[holder]??null:rivalBid});
+  }else{
+    if(winner===holder)remember(S,holder,'You bid against them for '+name+'.',-5);
+    record(S,'rightsLost',{...base,rival:winner,rivalBid:win});
+  }
+}
+// A holder who loses a market to the owner, or has to fight the owner off,
+// takes a first-refusal rule to the owners' room. One meeting a season, and
+// none once the rule is in.
+function maybeCallMeeting(S,decided){
+  const L=S.league,s=cur(S);
+  if(!S.club||L.rules.firstRefusal||L.meeting?.status==='scheduled'||L.meeting?.season===s.number)return;
+  const took=decided.find(C=>C.winner===S.club&&C.holder&&C.holder!==S.club);
+  const fought=decided.find(C=>C.bid&&C.holder&&C.holder!==S.club&&C.winner===C.holder);
+  const C=took??fought;
+  if(C)scheduleMeeting(S,C,!!took);
+}
+function scheduleMeeting(S,C,reversal){
+  const s=cur(S),L=S.league,week=s.tick+3;
+  L.meeting={season:s.number,week,sponsor:C.holder,marketId:C.marketId,status:'scheduled',callsLeft:MEETING_CALLS,lobby:{},revealed:{},playerVote:null,reversal};
   const name=openMarket(C.marketId).name,o=L.owners[C.holder];
-  record(S,'meetingCalled',{sponsor:C.holder,owner:o.name,marketName:name,week,reversal:L.meeting.reversal});
+  record(S,'meetingCalled',{sponsor:C.holder,owner:o.name,marketName:name,week,reversal});
   news(S,byId.get(C.holder).market+' owner '+o.name+' asks the league for a first-refusal rule on broadcast markets');
 }
-const playerOpposes=S=>S.league.meeting&&(S.league.meeting.reversal||S.league.contest?.bid!=null);
+const playerOpposes=S=>!!S.league.meeting; // meetings are only called against the owner
 function ownerLean(S,clubId){
   const L=S.league,V=L.meeting,o=L.owners[clubId];
   if(clubId===V.sponsor)return 9;
@@ -2155,9 +2221,13 @@ function resolveVote(S){
   const votes=Object.fromEntries(clubs.map(t=>[t.id,t.id===S.club?mine:ownerLean(S,t.id)>0?'yes':'no']));
   const yes=Object.values(votes).filter(v=>v==='yes').length,passed=yes>=VOTE_THRESHOLD;
   Object.assign(V,{status:'decided',votes,yes,passed});
+  if(passed)L.rules.firstRefusal=true;
   let lostMarket=false;
-  if(passed&&V.reversal&&L.markets[V.marketId].holder===S.club){
-    Object.assign(L.markets[V.marketId],{holder:sponsor,signedSeason:cur(S).number});
+  const M=L.markets[V.marketId];
+  if(passed&&V.reversal&&M.holder===S.club){
+    const theirs=L.contests.find(c=>c.marketId===V.marketId&&c.season===V.season)?.bids?.[sponsor];
+    Object.assign(M,{holder:sponsor,signedSeason:cur(S).number,...(theirs?{fee:theirs.annual}:{})});
+    M.fans[sponsor]??=0;
     lostMarket=true;
   }
   if(passed)remember(S,sponsor,'The owners backed their first-refusal rule.',4);
@@ -2170,10 +2240,12 @@ function resolveVote(S){
 
 // Words for league events.
 function leagueEventText(e){
-  const rival=e.rival&&teamName(e.rival);
+  const rival=e.rival&&teamName(e.rival),money=b=>'$'+b.annual+'M a year for '+b.years+' years';
   switch(e.type){
-    case 'rightsWon':return 'The '+e.marketName+' station took our offer: $'+e.bid.annual+'M a year for '+e.bid.years+' years against '+possessive(rival)+' $'+e.rivalBid.annual+'M. Our games get preferred coverage there. Expect to hear from their owner.';
-    case 'rightsLost':return rival+' kept '+e.marketName+'. They offered $'+e.rivalBid.annual+'M a year against our $'+e.bid.annual+'M. They know we tried.';
+    case 'rightsWon':return 'The '+e.marketName+' station took our offer: '+money(e.bid)+(e.rivalBid?' against '+possessive(rival)+' $'+e.rivalBid.annual+'M':rival?'':', unopposed')+'. Our games get preferred coverage there.'+(e.held?' Expect to hear from their owner.':'');
+    case 'rightsLost':return e.matched?rival+' matched our $'+e.bid.annual+'M under first refusal and keep '+e.marketName+'.':rival+' won '+e.marketName+' with $'+e.rivalBid.annual+'M a year against our $'+e.bid.annual+'M.'+(e.rival?' They know we tried.':'');
+    case 'rightsKept':return 'We keep '+e.marketName+': '+money(e.bid)+(e.matched?', matching '+possessive(rival)+' offer under first refusal.':e.rivalBid?', ahead of '+possessive(rival)+' $'+e.rivalBid.annual+'M.':', unopposed.');
+    case 'rightsLapsed':return e.rival?'We lost '+e.marketName+' to '+rival+(e.bid?', whose $'+e.rivalBid.annual+'M beat our $'+e.bid.annual+'M.':'. We made no offer to renew.'):'Our '+e.marketName+' rights lapsed. Nobody holds them now.';
     case 'rightsRenewed':return rival+' renewed the '+e.marketName+' broadcast rights unopposed.';
     case 'meetingCalled':return e.owner+' has called a league vote after '+weekLabel(e.week)+' on a first-refusal rule for broadcast markets.'+(e.reversal?' It would apply to deals signed this season, which means '+e.marketName+'.':'');
     case 'voteResult':return 'The owners voted '+e.yes+'–'+e.no+' on '+possessive(e.owner)+' first-refusal rule. It needed '+VOTE_THRESHOLD+'. '+(e.passed?'It passed.'+(e.lostMarket?' '+e.marketName+' goes back to '+byId.get(e.sponsor).market+'.':''):'It failed.')+' You voted '+e.mine+'.';
@@ -2245,11 +2317,11 @@ function drawMap(canvas,S){
   });
   ctx.restore();
   ctx.strokeStyle=fg;ctx.lineWidth=1.5;ctx.stroke(land);
-  const contested=S.league.contest?.status==='open'?S.league.contest.marketId:null,home=S.club&&byId.get(S.club).marketId;
+  const contested=new Set(openContests(S).map(C=>C.marketId)),home=S.club&&byId.get(S.club).marketId;
   ctx.font='600 11px '+token('--body','sans-serif');ctx.textBaseline='middle';
   for(const p of pts){
     ctx.beginPath();ctx.arc(p.x,p.y,p.open?4:3,0,Math.PI*2);ctx.fillStyle=p.open?bg:fg;ctx.fill();ctx.strokeStyle=p.open?fg:bg;ctx.lineWidth=1.5;ctx.stroke();
-    if(p.id===contested||p.id===home){ctx.beginPath();ctx.setLineDash(p.id===contested?[3,3]:[]);ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.strokeStyle=fg;ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);}
+    if(contested.has(p.id)||p.id===home){ctx.beginPath();ctx.setLineDash(contested.has(p.id)?[3,3]:[]);ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.strokeStyle=fg;ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([]);}
   }
   ctx.lineJoin='round';
   for(const l of mapLabels(pts,t=>ctx.measureText(t).width,home)){
@@ -2272,43 +2344,63 @@ function mapLabels(pts,measure,home=null){
 // ---------------------------------------------------------------------------
 // League view
 // ---------------------------------------------------------------------------
-const leagueUi={bid:null,lobby:false,notice:''};
+const leagueUi={market:null,bid:null,lobby:false,notice:''};
 const relationLabel=v=>v>=25?'Warm':v>=5?'Friendly':v>-10?'Neutral':v>-30?'Cool':'Hostile';
+function dealLabel(S,M){
+  if(!M.holder)return 'Up now';
+  return M.renewal<=cur(S).number?'Up for renewal':'Through season '+(M.renewal-1);
+}
 function leagueView(){
   const S=save,L=S.league,s=cur();
   let html=heading('LEAGUE','Broadcast markets')+
     '<figure class="map"><canvas id="marketMap" role="img" aria-label="Map of broadcast markets. Each market city’s area is filled with the color of the club that holds its broadcast rights."></canvas>'+
-    '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed ring the rights you can contest':'')+'.</figcaption></figure>';
-  html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
-    const M=L.markets[m.id],fans=Object.entries(M.fans).sort((a,b)=>b[1]-a[1]).map(([id,v])=>byId.get(id).abbr+' '+Math.round(v)+'%').join(' · ');
-    return '<tr><td>'+esc(m.name)+'</td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(fans)+'</td></tr>';
+    '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed rings markets up for renewal':'')+'.</figcaption></figure>';
+  html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Deal</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
+    const M=L.markets[m.id],fans=Object.entries(M.fans).filter(([,v])=>v>=.5).sort((a,b)=>b[1]-a[1]).map(([id,v])=>byId.get(id).abbr+' '+Math.round(v)+'%').join(' · ');
+    return '<tr><td>'+esc(m.name)+'<small>'+esc('Metro '+m.metro+'M · potential '+m.potential)+'</small></td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(dealLabel(S,M)+(M.holder?' · $'+M.fee+'M a year':''))+'</td><td>'+esc(fans)+'</td></tr>';
   }).join('')+'</tbody></table></div>';
+  if(L.rules.firstRefusal)html+='<p>'+esc('First refusal is league policy: at renewal a holder keeps its market by matching the winning offer, if that offer is no more than a quarter above its own.')+'</p>';
   if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>'+headlines(S);
-  const C=L.contest;
-  if(C){
-    const name=openMarket(C.marketId).name,M=L.markets[C.marketId];
-    html+='<h2>'+esc(name)+' broadcast rights</h2>';
-    if(C.status==='open'){
-      const [lo,hi]=stationRange(S);
-      leagueUi.bid??={annual:C.bid?.annual??Math.round(hi*2)/2,years:C.bid?.years??5};
-      const b=leagueUi.bid,amounts=[];for(let v=1;v<=12;v+=.5)amounts.push(v);
-      html+='<p>'+esc(teamName(C.holder)+' hold the rights. The station decides after '+weekLabel(C.deadlineWeek)+' and expects offers of $'+lo+'M to $'+hi+'M a year. It also weighs term length, ratings (fan preference) and who shows up in person. '+
-        'The rights would earn us about $'+adValue(C.marketId,M.fans[S.club]??0)+'M a year in local advertising at today’s fan preference.')+'</p>'+
-        (s.completed<s.weeks.length?'<p>'+esc('This week: '+coverageText(S,s.completed))+'</p>':'')+
-        (C.bid?'<p><b>'+esc('Your offer: $'+C.bid.annual+'M a year for '+C.bid.years+' years'+(C.lobbied?', and you visited the station yourself.':'.'))+'</b></p>':'')+
-        (now()<C.deadlineWeek?'<div class="controls"><label>Annual guarantee <select id="bidAnnual">'+amounts.map(v=>option(v,'$'+v.toFixed(1)+'M',v===b.annual)).join('')+'</select></label>'+
-        '<label>Term <select id="bidYears">'+[3,5,7].map(v=>option(v,v+' years',v===b.years)).join('')+'</select></label>'+
-        (C.lobbied?'':'<label><input type="checkbox" id="bidLobby"'+(leagueUi.lobby?' checked':'')+'> Visit the station yourself</label>')+
-        '<button id="submitBid">'+(C.bid?'Revise offer':'Make offer')+'</button>'+(C.bid?'<button id="withdrawBid">Withdraw</button>':'')+'</div>':'')+
-        (leagueUi.notice?'<p>'+esc(leagueUi.notice)+'</p>':'');
-    }else html+='<p>'+esc(C.winner===S.club?'You won the rights: $'+C.bid.annual+'M a year for '+C.bid.years+' years. '+(M.holder===S.club?(s.completed<s.weeks.length?'This week: '+coverageText(S,s.completed):''):'The league has since returned them to '+byId.get(M.holder).market+'.'):
-      teamName(C.winner)+' kept the rights'+(C.bid?' with $'+C.rivalBid.annual+'M a year against your $'+C.bid.annual+'M.':'.'))+'</p>';
+  const open=openContests(S),decided=L.contests.filter(C=>C.status==='decided'&&C.season===s.number);
+  if(open.length){
+    const pick=open.find(C=>C.marketId===leagueUi.market)??open.find(C=>C.holder===S.club)??open.find(C=>C.bid)??
+      [...open].sort((a,b)=>(L.markets[b.marketId].fans[S.club]??0)-(L.markets[a.marketId].fans[S.club]??0))[0];
+    if(leagueUi.market!==pick.marketId)Object.assign(leagueUi,{market:pick.marketId,bid:null,lobby:false});
+    const C=pick,m=openMarket(C.marketId),M=L.markets[C.marketId],[lo,hi]=stationRange(S,C.marketId),cap=bidCap(S,C.marketId),step=bidStep(cap);
+    leagueUi.bid??={annual:C.bid?.annual??Math.min(cap,Math.round(hi/step)*step),years:C.bid?.years??5};
+    const b=leagueUi.bid,amounts=[];for(let v=step;v<=cap+1e-9;v+=step)amounts.push(round1(v));
+    if(!amounts.includes(b.annual))amounts.push(b.annual),amounts.sort((x,y)=>x-y);
+    const share=M.fans[S.club]??0,ad=adValue(C.marketId,share);
+    html+='<h2>Rights up for renewal</h2><div class="controls"><label>Market <select id="bidMarket">'+open.map(x=>option(x.marketId,openMarket(x.marketId).name+(x.holder===S.club?' (yours)':x.holder?'':' (unclaimed)')+(x.bid?' · offer in':''),x===C)).join('')+'</select></label></div>'+
+      '<p>'+esc((C.holder===S.club?'You hold '+m.name+' and the deal is up. If you make no offer, someone else gets it or it goes unclaimed.':C.holder?teamName(C.holder)+' hold '+m.name+' and the deal is up.':'Nobody holds '+m.name+'.')+
+        ' The station decides after '+weekLabel(C.deadlineWeek)+' and expects offers of $'+lo+'M to $'+hi+'M a year. It also weighs term length, ratings (fan preference) and who shows up in person.')+'</p>'+
+      '<p>'+esc('Your fans there: '+Math.round(share)+'%. At that share the rights earn about $'+ad+'M a year in local advertising, so $'+b.annual+'M a year nets '+(ad-b.annual>=0?'':'−')+'$'+round1(Math.abs(ad-b.annual))+'M a year to start. Holding the rights wins fans each week your game airs there.')+'</p>'+
+      (s.completed<s.weeks.length?'<p>'+esc('This week: '+coverageText(S,C.marketId,s.completed))+'</p>':'')+
+      (C.bid?'<p><b>'+esc('Your offer: $'+C.bid.annual+'M a year for '+C.bid.years+' years'+(C.lobbied?', and you visited the station yourself.':'.'))+'</b></p>':'')+
+      (now()<C.deadlineWeek?'<div class="controls"><label>Annual guarantee <select id="bidAnnual">'+amounts.map(v=>option(v,'$'+v.toFixed(1)+'M',v===b.annual)).join('')+'</select></label>'+
+      '<label>Term <select id="bidYears">'+[3,5,7].map(v=>option(v,v+' years',v===b.years)).join('')+'</select></label>'+
+      (C.lobbied?'':'<label><input type="checkbox" id="bidLobby"'+(leagueUi.lobby?' checked':'')+'> Visit the station yourself</label>')+
+      '<button id="submitBid">'+(C.bid?'Revise offer':'Make offer')+'</button>'+(C.bid?'<button id="withdrawBid">Withdraw</button>':'')+'</div>':'')+
+      (leagueUi.notice?'<p>'+esc(leagueUi.notice)+'</p>':'');
   }
+  if(decided.length){
+    html+='<h2>Renewals decided this season</h2><ul>'+decided.map(C=>{
+      const name=openMarket(C.marketId).name,w=C.winningBid,mine=C.bid?' Your offer: $'+C.bid.annual+'M.':'';
+      const what=!C.winner?(C.holder?teamName(C.holder)+' let the rights lapse; nobody holds them.':'No offers; still unclaimed.'):
+        C.matched?teamName(C.winner)+' matched under first refusal: $'+w.annual+'M a year for '+w.years+' years.':
+        C.winner===C.holder?teamName(C.winner)+' renewed: $'+w.annual+'M a year for '+w.years+' years.':
+        teamName(C.winner)+(C.holder?' took them from '+teamName(C.holder):' claimed them')+': $'+w.annual+'M a year for '+w.years+' years.';
+      return '<li><strong>'+esc(name)+'</strong> '+esc(what+mine)+'</li>';
+    }).join('')+'</ul>';
+  }
+  const mineHeld=OPEN_MARKETS.filter(m=>L.markets[m.id].holder===S.club);
+  if(mineHeld.length&&s.completed<s.weeks.length)html+='<h2>Your markets</h2><ul>'+mineHeld.map(m=>{const M=L.markets[m.id];
+    return '<li><strong>'+esc(m.name)+'</strong> '+esc(Math.round(M.fans[S.club]??0)+'% of fans · $'+M.fee+'M a year · '+dealLabel(S,M).toLowerCase()+'. This week: '+coverageText(S,m.id,s.completed))+'</li>';}).join('')+'</ul>';
   const V=L.meeting;
   if(V){
     const sponsor=L.owners[V.sponsor],name=openMarket(V.marketId).name;
-    html+='<h2>League meeting</h2><p>'+esc(sponsor.name+' ('+teamName(V.sponsor)+') proposes a first-refusal rule: a club that held a market’s broadcast rights before this season may match any rival’s offer at renewal. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
-      '<p><b>Effect on your club:</b> '+esc(V.reversal?name+' would go back to '+byId.get(V.sponsor).market+'. You would lose preferred coverage there and about $'+round1(adValue(V.marketId,L.markets[V.marketId].fans[S.club]??0)-(L.markets[V.marketId].fee??0))+'M a year net.':'It would lock '+possessive(byId.get(V.sponsor).market)+' hold on '+name+' at the next renewal.')+'</p>';
+    html+='<h2>League meeting</h2><p>'+esc(sponsor.name+' ('+teamName(V.sponsor)+') proposes a first-refusal rule: at renewal, a club holding a market’s broadcast rights may keep them by matching a rival’s offer, if it is no more than a quarter above its own. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
+      '<p><b>Effect on your club:</b> '+esc((V.reversal?name+' would go back to '+byId.get(V.sponsor).market+'. You would lose preferred coverage there and about $'+round1(adValue(V.marketId,L.markets[V.marketId].fans[S.club]??0)-(L.markets[V.marketId].fee??0))+'M a year net. ':'')+'From then on, a club holding a market could keep it at renewal by matching any offer up to a quarter above its own, which protects the markets you hold and makes the others harder to take.')+'</p>';
     if(V.status==='scheduled'){
       const mine=V.playerVote??(playerOpposes(S)?'no':'yes');
       html+='<p>'+esc('The vote is after '+weekLabel(V.week)+'. Calls left before the meeting: '+V.callsLeft+'. A call tells you where an owner stands and nudges them your way; a promise moves them further and is recorded.')+'</p>'+
@@ -2697,7 +2789,6 @@ function rollover(S,r){
   for(const site of S.world.sites)if(site.status==='open')site.expiresWeek=shift(site.expiresWeek);
   for(const st of S.stadium.studies)if(st.status==='underway')st.due=shift(st.due);
   if(S.finance.naming.status==='awaiting')S.finance.naming.expiresWeek=shift(S.finance.naming.expiresWeek);
-  if(S.league.contest?.status==='open')S.league.contest.deadlineWeek=shift(S.league.contest.deadlineWeek);
   if(S.league.meeting?.status==='scheduled')S.league.meeting.week=shift(S.league.meeting.week);
   S.offer=null;
   if(S.depth){S.depth.overrides=0;S.depth.warned=false;}
@@ -2712,6 +2803,7 @@ function rollover(S,r){
   S.draft.prospects.sort((a,b)=>b.grade-a.grade);
   if(S.scouting){const ids=new Set(S.draft.prospects.map(p=>p.id));
     S.scouting.levels=Object.fromEntries(Object.entries(S.scouting.levels).filter(([id])=>ids.has(id)));S.scouting.watch=S.scouting.watch.filter(id=>ids.has(id));}
+  openRenewals(S);
   news(S,'Season '+next.number+' kicks off');
   afterTick(S,r);
 }
@@ -4439,7 +4531,7 @@ function describeEvent(e,S=save){
     case 'visitReport':return esc(visitReportText(e));
     case 'studyReport':return esc(studyReportText(e));
     case 'projectDone':case 'namingSigned':case 'namingAwaiting':case 'namingLapsed':case 'namingDeclined':return esc(financeEventText(e));
-    case 'rightsWon':case 'rightsLost':case 'rightsRenewed':case 'meetingCalled':case 'voteResult':return esc(leagueEventText(e));
+    case 'rightsWon':case 'rightsLost':case 'rightsKept':case 'rightsLapsed':case 'rightsRenewed':case 'meetingCalled':case 'voteResult':return esc(leagueEventText(e));
     case 'playoffResult':case 'seasonReview':case 'leagueYear':case 'draftOpen':case 'draftUnattended':case 'draftDone':case 'calendarNote':case 'finalCuts':return esc(calendarEventText(S,e));
     case 'playerReleased':case 'contractRestructured':case 'contractExtended':case 'resignings':case 'capYear':case 'capWarning':case 'capCompliance':case 'faSigned':case 'faLost':case 'playerTagged':case 'optionExercised':case 'floorShortfall':case 'salaryPrepaid':case 'floorWarning':return esc(contractEventText(S,e));
     case 'staffFired':case 'staffHired':case 'candidateLost':case 'staffReview':case 'proposalExpired':return esc(staffEventText(S,e));
@@ -4488,11 +4580,34 @@ const migrations={
   11:migrateV11,
   12:migrateV12,
 };
-// v12 -> v13: twelve more open markets. Each gets a broadcast record; the
-// relocation markets also get officials and site offers, open from now.
+// v12 -> v13: twelve more open markets, and broadcast deals that run out.
+// Each new market gets a broadcast record; the relocation markets also get
+// officials and site offers, open from now. Every deal gets a renewal season,
+// the one-off rights contest becomes this season's renewals, and first refusal
+// becomes a standing league rule.
 function migrateV12(old){
-  const r=rngFor(old.rng),t=now(old),known=new Set(old.world.markets.map(m=>m.id));
-  for(const m of OPEN_MARKETS)if(!old.league.markets[m.id])old.league.markets[m.id]=leagueMarket(r,m);
+  const r=rngFor(old.rng),t=now(old),s=cur(old),L=old.league,known=new Set(old.world.markets.map(m=>m.id));
+  for(const m of OPEN_MARKETS)if(!L.markets[m.id])L.markets[m.id]=leagueMarket(r,m);
+  for(const [id,M] of Object.entries(L.markets)){
+    M.renewal??=M.holder?s.number+1+randInt(r,4):s.number;
+    if(M.holder&&M.holder!==old.club)M.fee=startingFee(r,id,M.fans[M.holder]??0); // fees now follow market size
+  }
+  L.rules??={firstRefusal:!!(L.meeting?.status==='decided'&&L.meeting.passed)};
+  const C=L.contest;delete L.contest;L.contests??=[];
+  if(C){
+    const M=L.markets[C.marketId];
+    if(C.status==='open'){
+      M.renewal=s.number;
+      L.contests.push({marketId:C.marketId,season:s.number,holder:C.holder,deadlineWeek:C.deadlineWeek,status:'open',bid:C.bid,lobbied:C.lobbied});
+    }else{
+      const win=C.winner===old.club?C.bid:C.rivalBid,signed=M.signedSeason||s.number;
+      M.renewal=Math.max(s.number+1,signed+win.years);
+      L.contests.push({marketId:C.marketId,season:signed,holder:C.holder,deadlineWeek:C.deadlineWeek,status:'decided',bid:C.bid,lobbied:C.lobbied,
+        bids:{[C.holder]:C.rivalBid,...(C.bid?{[old.club]:C.bid}:{})},winner:C.winner,winningBid:win,matched:false});
+    }
+  }
+  if(L.meeting)L.meeting.season??=s.number;
+  openRenewals(old);
   for(const m of RELOCATION_MARKETS){
     if(known.has(m.id))continue;
     const {market,sites}=worldMarket(r,m,0);
@@ -4576,7 +4691,6 @@ function migrateV4(old){
   old.league=makeLeague(rngFor(old.rng));
   old.schemaVersion=5;
   for(const season of old.seasons)season.tick??=season.completed; // the contest deadline needs the clock
-  ensureContest(old);
   (old.migrations??=[]).push({from:4,to:5,at:new Date().toISOString()});
   return old;
 }
@@ -4714,7 +4828,9 @@ function validateSave(S){
   else{
     if(!clubs.every(t=>{const o=Lg.owners[t.id];return o&&typeof o.name==='string'&&Number.isFinite(o.relation)&&Array.isArray(o.memory);}))fail('An owner record is invalid.');
     if(!OPEN_MARKETS.every(m=>{const M=Lg.markets[m.id];return M&&(M.holder===null||byId.has(M.holder))&&M.fans&&Object.entries(M.fans).every(([id,v])=>byId.has(id)&&Number.isFinite(v));}))fail('A broadcast market record is invalid.');
-    if(Lg.contest&&(!openMarket(Lg.contest.marketId)||!byId.has(Lg.contest.holder)||!['open','decided'].includes(Lg.contest.status)))fail('The broadcast rights contest is invalid.');
+    if(!OPEN_MARKETS.every(m=>isInt(Lg.markets[m.id]?.renewal,0)))fail('A broadcast deal has no renewal season.');
+    if(!Array.isArray(Lg.contests)||!Lg.contests.every(c=>openMarket(c?.marketId)&&isInt(c.season,1)&&(c.holder===null||byId.has(c.holder))&&['open','decided'].includes(c.status)&&isInt(c.deadlineWeek,0)))fail('A broadcast rights renewal is invalid.');
+    if(!Lg.rules||typeof Lg.rules.firstRefusal!=='boolean')fail('League rules are missing.');
     if(Lg.meeting&&(!byId.has(Lg.meeting.sponsor)||!['scheduled','decided'].includes(Lg.meeting.status)||!isInt(Lg.meeting.callsLeft,0)))fail('The league meeting record is invalid.');
   }
   return errors;
@@ -5048,8 +5164,11 @@ function comingDue(S){
   return '<div><small>Coming due</small>'+esc(marketById(S,site.marketId).name+' '+site.name.toLowerCase()+' offer expires after '+weekLabel(site.expiresWeek))+'</div>';
 }
 function leagueCard(S){
-  const C=S.league.contest,V=S.league.meeting;
-  if(C?.status==='open')return '<div><small>Broadcast rights</small>'+esc(openMarket(C.marketId).name+': station decides after '+weekLabel(C.deadlineWeek))+' <button data-tab="League">Bid</button></div>';
+  const open=openContests(S),V=S.league.meeting;
+  if(open.length){
+    const mine=open.filter(C=>C.bid).length,held=open.filter(C=>C.holder===S.club&&!C.bid).length;
+    return '<div><small>Broadcast rights</small>'+esc(open.length+' market'+(open.length===1?'':'s')+' up for renewal'+(held?', '+held+' of yours without an offer':mine?', '+mine+' with your offer':'')+'; the station decides after '+weekLabel(Math.min(...open.map(C=>C.deadlineWeek))))+' <button data-tab="League">Bid</button></div>';
+  }
   if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="League">Lobby</button></div>';
   const n=S.league.news.at(-1);
   return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
@@ -5367,7 +5486,7 @@ document.addEventListener('click',e=>{
   const b=e.target.closest?.('button');if(!b)return;
   if(b.dataset.tab){tab=b.dataset.tab;draw();}
   if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
-  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;ensureContest(save);commit();}}
+  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
   if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
@@ -5391,11 +5510,11 @@ document.addEventListener('click',e=>{
   if(b.id==='endNaming'||b.id==='declineNaming'){declineNaming(save);commit();}
   if(b.id==='signNaming'){approveNaming(save);commit();}
   if(b.id==='submitBid'&&leagueUi.bid){
-    const result=submitBid(save,leagueUi.bid.annual,leagueUi.bid.years,leagueUi.lobby);
+    const result=submitBid(save,leagueUi.market,leagueUi.bid.annual,leagueUi.bid.years,leagueUi.lobby);
     leagueUi.notice=result==='ok'?'':result==='closed'?'The station has already decided.':'Choose an amount and term.';
     if(result==='ok'){leagueUi.lobby=false;commit();}else draw();
   }
-  if(b.id==='withdrawBid'){withdrawBid(save);commit();}
+  if(b.id==='withdrawBid'){withdrawBid(save,leagueUi.market);commit();}
   if(b.dataset.call||b.dataset.promise){callOwner(save,b.dataset.call??b.dataset.promise,!!b.dataset.promise);commit();}
   if(b.id==='importNo'){pendingImport=null;draw();}
   if(b.id==='watchLive'&&save.club&&canWatch(save)){
@@ -5488,6 +5607,7 @@ app.onchange=e=>{
   if(leagueUi.bid&&e.target.id==='bidAnnual'){leagueUi.bid.annual=Number(e.target.value);return;}
   if(leagueUi.bid&&e.target.id==='bidYears'){leagueUi.bid.years=Number(e.target.value);return;}
   if(e.target.id==='bidLobby'){leagueUi.lobby=e.target.checked;return;}
+  if(e.target.id==='bidMarket'){Object.assign(leagueUi,{market:e.target.value,bid:null,lobby:false,notice:''});draw();return;}
   if(financeUi.mandate&&['nameMin','nameYears','nameAuthority'].includes(e.target.id)){
     const m=financeUi.mandate;
     if(e.target.id==='nameMin')m.minAnnual=Number(e.target.value);

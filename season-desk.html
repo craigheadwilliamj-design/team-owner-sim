@@ -2727,7 +2727,7 @@ const COLLEGE_TIERS=[
   ['Florida','Florida State','Miami','Tennessee','Texas A&M','Auburn','Ole Miss','Washington','Wisconsin','Iowa','Utah','Missouri',
     'South Carolina','North Carolina','TCU','Arkansas'],
   ['Boise State','Iowa State','Kansas State','Oklahoma State','Baylor','Louisville','Pittsburgh','Virginia Tech','NC State','Minnesota',
-    'Purdue','Arizona State','Colorado','Mississippi State','Stanford','Cincinnati','UCF','Memphis'],
+    'Purdue','Arizona State','Colorado','Mississippi State','Stanford','Cincinnati','UCF','Memphis','Kansas'],
   ['North Dakota State','South Dakota State','Montana','Montana State','Jackson State','Grambling State','Northern Iowa','Delaware',
     'Villanova','Eastern Washington','Toledo','Appalachian State','James Madison','Sacramento State']];
 const COLLEGES=COLLEGE_TIERS.flat();
@@ -4562,7 +4562,7 @@ const RIVALRIES=[[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[
   [7,'the Third Saturday in October','Alabama','Tennessee'],[9,'','Ohio State','Penn State'],[9,'the Florida–Georgia game','Georgia','Florida'],
   [10,'','LSU','Alabama'],[11,'','Oregon','Washington'],[13,'The Game','Michigan','Ohio State'],[13,'the Iron Bowl','Auburn','Alabama'],
   [13,'the Palmetto Bowl','South Carolina','Clemson'],[13,'the Sunshine Showdown','Florida State','Florida'],[13,'','USC','Notre Dame'],
-  [13,'the Egg Bowl','Mississippi State','Ole Miss']];
+  [13,'the Egg Bowl','Mississippi State','Ole Miss'],[13,'the Border War','Kansas','Missouri']];
 const PLAYOFF_WEEK=COLLEGE_WEEKS+1;
 function makeSlate(r){
   const slate=RIVALRIES.map(([week,name,home,away])=>({week,name,home,away,kind:'rivalry'}));

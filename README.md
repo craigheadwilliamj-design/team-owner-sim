@@ -21,7 +21,9 @@ buy a franchise, hire the people who run it, and choose when to interfere.
 - Trades you make, trades your GM proposes, offers from rival clubs, and
   AI clubs trading with each other. Rivals pay a premium inside the
   division and conference.
-- A college wire, scouting and the draft.
+- A college wire, scouting and the draft. Real college programs come in
+  tiers: blue bloods produce the elite and carry the hype, and small schools
+  hide sleepers. Rivalry games, title games and a playoff swing draft stock.
 - Stadium talks and private site visits in open markets, including
   unclaimed markets and relocation targets such as Salt Lake City and
   Calgary.

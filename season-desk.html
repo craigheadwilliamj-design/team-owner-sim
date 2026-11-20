@@ -2725,16 +2725,22 @@ function finalCuts(S,r){
 const COLLEGE_TIERS=[
   ['Alabama','Georgia','Ohio State','Michigan','LSU','Texas','Oregon','Clemson','USC','Notre Dame','Penn State','Oklahoma'],
   ['Florida','Florida State','Miami','Tennessee','Texas A&M','Auburn','Ole Miss','Washington','Wisconsin','Iowa','Utah','Missouri',
-    'South Carolina','North Carolina','TCU','Arkansas'],
+    'South Carolina','North Carolina','TCU','Arkansas','UCLA','Michigan State'],
   ['Boise State','Iowa State','Kansas State','Oklahoma State','Baylor','Louisville','Pittsburgh','Virginia Tech','NC State','Minnesota',
-    'Purdue','Arizona State','Colorado','Mississippi State','Stanford','Cincinnati','UCF','Memphis','Kansas'],
+    'Purdue','Arizona State','Colorado','Mississippi State','Stanford','Cincinnati','UCF','Memphis','Kansas','West Virginia','Kentucky',
+    'Texas Tech','Houston','Tulane','Syracuse'],
   ['North Dakota State','South Dakota State','Montana','Montana State','Jackson State','Grambling State','Northern Iowa','Delaware',
-    'Villanova','Eastern Washington','Toledo','Appalachian State','James Madison','Sacramento State']];
+    'Villanova','Eastern Washington','Toledo','Appalachian State','James Madison','Sacramento State','Southern','Florida A&M',
+    'Fresno State','Marshall','South Dakota','Idaho']];
 const COLLEGES=COLLEGE_TIERS.flat();
 const TIER_NAMES=['blue blood','power program','FBS program','small school'];
 const TIER_HYPE=[2,1,0,-4];
-// Where each band of the class went to school: [elite, early rounds, the rest], each by tier.
-const TIER_ODDS=[[.55,.30,.12,.03],[.25,.35,.28,.12],[.10,.22,.38,.30]];
+// Where each band of the class went to school: [the top 48, the rest of the
+// draftable 224, everyone else], each by tier. Blue bloods send the most
+// players as well as the best: per school, about 11 prospects and 8 or 9
+// draftable a year; power programs 8 and 4 or 5; FBS programs 3 or 4 and
+// 1 or 2; small schools 1 or 2, and a draftable player every few years.
+const TIER_ODDS=[[.68,.25,.06,.01],[.395,.392,.182,.031],[.17,.36,.32,.15]];
 const TIER_BY_COLLEGE=new Map(COLLEGE_TIERS.flatMap((list,t)=>list.map(c=>[c,t])));
 // Schools from older saves keep their names and get a steady tier from it.
 function collegeTier(name){
@@ -2760,7 +2766,7 @@ function makeDraft(r,season){
   });
   // The school follows the talent, so tiers never change how good a class is.
   const byTalent=[...prospects].sort((a,b)=>(.55*b.potential+.45*b.rating)-(.55*a.potential+.45*a.rating));
-  byTalent.forEach((p,i)=>{p.college=pickCollege(r,i<48?0:i<160?1:2);p.grade+=TIER_HYPE[collegeTier(p.college)];});
+  byTalent.forEach((p,i)=>{p.college=pickCollege(r,i<48?0:i<224?1:2);p.grade+=TIER_HYPE[collegeTier(p.college)];});
   prospects.sort((a,b)=>b.grade-a.grade);
   for(const p of prospects)enrichProspect(r,p);
   return {season,status:'scouting',prospects,order:[],pick:0,picks:[],wire:[],nextClass:[],slate:makeSlate(r)};
@@ -4558,11 +4564,11 @@ function bigGame(r,p,opp){
 // the wire, the swings are twice as big, and matched positions go head to
 // head. Big games move the hype, not the player.
 // draft.slate  [{week,name,home,away,kind,score?,winner?}]
-const RIVALRIES=[[2,'the Border War','Kansas','Missouri'],[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[6,'the Red River Rivalry','Texas','Oklahoma'],
+const RIVALRIES=[[2,'the Border War','Kansas','Missouri'],[3,'the Backyard Brawl','Pittsburgh','West Virginia'],[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[6,'the Red River Rivalry','Texas','Oklahoma'],
   [7,'the Third Saturday in October','Alabama','Tennessee'],[9,'','Ohio State','Penn State'],[9,'the Florida–Georgia game','Georgia','Florida'],
-  [10,'','LSU','Alabama'],[11,'','Oregon','Washington'],[13,'The Game','Michigan','Ohio State'],[13,'the Iron Bowl','Auburn','Alabama'],
+  [8,'the Paul Bunyan Trophy game','Michigan State','Michigan'],[10,'','LSU','Alabama'],[11,'','Oregon','Washington'],[12,'the Victory Bell game','UCLA','USC'],[13,'The Game','Michigan','Ohio State'],[13,'the Iron Bowl','Auburn','Alabama'],
   [13,'the Palmetto Bowl','South Carolina','Clemson'],[13,'the Sunshine Showdown','Florida State','Florida'],[13,'','USC','Notre Dame'],
-  [13,'the Egg Bowl','Mississippi State','Ole Miss']];
+  [13,'the Egg Bowl','Mississippi State','Ole Miss'],[13,'the Governor’s Cup','Louisville','Kentucky'],[13,'the Bayou Classic','Southern','Grambling State']];
 const PLAYOFF_WEEK=COLLEGE_WEEKS+1;
 function makeSlate(r){
   const slate=RIVALRIES.map(([week,name,home,away])=>({week,name,home,away,kind:'rivalry'}));
@@ -4601,7 +4607,7 @@ function playMarquee(S,r,g,items,used){
   g.winner=homeWins?g.home:g.away;g.score=homeWins?[w,l]:[l,w];
   const where=g.name?' in '+g.name:'',label=(g.name?capital(g.name)+': ':'')+g.home+' '+g.score[0]+', '+g.away+' '+g.score[1]+'.';
   items.push({kind:'game',text:label});
-  const side=c=>D.prospects.slice(0,160).filter(p=>p.college===c&&!p.injured&&!used.has(p.id)).slice(0,5);
+  const side=c=>D.prospects.filter(p=>p.college===c&&!p.injured&&!used.has(p.id)).slice(0,5);
   const home=side(g.home),away=side(g.away),swing=(p,up,text)=>{
     const d=up?2+randInt(r,5):-(2+randInt(r,3));p.grade+=d;used.add(p.id);note(S,p,capital(text)+'.');};
   // Head to head first: each matched pair settles it between them, and the better player usually wins.

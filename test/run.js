@@ -1807,14 +1807,16 @@ test('v14 save upgrades to v15: the class in progress keeps its schools and pick
 
 test('schools follow the talent: blue bloods get the elite and the hype, small schools hide sleepers', () => {
   const { api } = load();
-  const elite = [0, 0, 0, 0], hype = [[], [], [], []];
-  for (const seed of [901, 902, 903, 904, 905]) {
+  const elite = [0, 0, 0, 0], hype = [[], [], [], []], volume = [0, 0, 0, 0];
+  for (const seed of [901, 902, 903, 904, 905, 906, 907, 908]) {
     const S = api.newSave(seed), all = [...S.draft.prospects];
     assert.equal(new Set(all.map(p => p.college)).size > 50, true, 'most programs show up in a class');
     assert(all.every(p => api.COLLEGE_TIERS.flat().includes(p.college)));
     all.sort((a, b) => (.55 * b.potential + .45 * b.rating) - (.55 * a.potential + .45 * a.rating)).slice(0, 48).forEach(p => elite[api.collegeTier(p.college)]++);
-    for (const p of all) hype[api.collegeTier(p.college)].push(p.grade - api.trueGrade(p));
+    for (const p of all) { hype[api.collegeTier(p.college)].push(p.grade - api.trueGrade(p)); volume[api.collegeTier(p.college)]++; }
   }
+  const per = volume.map((n, t) => n / 8 / api.COLLEGE_TIERS[t].length);
+  assert(per[0] > 9 && per[3] < 2.5 && per[0] > per[1] && per[1] > per[2] && per[2] > per[3], 'prospects per school by tier: ' + per.map(x => x.toFixed(1)));
   assert(elite[0] > elite[1] && elite[1] > elite[2] && elite[2] > elite[3], 'elite talent by tier: ' + elite);
   assert(elite[3] > 0, 'a few elite prospects come from small schools');
   const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
@@ -1828,12 +1830,13 @@ test('big games: rivalry week floods the wire with duels and big swings, then th
   const ids = week.items.flatMap(x => [x.pid, x.pid2]).filter(Boolean);
   assert.equal(new Set(ids).size, ids.length, 'one item per prospect per week');
   assert(week.items.some(x => x.kind === 'game' && /^The Iron Bowl: /.test(x.text)));
-  assert(week.items.filter(x => x.kind === 'game').length === 6, 'six rivalry games');
+  assert(week.items.filter(x => x.kind === 'game').length === 8, 'eight rivalry games');
+  assert(week.items.some(x => x.kind === 'game' && /^The Bayou Classic: /.test(x.text)));
   assert(S.draft.wire.find(w => w.week === 2).items.some(x => x.kind === 'game' && /^The Border War: Kansas \d+, Missouri \d+\.$/.test(x.text)), 'the Border War opens the fall');
   assert(week.items.length > 10, 'rivalry week is the busiest week of the wire');
   const games = S.draft.slate.filter(g => g.week === 13);
   assert(games.every(g => g.winner && g.score[0] !== g.score[1] && [g.home, g.away].includes(g.winner)));
-  const featured = S.draft.prospects.filter(p => p.notes.some(n => n.week === 13 && /Iron Bowl|The Game|Palmetto|Sunshine|Egg Bowl|Border War|Notre Dame|USC/.test(n.text)));
+  const featured = S.draft.prospects.filter(p => p.notes.some(n => n.week === 13 && /Iron Bowl|The Game|Palmetto|Sunshine|Egg Bowl|Governor|Bayou|Notre Dame|USC/.test(n.text)));
   assert(featured.length >= 4);
   api.jumpTo(S, 19);
   const k = kind => S.draft.slate.filter(g => g.kind === kind && g.winner);

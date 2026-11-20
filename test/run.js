@@ -1047,12 +1047,17 @@ test('trades respect the cap', () => {
 });
 
 test('every club opens each season at 53 and under the cap; the owner is forced into compliance if needed', () => {
-  // Seed 209 hits a known AI cap spiral (comply cuts that push dead money into
-  // the next year); it is tracked separately, so this uses 210.
-  const { api, S } = owned(210);
+  // Seed 209 once sent Tampa Bay into a cap spiral: re-signings that ignored next
+  // year's dead money, cuts that turned salary into dead money, and final cuts of
+  // guaranteed rookies. No club should carry more than a fifth of the cap in dead money.
+  const { api, S } = owned(209);
   for (let n = 0; n < 4; n++) {
     api.jumpTo(S, 51);
-    for (const t of api.clubs) { assert.equal(S.rosters[t.id].length >= 53, true, t.id); assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id)); }
+    for (const t of api.clubs) {
+      assert.equal(S.rosters[t.id].length >= 53, true, t.id);
+      assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id));
+      if (t.id !== 'club-06') assert((S.cap.dead[t.id] ?? 0) < S.cap.limit * 0.2, t.id + ' carries ' + S.cap.dead[t.id] + ' in dead money');
+    }
   }
   api.jumpTo(S, 50); // after final cuts
   S.cap.dead['club-06'] = (S.cap.dead['club-06'] ?? 0) + api.capRoom(S, 'club-06') + 20; // $20M over

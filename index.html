@@ -2569,12 +2569,16 @@ function campWork(S,r){
   for(const t of clubs){const k=.35*devFactor(S,t.id);for(const p of [...S.rosters[t.id],...(S.practice?.[t.id]??[])])if(p.age<=25&&p.rating<(p.potential??0)&&r()<k)p.rating++;}
 }
 // Keep the best at each position up to the roster slots, then the best of the rest to 53.
+// Who stays at final cuts: rating, plus what cutting him would cost in dead
+// money, plus a young player's room to grow. A guaranteed first-round rookie
+// stays over a slightly better veteran who can be cut for free.
+const cutValue=(S,p)=>p.rating+1.5*deadIfCut(p,S)+(p.age<=24?Math.max(0,(p.potential??p.rating)-p.rating)*.3:0);
 function finalCuts(S,r){
   let mine=[];
   for(const t of clubs){
-    const roster=S.rosters[t.id].filter(p=>!p.ir),keep=new Set();
-    for(const [pos,count] of positions)roster.filter(p=>p.pos===pos).sort((a,b)=>b.rating-a.rating).slice(0,count).forEach(p=>keep.add(p));
-    roster.filter(p=>!keep.has(p)).sort((a,b)=>b.rating-a.rating).slice(0,Math.max(0,53-keep.size)).forEach(p=>keep.add(p));
+    const roster=S.rosters[t.id].filter(p=>!p.ir),keep=new Set(),v=new Map(roster.map(p=>[p,cutValue(S,p)]));
+    for(const [pos,count] of positions)roster.filter(p=>p.pos===pos).sort((a,b)=>v.get(b)-v.get(a)).slice(0,count).forEach(p=>keep.add(p));
+    roster.filter(p=>!keep.has(p)).sort((a,b)=>v.get(b)-v.get(a)).slice(0,Math.max(0,53-keep.size)).forEach(p=>keep.add(p));
     const cut=roster.filter(p=>!keep.has(p));
     if(t.id===S.club)mine=cut.map(snap);
     for(const p of cut)releasePlayer(S,t.id,p.id);
@@ -2997,6 +3001,9 @@ function rookieTerms(S,overall){
   return {salary:round2(Math.max(S.cap.minSalary,annual-bonus/4)),years:4,bonus,gYears:overall<=32?4:overall<=64?2:0};
 }
 const minimumTerms=(S,years=1)=>({salary:S.cap.minSalary,years,bonus:0,gYears:0});
+// What a club's coming draft class will cost against the cap, at mid-round slots.
+// Zero once this year's draft is done.
+const draftClassCost=(S,id)=>S.draft?.status==='done'?0:round2(S.picks.filter(k=>k.owner===id).reduce((a,k)=>a+termsHit(rookieTerms(S,(k.round-1)*32+16)),0));
 
 // Cash for the owner's club. Lands in the ledger entry for the current week.
 function postCash(S,line,amount){
@@ -3177,7 +3184,9 @@ function resignExpiring(S,r){
     }
     for(const p of S.rosters[t.id])if(p.contract.yearsLeft===1&&p.contract.option&&p.rating>=72)exerciseOption(S,t.id,p.id);
     const starters=starterSet(S.rosters[t.id]);
-    let budget=S.cap.limit*(1+CAP_GROWTH)-nextYearCommitted(S,t.id)-12;
+    // Next year's room after the deals already signed, dead money already booked
+    // for next year, the coming draft class, and a little slack.
+    let budget=S.cap.limit*(1+CAP_GROWTH)-nextYearCommitted(S,t.id)-(S.cap.deadNext[t.id]??0)-draftClassCost(S,t.id)*(1+CAP_GROWTH)-6;
     const flush=budget>S.cap.limit*.15;
     const expiring=S.rosters[t.id].filter(p=>p.contract.yearsLeft===1&&S.cap.tags[t.id]?.playerId!==p.id).sort((a,b)=>b.rating-a.rating);
     for(const p of expiring){
@@ -3190,7 +3199,8 @@ function resignExpiring(S,r){
         budget-=hit;
         p.contract={salary:t2.salary,prorated:round2(t2.bonus/t2.years+p.contract.prorated/t2.years),yearsLeft:t2.years+1,length:t2.years+1,gYears:t2.gYears,kind:'extension',signedSeason:cur(S).number};
         if(t.id===S.club){payBonus(S,t2.bonus,'club');mine.kept.push(snap(p));}
-      }else if(starters.has(p.id)&&p.rating>=76&&p.age<=30&&!S.cap.tags[t.id]&&tagPlayer(S,t.id,p.id)==='ok'){
+      }else if(starters.has(p.id)&&p.rating>=76&&p.age<=30&&!S.cap.tags[t.id]&&tagAmount(S,p.pos)<=budget&&tagPlayer(S,t.id,p.id)==='ok'){
+        budget-=S.cap.tags[t.id].amount;
         if(t.id===S.club)mine.kept.push({...snap(p),tagged:true});
       }else if(t.id===S.club)mine.leaving.push(snap(p));
     }
@@ -3281,14 +3291,16 @@ function floorCheck(S){
 }
 // Release until under the cap, cheapest football loss per dollar first. Each cut
 // is replaced on a minimum deal, so the savings that count are net of that.
+// Cuts that save less than a fifth of the player's cap hit mostly turn salary
+// into dead money, so they come last; the cut player is never the one re-signed.
 function comply(S,id,forced){
   const cuts=[],r=rngFor(S.rng),saves=x=>capHit(x)-releaseCost(S,x).deadNow-S.cap.minSalary;
   for(let guard=0;guard<30&&capRoom(S,id)<0;guard++){
-    const starters=starterSet(S.rosters[id]);
-    const p=S.rosters[id].filter(x=>saves(x)>.5).sort((a,b)=>(Number(starters.has(a.id))-Number(starters.has(b.id)))||((a.rating-1.2*saves(a))-(b.rating-1.2*saves(b))))[0];
+    const starters=starterSet(S.rosters[id]),poor=x=>Number(saves(x)<capHit(x)*.2);
+    const p=S.rosters[id].filter(x=>saves(x)>.5).sort((a,b)=>(poor(a)-poor(b))||(Number(starters.has(a.id))-Number(starters.has(b.id)))||((a.rating-1.2*saves(a))-(b.rating-1.2*saves(b))))[0];
     if(!p)break;
     cuts.push({...snap(p),dead:releasePlayer(S,id,p.id).dead});
-    if(rosterCount(S,id)<53)signMinimum(S,id,p.pos,r);
+    if(rosterCount(S,id)<53)signMinimum(S,id,p.pos,r,p.id);
   }
   if(forced&&id===S.club&&cuts.length)record(S,'capCompliance',{cuts});
   return cuts;
@@ -3306,7 +3318,7 @@ function processFreeAgency(S,r){
     const size=rosterCount(S,id),cap=offseason?60:53,hardMax=offseason?75:53;
     if(size>=hardMax)continue;
     for(let n=0;n<(opening?2:0)+(capRoom(S,id)>S.cap.limit*.2?2:1);n++){
-      let room=capRoom(S,id)-(offseason&&t<MILESTONES.draft?8:0)-Object.values(bids).flat().filter(b=>b.club===id).reduce((a,b)=>a+termsHit(b.terms),0);
+      let room=capRoom(S,id)-(offseason?draftClassCost(S,id):0)-Object.values(bids).flat().filter(b=>b.club===id).reduce((a,b)=>a+termsHit(b.terms),0);
       const needs=positions.map(([pos])=>pos).filter(pos=>slotsOpen(S,id,pos)>0);
       // A free agent is worth a bid if he fills a hole or beats the weakest starter at his position.
       const floorAt=pos=>{const n=startersAt(pos),best=S.rosters[id].filter(x=>x.pos===pos&&!x.out).map(x=>x.rating).sort((a,b)=>b-a);return best[n-1]??0;};
@@ -3343,8 +3355,8 @@ function processFreeAgency(S,r){
     p.ask={...p.ask,salary:round2(Math.max(S.cap.minSalary,p.ask.salary*.92)),bonus:round2(p.ask.bonus*.85),gYears:p.ask.salary*.92<S.cap.minSalary*4?0:p.ask.gYears};
   }
 }
-function signMinimum(S,id,pos,r){
-  let p=S.fa.pool.filter(x=>x.pos===pos).sort((a,b)=>b.rating-a.rating)[0];
+function signMinimum(S,id,pos,r,except=null){
+  let p=S.fa.pool.filter(x=>x.pos===pos&&x.id!==except).sort((a,b)=>b.rating-a.rating)[0];
   if(!p){p={id:'m'+cur(S).number+'-'+id+'-'+randInt(r,1e9),name:personName(r),pos,rating:48+randInt(r,8),age:23+randInt(r,6)};p.potential=p.rating+randInt(r,4);}
   signPlayer(S,id,p,minimumTerms(S),'minimum','club');
 }

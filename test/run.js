@@ -1828,8 +1828,8 @@ test('big games: rivalry week floods the wire with duels and big swings, then th
   const ids = week.items.flatMap(x => [x.pid, x.pid2]).filter(Boolean);
   assert.equal(new Set(ids).size, ids.length, 'one item per prospect per week');
   assert(week.items.some(x => x.kind === 'game' && /^The Iron Bowl: /.test(x.text)));
-  assert(week.items.filter(x => x.kind === 'game').length === 7, 'seven rivalry games');
-  assert(week.items.some(x => x.kind === 'game' && /^The Border War: Kansas \d+, Missouri \d+\.$/.test(x.text)));
+  assert(week.items.filter(x => x.kind === 'game').length === 6, 'six rivalry games');
+  assert(S.draft.wire.find(w => w.week === 2).items.some(x => x.kind === 'game' && /^The Border War: Kansas \d+, Missouri \d+\.$/.test(x.text)), 'the Border War opens the fall');
   assert(week.items.length > 10, 'rivalry week is the busiest week of the wire');
   const games = S.draft.slate.filter(g => g.week === 13);
   assert(games.every(g => g.winner && g.score[0] !== g.score[1] && [g.home, g.away].includes(g.winner)));

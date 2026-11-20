@@ -4566,11 +4566,11 @@ function bigGame(r,p,opp){
 // the wire, the swings are twice as big, and matched positions go head to
 // head. Big games move the hype, not the player.
 // draft.slate  [{week,name,home,away,kind,score?,winner?}]
-const RIVALRIES=[[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[6,'the Red River Rivalry','Texas','Oklahoma'],
+const RIVALRIES=[[2,'the Border War','Kansas','Missouri'],[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[6,'the Red River Rivalry','Texas','Oklahoma'],
   [7,'the Third Saturday in October','Alabama','Tennessee'],[9,'','Ohio State','Penn State'],[9,'the Florida–Georgia game','Georgia','Florida'],
   [10,'','LSU','Alabama'],[11,'','Oregon','Washington'],[13,'The Game','Michigan','Ohio State'],[13,'the Iron Bowl','Auburn','Alabama'],
   [13,'the Palmetto Bowl','South Carolina','Clemson'],[13,'the Sunshine Showdown','Florida State','Florida'],[13,'','USC','Notre Dame'],
-  [13,'the Egg Bowl','Mississippi State','Ole Miss'],[13,'the Border War','Kansas','Missouri']];
+  [13,'the Egg Bowl','Mississippi State','Ole Miss']];
 const PLAYOFF_WEEK=COLLEGE_WEEKS+1;
 function makeSlate(r){
   const slate=RIVALRIES.map(([week,name,home,away])=>({week,name,home,away,kind:'rivalry'}));

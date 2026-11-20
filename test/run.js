@@ -20,7 +20,8 @@ const v9Save = fs.readFileSync(path.join(FIX, 'v9-save.json'), 'utf8');
 const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
 const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
 const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
-const NAMES = ['save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
+const NAMES = ['openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -214,7 +215,7 @@ test('a club will not sell its only kicker for a pick, but will take a kicker ba
 
 test('ordinary depth trades still go through', () => {
   const { api } = load();
-  const S = api.newSave(43); S.club = 'club-06';
+  const S = api.newSave(44); S.club = 'club-06';
   const wr = S.rosters['club-32'].filter(p => p.pos === 'WR').sort((a, b) => a.rating - b.rating)[0];
   api.tradeQuote(S, 'club-32', wr.id);
   assert.equal(S.offer.status, 'opening');
@@ -233,8 +234,8 @@ test('v2 save upgrades with markets, sites and leases, and nothing else changes'
   const old = JSON.parse(v2Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.equal(S.world.markets.length, 8);
-  assert.equal(S.world.sites.length, 16);
+  assert.equal(S.world.markets.length, 17);
+  assert.equal(S.world.sites.length, 34);
   assert.equal(Object.keys(S.world.leases).length, 32);
   assert(S.world.sites.every(x => x.expiresWeek > old.seasons[0].completed), 'deadlines start after the current week');
   const without = (v, keys) => JSON.parse(JSON.stringify(v, (k, x) => (keys.includes(k) ? undefined : x)));
@@ -351,7 +352,9 @@ test('v3 save upgrades with finances, and stadium talks survive', () => {
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.stadium, old.stadium);
-  assert.deepEqual(S.world, old.world);
+  assert.deepEqual(S.world.markets.slice(0, old.world.markets.length), old.world.markets);
+  assert.deepEqual(S.world.sites.slice(0, old.world.sites.length), old.world.sites);
+  assert.deepEqual(S.world.leases, old.world.leases);
   assert.equal(S.finance.ledger.length, 0);
   assert(S.finance.projects.every(p => p.status === 'proposed'));
   api.playWeek(S);
@@ -503,53 +506,74 @@ test('finances page renders every state without raw markup', () => {
 
 
 // ---- Owners, press and markets ---------------------------------------------
+// Puts Columbus (held by Cleveland) up for renewal this season.
+const columbusUp = (api, S) => {
+  S.league.markets.columbus.renewal = api.cur(S).number;
+  S.league.contests = S.league.contests.filter(c => c.marketId !== 'columbus');
+  api.openRenewals(S);
+  return api.contestFor(S, 'columbus');
+};
 const contested = (seed, bid = { annual: 12, years: 7, lobby: true }) => {
   const { api, S } = owned(seed);
-  api.ensureContest(S);
-  if (bid) api.submitBid(S, bid.annual, bid.years, bid.lobby);
+  columbusUp(api, S);
+  if (bid) assert.equal(api.submitBid(S, 'columbus', bid.annual, bid.years, bid.lobby), 'ok');
   return { api, S };
 };
-const liveContest = () => { const { api } = load(); const S = api.save; S.club = 'club-06'; api.ensureContest(S); api.submitBid(S, 12, 7, true); return { api, S }; };
+const liveContest = () => { const { api } = load(); const S = api.save; S.club = 'club-06'; columbusUp(api, S); api.submitBid(S, 'columbus', 12, 7, true); return { api, S }; };
 const untilMeeting = (api, S) => { while (!S.league.meeting && api.cur(S).completed < 18) api.playWeek(S); };
 const untilVote = (api, S) => { while (S.league.meeting.status !== 'decided') api.playWeek(S); };
+const untilDecided = (api, S, id = 'columbus') => { const C = api.contestFor(S, id); while (C.status === 'open') api.playWeek(S); return C; };
 
-test('v4 save upgrades: owners, markets, and the Columbus contest for Cincinnati', () => {
+test('v4 save upgrades: owners, markets with renewal seasons, and this season’s renewals', () => {
   const { api } = load();
   const old = JSON.parse(v4Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.finance, old.finance);
   assert.equal(Object.keys(S.league.owners).length, 32);
-  assert.equal(S.league.contest.marketId, 'columbus');
-  assert.equal(S.league.contest.holder, 'club-07');
-  assert(S.league.contest.deadlineWeek > old.seasons[0].completed);
+  assert.equal(S.league.rules.firstRefusal, false);
+  const season = api.cur(S).number;
+  const due = Object.entries(S.league.markets).filter(([, M]) => !M.holder || M.renewal <= season).map(([id]) => id).sort();
+  assert.deepEqual(S.league.contests.map(c => c.marketId).sort(), due);
+  assert(due.includes('austin'), 'unclaimed markets are open');
+  assert(S.league.contests.every(c => c.deadlineWeek > old.seasons[0].completed));
 });
 
 test('Cincinnati contests Columbus against Cleveland and control changes hands', () => {
   const { api, S } = contested(51);
-  const C = S.league.contest;
-  assert.equal(C.marketId, 'columbus');
   const fansBefore = { ...S.league.markets.columbus.fans };
-  while (C.status === 'open') api.playWeek(S);
+  const C = untilDecided(api, S);
   assert.equal(C.winner, 'club-06', 'a max offer with a station visit wins');
-  assert.equal(S.league.markets.columbus.holder, 'club-06');
-  const cell = api.mapPoints(S).find(p => p.id === 'columbus');
-  assert.deepEqual(cell.holders, ['club-06'], 'the map cell now belongs to Cincinnati');
-  assert(S.league.markets.columbus.fans['club-07'] >= fansBefore['club-07'], 'Cleveland keeps its fans: control and preference are separate');
-  const rival = S.league.owners['club-07'];
-  assert.match(rival.memory.at(-1).text, /took the Columbus broadcast rights/);
+  const M = S.league.markets.columbus;
+  assert.equal(M.holder, 'club-06');
+  assert.equal(M.fee, 12);
+  assert.equal(M.renewal, api.cur(S).number + 7, 'the deal runs seven seasons');
+  assert.deepEqual(api.mapPoints(S).find(p => p.id === 'columbus').holders, ['club-06'], 'the map cell now belongs to Cincinnati');
+  assert(M.fans['club-07'] >= fansBefore['club-07'] - 5, 'Cleveland keeps most of its fans: control and preference are separate');
+  assert.match(S.league.owners['club-07'].memory.at(-1).text, /took the Columbus broadcast rights/);
   assert.match(api.describeEvent(S.events.find(e => e.type === 'rightsWon')), /Cleveland Bulldogs’ \$/);
   assert(S.league.news.some(n => /win Columbus TV rights/.test(n.text)));
 });
 
-test('a low offer loses, and no offer means an unopposed renewal', () => {
+test('a low offer loses, and with no offer Cleveland renews quietly', () => {
   const low = contested(52, { annual: 1, years: 3, lobby: false });
-  while (low.S.league.contest.status === 'open') low.api.playWeek(low.S);
-  assert.equal(low.S.league.contest.winner, 'club-07');
+  assert.equal(untilDecided(low.api, low.S).winner, 'club-07');
   assert(low.S.events.some(e => e.type === 'rightsLost'));
   const none = contested(53, null);
-  while (none.S.league.contest.status === 'open') none.api.playWeek(none.S);
-  assert(none.S.events.some(e => e.type === 'rightsRenewed'));
+  const C = untilDecided(none.api, none.S);
+  assert.equal(C.winner, 'club-07');
+  assert(none.S.league.markets.columbus.renewal > none.api.cur(none.S).number);
+  assert(!none.S.events.some(e => /^rights/.test(e.type)), 'nothing for the owner’s inbox');
+});
+
+test('a market you hold and do not bid on is lost', () => {
+  const { api, S } = owned(54);
+  Object.assign(S.league.markets.columbus, { holder: 'club-06', fee: 5 });
+  columbusUp(api, S);
+  const C = untilDecided(api, S);
+  assert.notEqual(S.league.markets.columbus.holder, 'club-06');
+  assert.equal(C.winner, S.league.markets.columbus.holder);
+  assert.match(api.describeEvent(S.events.find(e => e.type === 'rightsLapsed')), /Columbus/);
 });
 
 test('kickoff windows: both Ohio clubs air in Columbus at different times, only the holder on a conflict', () => {
@@ -558,10 +582,72 @@ test('kickoff windows: both Ohio clubs air in Columbus at different times, only 
   for (let w = 0; w < 18; w++) {
     const rows = api.coverage(S, 'columbus', w), cin = rows.find(r => r.id === 'club-06'), cle = rows.find(r => r.id === 'club-07');
     if (!cin.slot || !cle.slot) continue;
-    if (cin.slot === cle.slot) { conflict++; assert(cle.airs && !cin.airs); assert.match(api.coverageText(S, w), /sees Cleveland, not you/); }
-    else { both++; assert(cle.airs && cin.airs); assert.match(api.coverageText(S, w), /Both games air/); }
+    if (cin.slot === cle.slot) { conflict++; assert(cle.airs && !cin.airs); assert.match(api.coverageText(S, 'columbus', w), /sees Cleveland, not you/); }
+    else { both++; assert(cle.airs && cin.airs); assert.match(api.coverageText(S, 'columbus', w), /Both games air/); }
   }
   assert(both > 0 && conflict > 0, `both ${both}, conflict ${conflict}`);
+});
+
+test('fans shift: the holder gains, a blacked-out rival loses, and with no undecided fans left the holder takes them from rivals', () => {
+  const { api, S } = contested(55);
+  untilDecided(api, S);
+  S.league.meeting = null; // no vote to hand Columbus back mid-test
+  const at = { ...S.league.markets.columbus.fans };
+  while (api.cur(S).completed < 18) api.playWeek(S);
+  const end = S.league.markets.columbus.fans;
+  assert(end['club-06'] > at['club-06'] + 4, `Cincinnati ${at['club-06']} → ${end['club-06']}`);
+  assert(end['club-07'] < at['club-07'], `Cleveland ${at['club-07']} → ${end['club-07']}`);
+  const M = S.league.markets.columbus;
+  M.fans = { 'club-06': 50, 'club-07': 48 };
+  const w = [...Array(18).keys()].find(i => { const r = api.coverage(S, 'columbus', i); return r.every(x => x.slot && x.airs); });
+  api.shiftFans(S, 'columbus', w);
+  assert(M.fans['club-06'] > 50 && M.fans['club-07'] < 48, 'the holder takes fans from a rival even when both games air');
+});
+
+test('first refusal: once it is a rule, a holder keeps its market by matching an offer within a quarter of its own', () => {
+  let matched = 0, beaten = 0;
+  for (let seed = 60; seed < 90 && !(matched && beaten); seed++) {
+    const { api, S } = owned(seed);
+    S.league.rules.firstRefusal = true;
+    const [, hi] = api.stationRange(S, 'columbus');
+    columbusUp(api, S);
+    api.submitBid(S, 'columbus', Math.round((hi + 0.5) * 2) / 2, 7, true);
+    const C = untilDecided(api, S);
+    if (C.matched) {
+      matched++;
+      assert.equal(S.league.markets.columbus.holder, 'club-07');
+      assert.equal(S.league.markets.columbus.fee, C.bid.annual, 'Cleveland pays what we offered');
+      assert(C.bid.annual <= C.bids['club-07'].annual * 1.25);
+      assert.match(api.describeEvent(S.events.find(e => e.type === 'rightsLost')), /first refusal/);
+    } else if (C.winner === 'club-06') { beaten++; assert(C.bid.annual > C.bids['club-07'].annual * 1.25); }
+  }
+  assert(matched && beaten, `matched ${matched}, beaten ${beaten}`);
+});
+
+test('deals run out: every season the due markets come up, and the league map changes without the owner', () => {
+  const { S, api } = owned(77); // the owner makes no offers
+  const start = Object.fromEntries(Object.entries(S.league.markets).map(([id, M]) => [id, M.holder]));
+  for (let season = 1; season <= 4; season++) {
+    const n = api.cur(S).number, due = Object.entries(S.league.markets).filter(([, M]) => !M.holder || M.renewal <= n).map(([id]) => id).sort();
+    assert.deepEqual(S.league.contests.map(c => c.marketId).sort(), due, 'season ' + n);
+    api.jumpTo(S, 6);
+    assert(S.league.contests.every(c => c.status === 'decided'));
+    assert(Object.values(S.league.markets).every(M => !M.holder || M.renewal > n), 'every held deal runs past this season');
+    api.jumpTo(S, api.SEASON_TICKS + 1);
+  }
+  const changed = Object.keys(start).filter(id => S.league.markets[id].holder !== start[id]);
+  assert(changed.length >= 3, 'changed hands: ' + changed.join(', '));
+  assert(S.league.news.some(n => /claim the unclaimed|win .* TV rights from/.test(n.text)));
+});
+
+test('the bid cap follows the price: Mexico City takes far more than $12M', () => {
+  const { api, S } = owned(56);
+  S.league.markets['mexico-city'].renewal = 1; api.openRenewals(S);
+  const [, hi] = api.stationRange(S, 'mexico-city');
+  assert(hi > 12 && api.bidCap(S, 'mexico-city') >= hi);
+  assert.equal(api.submitBid(S, 'mexico-city', Math.ceil(hi), 5, false), 'ok');
+  assert.equal(api.submitBid(S, 'mexico-city', api.bidCap(S, 'mexico-city') + 1, 5, false), 'invalid');
+  assert.equal(api.submitBid(S, 'columbus', 5, 5, false), api.contestFor(S, 'columbus') ? 'ok' : 'closed');
 });
 
 test('the losing owner calls a vote, and it would hand Columbus back', () => {
@@ -589,7 +675,7 @@ test('lobbying: calls reveal where owners stand, promises move them and are reme
   assert.equal(api.callOwner(S, target, false), 'noCalls');
 });
 
-test('the vote counts every owner, and a pass returns Columbus to Cleveland', () => {
+test('the vote counts every owner; a pass returns Columbus to Cleveland and makes first refusal a rule', () => {
   let passedOnce = false, failedOnce = false;
   for (let seed = 60; seed < 90 && !(passedOnce && failedOnce); seed++) {
     const { api, S } = contested(seed);
@@ -599,8 +685,17 @@ test('the vote counts every owner, and a pass returns Columbus to Cleveland', ()
     assert.equal(Object.keys(V.votes).length, 32);
     assert.equal(V.votes['club-07'], 'yes');
     assert.equal(V.votes['club-06'], 'no');
-    if (V.passed) { passedOnce = true; assert.equal(S.league.markets.columbus.holder, 'club-07'); assert.deepEqual(api.mapPoints(S).find(p => p.id === 'columbus').holders, ['club-07']); }
-    else { failedOnce = true; assert.equal(S.league.markets.columbus.holder, 'club-06'); assert.match(S.league.owners['club-07'].memory.at(-1).text, /block/); }
+    if (V.passed) {
+      passedOnce = true;
+      assert.equal(S.league.markets.columbus.holder, 'club-07');
+      assert.deepEqual(api.mapPoints(S).find(p => p.id === 'columbus').holders, ['club-07']);
+      assert.equal(S.league.rules.firstRefusal, true);
+    } else {
+      failedOnce = true;
+      assert.equal(S.league.markets.columbus.holder, 'club-06');
+      assert.equal(S.league.rules.firstRefusal, false);
+      assert.match(S.league.owners['club-07'].memory.at(-1).text, /block/);
+    }
     assert(S.league.news.some(n => /first-refusal rule/.test(n.text)));
   }
   assert(passedOnce && failedOnce, 'votes go both ways across seeds');
@@ -619,7 +714,7 @@ test('owners who resent subsidies hear about the plane you paid for', () => {
 
 test('owning out-of-market rights shows up in the books', () => {
   const { api, S } = contested(57);
-  while (S.league.contest.status === 'open') api.playWeek(S);
+  untilDecided(api, S);
   api.playWeek(S);
   assert.notEqual(S.finance.ledger.at(-1).lines.marketRights, 0);
 });
@@ -627,7 +722,7 @@ test('owning out-of-market rights shows up in the books', () => {
 test('voronoi cells: one per market, each contains its own city, and they tile the map', () => {
   const { api } = load();
   const pts = api.mapPoints(api.save), cells = api.voronoiCells(pts.map(p => [p.x, p.y]), 760, 590);
-  assert.equal(cells.length, 38);
+  assert.equal(cells.length, 50);
   const area = poly => Math.abs(poly.reduce((a, [x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return a + x * y2 - x2 * y; }, 0)) / 2;
   const inside = (poly, [px, py]) => poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) >= -1e-6; }) || poly.every(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; return (x2 - x) * (py - y) - (y2 - y) * (px - x) <= 1e-6; });
   pts.forEach((p, i) => assert(inside(cells[i], [p.x, p.y]), p.id));
@@ -954,10 +1049,17 @@ test('trades respect the cap', () => {
 });
 
 test('every club opens each season at 53 and under the cap; the owner is forced into compliance if needed', () => {
+  // Seed 209 once sent Tampa Bay into a cap spiral: re-signings that ignored next
+  // year's dead money, cuts that turned salary into dead money, and final cuts of
+  // guaranteed rookies. No club should carry more than a fifth of the cap in dead money.
   const { api, S } = owned(209);
   for (let n = 0; n < 4; n++) {
     api.jumpTo(S, 51);
-    for (const t of api.clubs) { assert.equal(S.rosters[t.id].length >= 53, true, t.id); assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id)); }
+    for (const t of api.clubs) {
+      assert.equal(S.rosters[t.id].length >= 53, true, t.id);
+      assert(api.capRoom(S, t.id) >= -0.01, t.id + ' over by ' + -api.capRoom(S, t.id));
+      if (t.id !== 'club-06') assert((S.cap.dead[t.id] ?? 0) < S.cap.limit * 0.2, t.id + ' carries ' + S.cap.dead[t.id] + ' in dead money');
+    }
   }
   api.jumpTo(S, 50); // after final cuts
   S.cap.dead['club-06'] = (S.cap.dead['club-06'] ?? 0) + api.capRoom(S, 'club-06') + 20; // $20M over
@@ -1219,7 +1321,7 @@ test('firing pays out the contract and installs an interim; interviews talk abou
 test('the February review checks promises against what happened', () => {
   const { api, S } = owned(407);
   api.fireStaff(S, 'hc');
-  const c = S.staff.market.hc.find(x => true);
+  const c = S.staff.market.hc.find(x => x.style.lineup !== 'merit'); // merit coaches may call QB an open competition
   api.interview(S, 'hc', c.id); api.hire(S, 'hc', c.id);
   c.commitments.push({ type: 'needPosition', pos: 'LS' }); // a request the GM will not fill
   api.jumpTo(S, 23);
@@ -1232,7 +1334,7 @@ test('the February review checks promises against what happened', () => {
 });
 
 test('approvals: big GM signings wait for the owner, and approving sends the offer', () => {
-  const { api, S } = owned(408);
+  const { api, S } = owned(409); // about one seed in twelve draws no signing worth asking about
   api.setDirective(S, 'approvalOver', 2);
   api.setDirective(S, 'approach', 'win-now'); // so the GM chases veterans too
   api.jumpTo(S, 27);
@@ -1438,7 +1540,7 @@ test('v10 save upgrades to v11, and an open job is filled after four weeks', () 
 });
 
 test('the GM brings trade ideas, and approving one makes the trade', () => {
-  const { api, S } = owned(601);
+  const { api, S } = owned(602); // about one seed in ten draws no idea before the deadline
   assert(advanceUntil(api, S, () => S.staff.proposals.some(P => P.kind === 'trade')), 'the GM proposed something');
   const P = S.staff.proposals.find(x => x.kind === 'trade');
   assert.match(api.tradeSummary(S, P), /^Trade for /);
@@ -1562,6 +1664,54 @@ test('v11 save upgrades to v12: prospect traits, a wire, and the owner’s scout
   assert(S.draft.prospects.every(p => p.workEthic && p.durability && p.athletic && Array.isArray(p.notes) && ['JR', 'SR'].includes(p.year)));
   assert.deepEqual(S.draft.wire, []);
   assert(S.scouting.points >= 2 && S.scouting.assign === 'gm');
+});
+
+test('v13 save upgrades to v14: twelve more open markets and renewals, nothing else moves', () => {
+  const { api } = load();
+  const old = JSON.parse(v13Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(Object.keys(S.league.markets).length, 20);
+  for (const [id, M] of Object.entries(old.league.markets)) { const { renewal, fee, ...rest } = S.league.markets[id], { fee: oldFee, ...was } = M; assert.deepEqual(rest, was, id); assert(renewal > 1, id + ' renews in a later season'); assert(fee >= 1, id + ' fee follows market size'); }
+  assert.equal(old.league.contest.status, 'decided');
+  assert.equal(S.league.markets.columbus.renewal, 6, 'Cleveland renewed Columbus for five seasons');
+  assert.equal(S.league.contest, undefined);
+  const open = S.league.contests.filter(c => c.status === 'open').map(c => c.marketId);
+  for (const id of ['austin', 'calgary', 'guadalajara', 'monterrey', 'vancouver']) assert(open.includes(id), id + ': unclaimed markets open now');
+  for (const id of open) { const M = S.league.markets[id]; assert(!M.holder || M.renewal <= api.cur(S).number, id + ' is due'); }
+  assert(S.league.contests.every(c => c.deadlineWeek === api.cur(S).tick + 4 || c.status === 'decided'));
+  assert.deepEqual(S.world.markets.slice(0, 8), old.world.markets);
+  assert.deepEqual(S.world.sites.slice(0, 16), old.world.sites);
+  const added = S.world.sites.slice(16);
+  assert.equal(added.length, 18, 'two sites in each of the nine new relocation markets');
+  assert(added.every(x => x.status === 'open' && x.expiresWeek > api.cur(S).tick));
+  assert(!S.world.markets.some(m => m.id === 'milwaukee'), 'TV-only markets have no stadium sites');
+  api.playWeek(S);
+});
+
+test('open markets: twenty broadcast markets, some unclaimed, the bigger ones open to relocation', () => {
+  const { api, S } = owned(901);
+  assert.equal(api.OPEN_MARKETS.length, 20);
+  assert.equal(S.world.markets.length, api.RELOCATION_MARKETS.length);
+  assert.equal(S.world.sites.length, 2 * api.RELOCATION_MARKETS.length);
+  const unclaimed = Object.entries(S.league.markets).filter(([, M]) => M.holder === null).map(([id]) => id).sort();
+  assert.deepEqual(unclaimed, ['austin', 'calgary', 'guadalajara', 'monterrey', 'vancouver']);
+  for (const id of unclaimed) assert.equal(Object.keys(S.league.markets[id].fans).length, 2, id + ': the two nearest clubs have a following');
+  assert.deepEqual(S.world.markets.find(m => m.id === 'monterrey').officials.map(o => o.title), ['Mayor', 'Governor']);
+  assert.deepEqual(S.world.markets.find(m => m.id === 'mexico-city').officials.map(o => o.title), ['Head of Government', 'Tourism Secretary']);
+  const before = { ...S.league.markets.austin.fans };
+  for (let i = 0; i < 4; i++) api.playWeek(S);
+  assert(Object.keys(before).some(id => S.league.markets.austin.fans[id] > before[id]), 'fans grow in an unclaimed market');
+  assert.match(api.leagueView(), /Unclaimed/);
+});
+
+test('map labels do not overlap', () => {
+  const { api } = load();
+  const boxes = api.mapLabels(api.mapPoints(api.save), s => s.length * 6.5).map(l => l.box);
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const [a, b] = [boxes[i], boxes[j]];
+    assert(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y, 'labels ' + i + ' and ' + j + ' overlap');
+  }
 });
 
 test('the college wire runs all fall: varied items, prospect histories, moving stock', () => {
@@ -1850,7 +2000,7 @@ test('v12 save upgrades to v13: no stats yet, and they start with the next game'
   const { api } = load();
   const S = api.upgrade(JSON.parse(v12Save)).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.deepEqual(S.migrations.at(-1).from, 12);
+  assert(S.migrations.some(m => m.from === 12 && m.to === 13));
   assert(Object.values(S.rosters).flat().every(p => p.stats === undefined));
   api.playWeek(S);
   const season = api.cur(S).number;

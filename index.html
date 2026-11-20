@@ -510,7 +510,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=14;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=15;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -2727,9 +2727,40 @@ function finalCuts(S,r){
 }
 
 // ---- The draft ---------------------------------------------------------------
-const COLLEGES=['Allegheny State','Bayou Tech','Cascade','Central Prairie','Delta A&M','Eastern Ridge','Great Lakes Tech','Gulf State',
-  'High Plains','Iron Range','Keystone Valley','Lakeshore','Magnolia','North Woods','Ozark State','Palmetto','Piedmont','Red River',
-  'Sierra Tech','Tidewater','Twin Rivers','Western Plateau'];
+// College programs by tier. The tier decides how good a program's prospects
+// tend to be and how much hype follows them: blue bloods are overrated on
+// the board, small schools are where the sleepers hide.
+const COLLEGE_TIERS=[
+  ['Alabama','Georgia','Ohio State','Michigan','LSU','Texas','Oregon','Clemson','USC','Notre Dame','Penn State','Oklahoma'],
+  ['Florida','Florida State','Miami','Tennessee','Texas A&M','Auburn','Ole Miss','Washington','Wisconsin','Iowa','Utah','Missouri',
+    'South Carolina','North Carolina','TCU','Arkansas','UCLA','Michigan State'],
+  ['Boise State','Iowa State','Kansas State','Oklahoma State','Baylor','Louisville','Pittsburgh','Virginia Tech','NC State','Minnesota',
+    'Purdue','Arizona State','Colorado','Mississippi State','Stanford','Cincinnati','UCF','Memphis','Kansas','West Virginia','Kentucky',
+    'Texas Tech','Houston','Tulane','Syracuse'],
+  ['North Dakota State','South Dakota State','Montana','Montana State','Jackson State','Grambling State','Northern Iowa','Delaware',
+    'Villanova','Eastern Washington','Toledo','Appalachian State','James Madison','Sacramento State','Southern','Florida A&M',
+    'Fresno State','Marshall','South Dakota','Idaho']];
+const COLLEGES=COLLEGE_TIERS.flat();
+const TIER_NAMES=['blue blood','power program','FBS program','small school'];
+const TIER_HYPE=[2,1,0,-4];
+// Where each band of the class went to school: [the top 48, the rest of the
+// draftable 224, everyone else], each by tier. Blue bloods send the most
+// players as well as the best: per school, about 11 prospects and 8 or 9
+// draftable a year; power programs 8 and 4 or 5; FBS programs 3 or 4 and
+// 1 or 2; small schools 1 or 2, and a draftable player every few years.
+const TIER_ODDS=[[.68,.25,.06,.01],[.395,.392,.182,.031],[.17,.36,.32,.15]];
+const TIER_BY_COLLEGE=new Map(COLLEGE_TIERS.flatMap((list,t)=>list.map(c=>[c,t])));
+// Schools from older saves keep their names and get a steady tier from it.
+function collegeTier(name){
+  if(TIER_BY_COLLEGE.has(name))return TIER_BY_COLLEGE.get(name);
+  let h=0;for(const ch of String(name))h=(h*31+ch.charCodeAt(0))%9973;
+  return 1+h%2;
+}
+function pickCollege(r,band){
+  const odds=TIER_ODDS[band];let x=r(),t=0;
+  while(t<3&&x>=odds[t]){x-=odds[t];t++;}
+  return pick1(r,COLLEGE_TIERS[t]);
+}
 const positionWeights=positions.flatMap(([pos,count])=>Array(count).fill(pos));
 // How boards value positions: a great kicker is still not a first-round grade.
 const DRAFT_POSITION_VALUE={QB:4,DE:2,OT:2,WR:1,CB:1,K:-14,P:-14,LS:-18};
@@ -2738,11 +2769,15 @@ function makeDraft(r,season){
     const pos=positionWeights[randInt(r,positionWeights.length)];
     const rating=44+randInt(r,20)+(i<48?randInt(r,12):0);
     const potential=Math.min(97,rating+5+randInt(r,22)+(i<48?randInt(r,6):0));
-    return {id:'d'+season+'-'+(i+1),name:personName(r),pos,college:COLLEGES[randInt(r,COLLEGES.length)],age:21+randInt(r,3),
+    return {id:'d'+season+'-'+(i+1),name:personName(r),pos,college:'',age:21+randInt(r,3),
       rating,potential,grade:Math.round(.55*potential+.45*rating+randInt(r,9)-4+(DRAFT_POSITION_VALUE[pos]??0))};
-  }).sort((a,b)=>b.grade-a.grade);
+  });
+  // The school follows the talent, so tiers never change how good a class is.
+  const byTalent=[...prospects].sort((a,b)=>(.55*b.potential+.45*b.rating)-(.55*a.potential+.45*a.rating));
+  byTalent.forEach((p,i)=>{p.college=pickCollege(r,i<48?0:i<224?1:2);p.grade+=TIER_HYPE[collegeTier(p.college)];});
+  prospects.sort((a,b)=>b.grade-a.grade);
   for(const p of prospects)enrichProspect(r,p);
-  return {season,status:'scouting',prospects,order:[],pick:0,picks:[],wire:[],nextClass:[]};
+  return {season,status:'scouting',prospects,order:[],pick:0,picks:[],wire:[],nextClass:[],slate:makeSlate(r)};
 }
 function draftOrder(S){
   const s=cur(S),table=standings(S).flat(),P=s.postseason;
@@ -3015,7 +3050,7 @@ function draftView(){
     list.map(p=>'<tr><td>'+(D.prospects.indexOf(p)+1)+'</td><td>'+esc(name(p))+(p.injured?'<small>Injured this season</small>':'')+'</td><td>'+esc(p.pos)+'</td><td>'+esc(p.college)+'</td><td>'+esc(p.year??'')+'</td><td>'+p.grade+'</td><td>'+grade(p)+'</td><td>'+dots(p)+'</td><td>'+trend(p)+'</td><td class="calls">'+(extra?extra(p):'')+actions(p)+'</td></tr>').join('')+'</tbody></table></div>';
   let html=heading('DRAFT AND SCOUTING','Class of season '+D.season);
   const prof=draftUi.profile&&[...D.prospects,...(D.nextClass??[])].find(p=>p.id===draftUi.profile);
-  if(prof)html+='<div class="confirm negotiation"><div><strong>'+esc(prof.pos+' '+prof.name+', '+prof.college+' ('+(prof.year??'')+', age '+prof.age+')')+'</strong><small>'+esc('Consensus grade '+prof.grade+(D.combineDone||prof.athletic&&D.status!=='scouting'?' · Combine athleticism '+prof.athletic:''))+'</small></div>'+
+  if(prof)html+='<div class="confirm negotiation"><div><strong>'+esc(prof.pos+' '+prof.name+', '+prof.college+' ('+TIER_NAMES[collegeTier(prof.college)]+'; '+(prof.year??'')+', age '+prof.age+')')+'</strong><small>'+esc('Consensus grade '+prof.grade+(D.combineDone||prof.athletic&&D.status!=='scouting'?' · Combine athleticism '+prof.athletic:''))+'</small></div>'+
     '<ul class="commitments">'+(prof.notes.length?prof.notes.map(n=>'<li>'+esc(shortLabel(n.week)+': '+n.text)+'</li>').join(''):'<li>No headlines yet.</li>')+'</ul>'+
     (S.club?'<p>'+esc(scoutingReport(S,prof).join(' '))+'</p>':'')+'<div class="controls"><button id="closeProfile">Close</button></div></div>';
   const mineOwned=S.club?S.picks.filter(p=>p.owner===S.club).sort((a,b)=>a.round-b.round):[];
@@ -3028,8 +3063,10 @@ function draftView(){
     html+='<p>'+esc('The draft is '+weekLabel(MILESTONES.draft)+'. The consensus grade moves with the college wire; your GM grade starts from the truth, pulled toward the hype and blurred by his scouting. Each scouting visit cuts through both: the first sharpens the grade, the second reveals work ethic and durability, the third tells you whether he is overrated.')+'</p>'+
       (S.club?'<div class="controls"><label>Scouting assignments <select id="scoutAssign">'+option('gm','The GM spends what I leave',S.scouting.assign!=='owner')+option('owner','I assign them all',S.scouting.assign==='owner')+'</select></label></div>':'');
     const weeks=[...D.wire].reverse().filter(w=>w.items.length).slice(0,draftUi.allWire?40:3);
-    html+='<h2>College wire</h2>'+(weeks.length?weeks.map(w=>'<h3 class="wirehead">'+esc(capital(weekLabel(w.week)))+'</h3><ul>'+w.items.map(it=>'<li>'+(it.pid&&watch.has(it.pid)?'<strong>★ '+esc(it.text)+'</strong>':esc(it.text))+(it.pid?' <button data-profile="'+esc(it.pid)+'">Profile</button>':'')+'</li>').join('')+'</ul>').join('')+
+    html+='<h2>College wire</h2>'+(weeks.length?weeks.map(w=>'<h3 class="wirehead">'+esc(capital(weekLabel(w.week)))+'</h3><ul>'+w.items.map(it=>'<li>'+(it.kind==='game'?'<b>'+esc(it.text)+'</b>':(it.pid&&watch.has(it.pid))||(it.pid2&&watch.has(it.pid2))?'<strong>★ '+esc(it.text)+'</strong>':esc(it.text))+[it.pid,it.pid2].filter(Boolean).map(id=>' <button data-profile="'+esc(id)+'">Profile</button>').join('')+'</li>').join('')+'</ul>').join('')+
       (D.wire.length>3?'<div class="controls"><button id="toggleWire">'+(draftUi.allWire?'Show the latest weeks':'Show every week')+'</button></div>':''):'<p>The college season starts with Week 1. The wire follows the class all fall.</p>');
+    const games=(D.slate??[]).filter(g=>!g.winner&&g.week>=now(S)).sort((a,b)=>a.week-b.week).slice(0,6);
+    if(games.length)html+='<h2>Big games ahead</h2><ul>'+games.map(g=>'<li>'+esc(capital(weekLabel(g.week))+': '+g.home+' vs. '+g.away+(g.name?', '+g.name:''))+'</li>').join('')+'</ul>';
     const top=D.prospects.slice(0,40),extraWatch=D.prospects.filter(p=>watch.has(p.id)&&!top.includes(p));
     html+='<h2>Big board</h2>'+table(top)+(extraWatch.length?'<h2>Also on your watch list</h2>'+table(extraWatch):'');
     if(D.nextClass?.length)html+='<p>'+esc(D.nextClass.length+' juniors went back to school and will be in next year’s class.')+'</p>';
@@ -4530,19 +4567,98 @@ function bigGame(r,p,opp){
     P:[()=>'pinned '+opp+' inside the 10 five times'],LS:[()=>'was perfect on snaps against '+opp]}[p.pos]??[()=>'starred against '+opp];
   return T[randInt(r,T.length)]();
 }
+// ---- Big games -------------------------------------------------------------------------
+// The college season's marquee games. Every top prospect on both sides makes
+// the wire, the swings are twice as big, and matched positions go head to
+// head. Big games move the hype, not the player.
+// draft.slate  [{week,name,home,away,kind,score?,winner?}]
+const RIVALRIES=[[2,'the Border War','Kansas','Missouri'],[3,'the Backyard Brawl','Pittsburgh','West Virginia'],[4,'','Clemson','Florida State'],[5,'','Georgia','Tennessee'],[6,'the Red River Rivalry','Texas','Oklahoma'],
+  [7,'the Third Saturday in October','Alabama','Tennessee'],[9,'','Ohio State','Penn State'],[9,'the Florida–Georgia game','Georgia','Florida'],
+  [8,'the Paul Bunyan Trophy game','Michigan State','Michigan'],[10,'','LSU','Alabama'],[11,'','Oregon','Washington'],[12,'the Victory Bell game','UCLA','USC'],[13,'The Game','Michigan','Ohio State'],[13,'the Iron Bowl','Auburn','Alabama'],
+  [13,'the Palmetto Bowl','South Carolina','Clemson'],[13,'the Sunshine Showdown','Florida State','Florida'],[13,'','USC','Notre Dame'],
+  [13,'the Egg Bowl','Mississippi State','Ole Miss'],[13,'the Governor’s Cup','Louisville','Kentucky'],[13,'the Bayou Classic','Southern','Grambling State']];
+const PLAYOFF_WEEK=COLLEGE_WEEKS+1;
+function makeSlate(r){
+  const slate=RIVALRIES.map(([week,name,home,away])=>({week,name,home,away,kind:'rivalry'}));
+  const pool=[...COLLEGE_TIERS[0],...COLLEGE_TIERS[0],...COLLEGE_TIERS[1]],title=[];
+  while(title.length<4){const c=pick1(r,pool);if(!title.includes(c))title.push(c);}
+  slate.push({week:COLLEGE_WEEKS,name:'a conference title game',home:title[0],away:title[1],kind:'title'},
+    {week:COLLEGE_WEEKS,name:'a conference title game',home:title[2],away:title[3],kind:'title'});
+  return slate;
+}
+// The playoff: eight schools on their big-game record, then the bracket plays out.
+function fillPlayoff(D,r,t){
+  const G=D.slate,winners=k=>G.filter(g=>g.kind===k&&g.winner).map(g=>g.winner);
+  if(t===PLAYOFF_WEEK){
+    const wins=new Map();for(const g of G)if(g.winner)wins.set(g.winner,(wins.get(g.winner)??0)+(g.kind==='title'?2:1));
+    const field=[...new Set([...COLLEGE_TIERS[0],...COLLEGE_TIERS[1]])].map(c=>({c,k:(wins.get(c)??0)*10-collegeTier(c)*4+r()*5}))
+      .sort((a,b)=>b.k-a.k).slice(0,8).map(x=>x.c);
+    [[0,7,0],[3,4,0],[1,6,1],[2,5,1]].forEach(([a,b,w])=>G.push({week:PLAYOFF_WEEK+w,name:'a playoff quarterfinal',home:field[a],away:field[b],kind:'quarterfinal'}));
+  }
+  if(t===PLAYOFF_WEEK+2){const q=winners('quarterfinal');if(q.length===4)G.push({week:t,name:'a playoff semifinal',home:q[0],away:q[1],kind:'semifinal'},{week:t,name:'a playoff semifinal',home:q[2],away:q[3],kind:'semifinal'});}
+  if(t===PLAYOFF_WEEK+3){const s=winners('semifinal');if(s.length===2)G.push({week:t,name:'the national championship',home:s[0],away:s[1],kind:'final'});}
+}
+const tag=p=>p.pos+' '+p.name+' ('+p.college+')';
+// Who lines up against whom: the attacker's position, then the men who cover him.
+const DUELS=[
+  ['WR',['CB'],(a,b)=>a+' beat '+b+' for two long touchdowns',(a,b,r)=>b+' shadowed '+a+' and held him to '+['one catch','two catches','three catches'][randInt(r,3)]],
+  ['QB',['CB','S'],(a,b)=>a+' carved up a secondary led by '+b,(a,b)=>b+' picked off '+a+' twice'],
+  ['OT',['DE'],(a,b)=>a+' kept '+b+' without a sack all game',(a,b,r)=>b+' beat '+a+' for '+(2+randInt(r,2))+' sacks'],
+  ['OG',['DT'],(a,b)=>a+' moved '+b+' off the ball all game',(a,b,r)=>b+' blew past '+a+' for '+(2+randInt(r,2))+' tackles for loss'],
+  ['C',['DT'],(a,b)=>a+' neutralized '+b+' in the middle',(a,b)=>b+' collapsed the pocket through '+a+' all day'],
+  ['RB',['LB'],(a,b,r)=>a+' ran through '+b+' for '+(120+randInt(r,80))+' yards',(a,b)=>b+' stuffed '+a+' at the line all day'],
+  ['TE',['LB','S'],(a,b,r)=>a+' got loose on '+b+' for '+(80+randInt(r,60))+' yards',(a,b)=>b+' blanketed '+a+' all game']];
+function playMarquee(S,r,g,items,used){
+  const D=S.draft;
+  const pHome=Math.max(.2,Math.min(.8,.5+.08*(collegeTier(g.away)-collegeTier(g.home))));
+  const homeWins=r()<pHome,w=20+randInt(r,22),l=Math.max(0,w-1-randInt(r,18));
+  g.winner=homeWins?g.home:g.away;g.score=homeWins?[w,l]:[l,w];
+  const where=g.name?' in '+g.name:'',label=(g.name?capital(g.name)+': ':'')+g.home+' '+g.score[0]+', '+g.away+' '+g.score[1]+'.';
+  items.push({kind:'game',text:label});
+  const side=c=>D.prospects.filter(p=>p.college===c&&!p.injured&&!used.has(p.id)).slice(0,5);
+  const home=side(g.home),away=side(g.away),swing=(p,up,text)=>{
+    const d=up?2+randInt(r,5):-(2+randInt(r,3));p.grade+=d;used.add(p.id);note(S,p,capital(text)+'.');};
+  // Head to head first: each matched pair settles it between them, and the better player usually wins.
+  for(const [att,covers,win,lose] of DUELS)for(const [A,B] of [[home,away],[away,home]]){
+    const a=A.find(p=>p.pos===att&&!used.has(p.id)),b=a&&B.find(p=>covers.includes(p.pos)&&!used.has(p.id));
+    if(!b)continue;
+    const aWins=r()<Math.max(.2,Math.min(.8,.5+(trueGrade(a)-trueGrade(b))*.03));
+    const text=(aWins?win:lose)(tag(a),tag(b),r)+where,[up,down]=aWins?[a,b]:[b,a];
+    swing(up,true,text);swing(down,false,text);
+    items.push({pid:up.id,pid2:down.id,kind:'duel',text:text+'.'});
+  }
+  for(const p of [...home,...away]){
+    if(used.has(p.id))continue;
+    const won=p.college===g.winner,opp=p.college===g.home?g.away:g.home,up=r()<(won?.75:.45);
+    const text=up?tag(p)+' '+bigGame(r,p,opp)+where:tag(p)+' struggled against '+opp+where;
+    swing(p,up,text);
+    items.push({pid:p.id,kind:up?'rise':'fall',text:text+(up?'':'; his stock is slipping')+'.'});
+  }
+}
+const TIER_COVERAGE=[3,2,1.5,.6]; // small schools rarely make the wire
+function weightedPick(r,list){
+  const w=list.map(p=>TIER_COVERAGE[collegeTier(p.college)]),total=w.reduce((a,b)=>a+b,0);
+  let x=r()*total;for(let i=0;i<list.length;i++){x-=w[i];if(x<0)return list[i];}
+  return list.at(-1);
+}
 function collegeWeek(S,r){
   const D=S.draft,t=now(S);
   if(!D||D.status!=='scouting')return;
-  const items=[],pool=D.prospects.slice(0,140).filter(p=>!p.injured);
-  const watch=new Set(S.scouting?.watch??[]);
+  const items=[],watch=new Set(S.scouting?.watch??[]);
   const bowl=t>COLLEGE_WEEKS;
-  const used=new Set(),usedPos=new Set();
+  const used=new Set(),usedPos=new Set(),busy=new Set();
+  if(D.slate){
+    fillPlayoff(D,r,t);
+    for(const g of D.slate)if(g.week===t&&!g.winner){busy.add(g.home).add(g.away);playMarquee(S,r,g,items,used);}
+  }
+  // Schools in a big game this week played nobody else.
+  const pool=D.prospects.slice(0,140).filter(p=>!p.injured&&!busy.has(p.college)),free=COLLEGES.filter(c=>!busy.has(c));
   for(let n=0;n<(bowl?3:4);n++){
     const fresh=pool.filter(x=>!used.has(x.id)&&!usedPos.has(x.pos));
     if(!fresh.length)break;
-    const p=r()<.3&&watch.size?fresh.find(x=>watch.has(x.id)&&r()<.5)??pick1(r,fresh):pick1(r,fresh);
+    const p=r()<.3&&watch.size?fresh.find(x=>watch.has(x.id)&&r()<.5)??weightedPick(r,fresh):weightedPick(r,fresh);
     used.add(p.id);usedPos.add(p.pos);
-    const opp=pick1(r,COLLEGES.filter(c=>c!==p.college)),roll=r();
+    const opp=pick1(r,free.filter(c=>c!==p.college)),roll=r();
     if(roll<.04&&!bowl){
       p.injured=true;p.grade-=6;note(S,p,'Season-ending injury against '+opp+'.');
       items.push({pid:p.id,kind:'injury',text:p.pos+' '+p.name+' ('+p.college+') is out for the season after an injury against '+opp+'.'});
@@ -4558,7 +4674,7 @@ function collegeWeek(S,r){
       items.push({pid:p.id,kind:'fall',text:p.pos+' '+p.name+' ('+p.college+') struggled against '+opp+'; his stock is slipping.'});
     }
   }
-  const [a,b]=[pick1(r,COLLEGES),pick1(r,COLLEGES)];
+  const [a,b]=[pick1(r,free),pick1(r,free)];
   if(a!==b&&!bowl)items.push({kind:'score',text:'Elsewhere: '+a+' '+(17+randInt(r,25))+', '+b+' '+(3+randInt(r,20))+'.'});
   D.wire.push({season:cur(S).number,week:t,items});
   D.prospects.sort((x,y)=>y.grade-x.grade);
@@ -4733,7 +4849,17 @@ const migrations={
   11:migrateV11,
   12:migrateV12,
   13:migrateV13,
+  14:migrateV14,
 };
+// v14 -> v15: real colleges in tiers, and the big games of the college season.
+// A class already in progress keeps its schools (each gets a steady tier from
+// its name) and picks up this fall's slate; games already past are skipped.
+function migrateV14(old){
+  old.draft.slate??=makeSlate(rngFor(old.rng));
+  old.schemaVersion=15;
+  (old.migrations??=[]).push({from:14,to:15,at:new Date().toISOString()});
+  return old;
+}
 // v13 -> v14: twelve more open markets, and broadcast deals that run out.
 // Each new market gets a broadcast record; the relocation markets also get
 // officials and site offers, open from now. Every deal gets a renewal season,
@@ -4982,7 +5108,7 @@ function validateSave(S){
   else if(Object.values(S.rosters??{}).flat().some(p=>!p?.contract||![p.contract.salary,p.contract.prorated].every(Number.isFinite)||!isInt(p.contract.yearsLeft,1,10)))fail('A player contract is invalid.');
   if(!S.staff?.clubs||!clubs.every(t=>S.staff.clubs[t.id]?.hc?.ratings&&S.staff.clubs[t.id]?.gm?.ratings)||!S.staff.directives||!Array.isArray(S.staff.proposals)||!S.staff.market||!Array.isArray(S.staff.openings))fail('Coach and front-office records are missing.');
   if(!S.depth||!S.depth.order||!Array.isArray(S.depth.inactive)||!Array.isArray(S.depth.active)||!S.irReturns||!S.practice||!clubs.every(t=>Array.isArray(S.practice[t.id])&&S.practice[t.id].length<=PRACTICE_LIMIT&&S.practice[t.id].every(p=>p.contract)))fail('Depth chart or practice-squad records are missing.');
-  if(!S.scouting||!S.scouting.levels||!Array.isArray(S.scouting.watch)||!Array.isArray(S.draft?.wire)||!Array.isArray(S.draft?.nextClass))fail('Scouting records are missing.');
+  if(!S.scouting||!S.scouting.levels||!Array.isArray(S.scouting.watch)||!Array.isArray(S.draft?.wire)||!Array.isArray(S.draft?.nextClass)||!Array.isArray(S.draft?.slate))fail('Scouting records are missing.');
   if(!S.draft||!Array.isArray(S.draft.prospects)||!['scouting','live','done'].includes(S.draft.status)||!isInt(S.draft.pick,0))fail('The draft class is missing.');
   if(!Array.isArray(S.history)||!Array.isArray(S.draftHistory))fail('Season history is missing.');
   const Lg=S.league;

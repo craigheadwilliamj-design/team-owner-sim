@@ -21,7 +21,8 @@ const v10Save = fs.readFileSync(path.join(FIX, 'v10-save.json'), 'utf8');
 const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
 const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
 const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
-const NAMES = ['openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
+const NAMES = ['COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -1789,6 +1790,76 @@ test('draft page shows the wire, the board and a prospect profile', () => {
   assert(!/<script|onerror/i.test(html));
 });
 
+test('v14 save upgrades to v15: the class in progress keeps its schools and picks up the slate', () => {
+  const { api } = load();
+  const old = JSON.parse(v14Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.draft.prospects, old.draft.prospects, 'prospects untouched');
+  assert.deepEqual(S.draft.wire, old.draft.wire);
+  assert(S.draft.slate.length >= 14 && S.draft.slate.every(g => !g.winner));
+  assert(S.draft.prospects.every(p => [1, 2].includes(api.collegeTier(p.college))), 'old schools get a steady middle tier');
+  assert.equal(api.collegeTier('Iron Range'), api.collegeTier('Iron Range'));
+  for (let i = 0; i < 7; i++) api.playWeek(S);
+  assert(S.draft.slate.filter(g => g.week <= 7).every(g => !g.winner), 'games already past are skipped');
+  assert(S.draft.slate.some(g => g.week > 7 && g.week <= api.now(S) && g.winner), 'later big games are played');
+});
+
+test('schools follow the talent: blue bloods get the elite and the hype, small schools hide sleepers', () => {
+  const { api } = load();
+  const elite = [0, 0, 0, 0], hype = [[], [], [], []], volume = [0, 0, 0, 0];
+  for (const seed of [901, 902, 903, 904, 905, 906, 907, 908]) {
+    const S = api.newSave(seed), all = [...S.draft.prospects];
+    assert.equal(new Set(all.map(p => p.college)).size > 50, true, 'most programs show up in a class');
+    assert(all.every(p => api.COLLEGE_TIERS.flat().includes(p.college)));
+    all.sort((a, b) => (.55 * b.potential + .45 * b.rating) - (.55 * a.potential + .45 * a.rating)).slice(0, 48).forEach(p => elite[api.collegeTier(p.college)]++);
+    for (const p of all) { hype[api.collegeTier(p.college)].push(p.grade - api.trueGrade(p)); volume[api.collegeTier(p.college)]++; }
+  }
+  const per = volume.map((n, t) => n / 8 / api.COLLEGE_TIERS[t].length);
+  assert(per[0] > 9 && per[3] < 2.5 && per[0] > per[1] && per[1] > per[2] && per[2] > per[3], 'prospects per school by tier: ' + per.map(x => x.toFixed(1)));
+  assert(elite[0] > elite[1] && elite[1] > elite[2] && elite[2] > elite[3], 'elite talent by tier: ' + elite);
+  assert(elite[3] > 0, 'a few elite prospects come from small schools');
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  assert(mean(hype[0]) > mean(hype[3]) + 4, 'blue bloods are overrated next to small schools');
+});
+
+test('big games: rivalry week floods the wire with duels and big swings, then the playoff plays out', () => {
+  const { api, S } = owned(906);
+  api.jumpTo(S, 13);
+  const week = S.draft.wire.find(w => w.week === 13);
+  const ids = week.items.flatMap(x => [x.pid, x.pid2]).filter(Boolean);
+  assert.equal(new Set(ids).size, ids.length, 'one item per prospect per week');
+  assert(week.items.some(x => x.kind === 'game' && /^The Iron Bowl: /.test(x.text)));
+  assert(week.items.filter(x => x.kind === 'game').length === 8, 'eight rivalry games');
+  assert(week.items.some(x => x.kind === 'game' && /^The Bayou Classic: /.test(x.text)));
+  assert(S.draft.wire.find(w => w.week === 2).items.some(x => x.kind === 'game' && /^The Border War: Kansas \d+, Missouri \d+\.$/.test(x.text)), 'the Border War opens the fall');
+  assert(week.items.length > 10, 'rivalry week is the busiest week of the wire');
+  const games = S.draft.slate.filter(g => g.week === 13);
+  assert(games.every(g => g.winner && g.score[0] !== g.score[1] && [g.home, g.away].includes(g.winner)));
+  const featured = S.draft.prospects.filter(p => p.notes.some(n => n.week === 13 && /Iron Bowl|The Game|Palmetto|Sunshine|Egg Bowl|Governor|Bayou|Notre Dame|USC/.test(n.text)));
+  assert(featured.length >= 4);
+  api.jumpTo(S, 19);
+  const k = kind => S.draft.slate.filter(g => g.kind === kind && g.winner);
+  assert.equal(k('title').length, 2);
+  assert.equal(k('quarterfinal').length, 4);
+  assert.equal(k('semifinal').length, 2);
+  assert.equal(k('final').length, 1);
+  assert(k('semifinal').every(g => k('quarterfinal').some(q => q.winner === g.home)), 'the bracket advances winners');
+  assert(S.draft.wire.some(w => w.items.some(x => /^The national championship: /.test(x.text))));
+});
+
+test('draft page lists the big games ahead and a prospect’s program', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  api.advance(S);
+  let html = api.draftView();
+  assert.match(html, /Big games ahead/);
+  assert.match(html, /Red River Rivalry/);
+  api.draftUi.profile = S.draft.prospects[0].id;
+  html = api.draftView();
+  assert.match(html, /blue blood|power program|FBS program|small school/);
+});
+
 // ---- Play-by-play engine --------------------------------------------------
 const engineGames = (api, n, opts = {}) => {
   const S = api.newSave(31), units = api.clubs.map(t => api.clubUnits(S, t.id)), r = api.rngFor({ seed: 5, state: 5 });
@@ -1931,7 +2002,8 @@ test('season stats: box scores add up, starters start, playoffs are not counted'
   const before = lines_();
   api.advance(S); api.advance(S);
   assert(api.cur(S).postseason?.rounds.length >= 1);
-  assert.deepEqual(lines_(), before, 'playoff games leave season lines alone');
+  const after = lines_(); // players can leave the pool in the playoffs; compare the ones still here
+  assert.deepEqual(after, Object.fromEntries(Object.keys(after).map(id => [id, before[id] ?? 'null'])), 'playoff games leave season lines alone');
 });
 
 test('season stats move trade prices: a big year costs more, a bad one less', () => {

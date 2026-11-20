@@ -10,16 +10,26 @@ buy a franchise, hire the people who run it, and choose when to interfere.
 
 - An 18-week season, playoffs, and a full offseason calendar (February Week 1
   to August Week 4) with a jump-ahead control.
+- Every game is simulated play by play from player ratings; your own games
+  come as a live broadcast.
+- Player season stats, which feed trade value and contract asks.
 - Coaches and a GM with ratings, styles and promises you can hold them to;
-  firing, interviews, and a coaching carousel.
+  firing, interviews, auto-hire and a coaching carousel.
 - Depth chart, game-day actives, injured reserve and practice squads.
 - Contracts and a salary cap: negotiation, guarantees, the franchise tag,
   rookie options, cap carryover and a salary floor.
 - Trades you make, trades your GM proposes, offers from rival clubs, and
-  AI clubs trading with each other.
-- A college wire, scouting and the draft.
-- Stadium talks in open markets, club finances, naming rights, broadcast
-  markets on a map, and league votes.
+  AI clubs trading with each other. Rivals pay a premium inside the
+  division and conference.
+- A college wire, scouting and the draft. Real college programs come in
+  tiers: blue bloods produce the elite and carry the hype, and small schools
+  hide sleepers. Rivalry games, title games and a playoff swing draft stock.
+- Stadium talks and private site visits in open markets, including
+  unclaimed markets and relocation targets such as Salt Lake City and
+  Calgary.
+- Club finances, naming rights, and league votes.
+- Broadcast markets on a map: rights deals renew, and fan bases shift with
+  coverage.
 
 ## Saves
 
@@ -37,6 +47,8 @@ from it for GitHub Pages.
 npm test        # headless test suite (Node 20+)
 npm run build   # regenerate index.html after editing season-desk.html
 npm run check   # confirm index.html is up to date (CI runs this)
+npm run calibrate  # engine stats vs NFL averages and the old win curve
+npm run pbp        # print one simulated game, play by play
 ```
 
 Every change to the save shape bumps `SCHEMA_VERSION` and adds a migration.

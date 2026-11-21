@@ -34,6 +34,10 @@ buy a franchise, hire the people who run it, and choose when to interfere.
   city's team when the next season opens (optionally under a new nickname),
   the league realigns divisions to fit, and the city you left joins the open
   markets.
+- AI clubs relocate too, rarely: at most one move every six seasons, only
+  for a market at least twice the size with the lease nearly up, or a public
+  offer that pays for most of the stadium, and only if the owners vote it
+  through. You get a vote, and hear about it in your inbox.
 - Club finances, naming rights, and league votes.
 - Broadcast markets on a map: rights deals renew, and fan bases shift with
   coverage.

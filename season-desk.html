@@ -1887,7 +1887,8 @@ function applyIdentity(S){
 }
 
 const pendingApplication=S=>{const A=S.stadium.application;return A&&(A.status==='pending'||A.status==='approved')?A:null;};
-const citySince=S=>S.relocations.at(-1)?.season??1;
+const clubSince=(S,id)=>S.relocations.filter(m=>m.club===id).at(-1)?.season??1; // first season in its current city
+const citySince=S=>clubSince(S,S.club);
 // Why the owner cannot file right now, or null.
 function relocationBlock(S){
   const s=cur(S);
@@ -1910,8 +1911,8 @@ function relocationBlockText(S,code){
 const stadiumCost=site=>round5(650+(site.maxSeats-60000)/1000*12);
 // What a move to this site costs the owner. With estimate set and the
 // infrastructure not yet verified, it uses the city's number, not the true one.
-function relocationCosts(S,site,estimate=false){
-  const m=marketById(S,site.marketId),lease=S.world.leases[S.club],here=homeMetro(byId.get(S.club).marketId);
+function relocationCosts(S,site,estimate=false,clubId=S.club){
+  const m=marketById(S,site.marketId),lease=S.world.leases[clubId],here=homeMetro(byId.get(clubId).marketId);
   const infra=estimate&&!site.infraKnown?site.infraEstimate:site.infraTrue;
   const land=site.landTerms==='purchase'?round5(site.acres*.8):0,build=stadiumCost(site);
   const fee=round5(80+14*Math.sqrt(m.metro)+(m.metro>here?6*Math.sqrt(m.metro-here):0));
@@ -1936,8 +1937,8 @@ function newAbbr(name){
 // Realignment: if the new city sits clearly closer to another division, the
 // league swaps the club into it, and sends that division's best-placed club
 // the other way. Returns null when the club stays where it is.
-function realignmentPlan(S,dest){
-  const me=byId.get(S.club),pt=[dest.lat,dest.lon];
+function realignmentPlan(S,dest,clubId=S.club){
+  const me=byId.get(clubId),pt=[dest.lat,dest.lon];
   const miles=t=>milesBetween(pt,marketCoords(t.marketId)),mean=(list,f)=>list.reduce((a,t)=>a+f(t),0)/list.length;
   const rows=groups.map(g=>({conference:g[0].conference,division:g[0].division,others:g.filter(t=>t.id!==me.id)}));
   const own=rows.find(d=>d.conference===me.conference&&d.division===me.division),ownMean=mean(own.others,miles);
@@ -1964,7 +1965,7 @@ function fileRelocation(S,siteId,opts={}){
   F.contributions.capital=round2(F.contributions.capital+RELOCATION_FILING);
   F.capitalLog.push({season:s.number,week:s.tick,project:'relocation',amount:RELOCATION_FILING,funding:'owner'});
   const vacates=!clubs.some(t=>t.marketId===home.marketId&&t.id!==home.id);
-  S.stadium.application={status:'pending',filedSeason:s.number,filedWeek:s.tick,siteId,marketId:dest.id,siteName:site.name,destination:dest,
+  S.stadium.application={status:'pending',mover:S.club,filedSeason:s.number,filedWeek:s.tick,siteId,marketId:dest.id,siteName:site.name,destination:dest,
     from:{market:home.market,marketId:home.marketId,nickname:home.nickname,abbr:home.abbr,conference:home.conference,division:home.division},
     fromMetro:homeMetro(home.marketId),fromCoords:marketCoords(home.marketId),vacates,nickname,realign:realignmentPlan(S,dest),
     costs:{...costs,rebrand,filing:RELOCATION_FILING,total},funding,paid};
@@ -1992,9 +1993,11 @@ function refundRelocation(S,A){
 
 // The vote. Owners start against a move (tradition, the league's wish to keep
 // cities) and are won by a big new market, the league's fee, or a rival's loss.
-function relocationLean(S,clubId){
-  const L=S.league,V=L.meeting,A=S.stadium.application,o=L.owners[clubId],t=byId.get(clubId),dest=A.destination;
-  let x=.02-o.tradition*.7+o.sponsorAffinity*.5+o.relation/100*.9;
+// A is the move being voted on: the owner's application, or an AI club's proposal.
+// Relations and lobbying only count for the owner's own application.
+function relocationLean(S,clubId,A=S.stadium.application){
+  const L=S.league,mine=A===S.stadium.application,o=L.owners[clubId],t=byId.get(clubId),dest=A.destination;
+  let x=.02-o.tradition*.7+o.sponsorAffinity*.5+(mine?o.relation/100*.9:0);
   x+=(A.costs.fee-110)/320;
   x+=Math.max(-.3,Math.min(.3,Math.log2(dest.metro/A.fromMetro)*.2));
   const toDest=milesBetween([dest.lat,dest.lon],marketCoords(t.marketId));
@@ -2002,7 +2005,7 @@ function relocationLean(S,clubId){
   if(L.markets[dest.id]?.holder===clubId)x-=.5;
   if(A.realign?.swap===clubId)x-=.6;
   if(milesBetween(A.fromCoords,marketCoords(t.marketId))<250)x+=A.vacates?.25:.3;
-  return round2(x+(V.lobby[clubId]??0));
+  return round2(x+(mine?S.league.meeting?.lobby?.[clubId]??0:0));
 }
 function resolveRelocationVote(S){
   const L=S.league,V=L.meeting,A=S.stadium.application,F=S.finance,s=cur(S),me=byId.get(S.club),dest=A.destination;
@@ -2028,6 +2031,36 @@ function resolveRelocationVote(S){
   news(S,passed?'Owners approve '+A.from.market+' move to '+dest.name+', '+yes+'–'+(32-yes):'Owners reject '+A.from.market+' move to '+dest.name+', '+yes+'–'+(32-yes));
 }
 
+// The open market a vacated home city becomes.
+function vacatedMarket(from){
+  const known=KNOWN_MARKETS.get(from.marketId),info=HOME_MARKET_INFO[from.marketId]??{},[lat,lon]=marketCoords(from.marketId);
+  return known?{...known,relocation:true}:{id:from.marketId,name:info.city??from.market,region:info.region??'',country:'US',metro:homeMetro(from.marketId),potential:info.potential??60,lat,lon,relocation:true};
+}
+// Everything a move does to the league, for the owner's club or an AI club:
+// logs it, rewires the markets and gives the club its new stadium. Offers that
+// the move creates expire expireBase+6 to +19 weeks out, on the current calendar.
+function moveClub(S,r,entry,site,expireBase){
+  const L=S.league,dest=entry.destination;
+  S.relocations.push(entry);
+  applyIdentity(S);
+  // The city leaves the open pool, with its offers and its broadcast deal.
+  for(const x of S.world.sites.filter(x=>x.marketId===dest.id))x.status='taken';
+  const holder=L.markets[dest.id]?.holder??null;
+  delete L.markets[dest.id];
+  L.contests=L.contests.filter(c=>c.marketId!==dest.id);
+  // The city left behind joins it.
+  if(entry.vacated){
+    const {market,sites}=worldMarket(r,entry.vacated,cur(S).completed);
+    for(const x of sites)x.expiresWeek=expireBase+6+randInt(r,14);
+    S.world.markets.push(market);S.world.sites.push(...sites);
+    const M=leagueMarket(r,entry.vacated);
+    Object.assign(M,{renewal:entry.season});M.fans[entry.club]=22;
+    L.markets[entry.vacated.id]=M;
+  }
+  const oldStadium=S.world.leases[entry.club].stadium,stadium=dest.name+' '+['Stadium','Field','Coliseum'][randInt(r,3)];
+  S.world.leases[entry.club]={stadium,opened:2025+entry.season,capacity:site.maxSeats,yearsLeft:30,condition:'Modern',parking:site.parking,landTerms:site.landTerms,siteId:site.id};
+  return {holder,stadium,oldStadium};
+}
 // Runs at the rollover: the approved move takes effect as the new season opens.
 function executeRelocation(S,r){
   const A=pendingApplication(S);
@@ -2036,41 +2069,20 @@ function executeRelocation(S,r){
   const to={market:dest.name,marketId:dest.id,nickname:A.nickname??home.nickname,abbr:newAbbr(dest.name),
     conference:A.realign?.to.conference??home.conference,division:A.realign?.to.division??home.division};
   const swap=A.realign?{club:A.realign.swap,to:{conference:A.from.conference,division:A.from.division}}:null;
-  let vacated=null;
-  if(A.vacates){
-    const known=KNOWN_MARKETS.get(home.marketId),info=HOME_MARKET_INFO[home.marketId]??{};
-    const [lat,lon]=marketCoords(home.marketId);
-    vacated=known?{...known,relocation:true}:{id:home.marketId,name:info.city??A.from.market,region:info.region??'',country:'US',metro:homeMetro(home.marketId),potential:info.potential??60,lat,lon,relocation:true};
-  }
-  S.relocations.push({season,club:S.club,from:A.from,to,swap,vacated,destination:dest,siteId:A.siteId,costs:A.costs});
-  applyIdentity(S);
-  // The city leaves the open pool, with its offers and its broadcast deal.
-  for(const x of S.world.sites.filter(x=>x.marketId===dest.id))x.status='taken';
-  const holder=L.markets[dest.id]?.holder;
-  delete L.markets[dest.id];
-  L.contests=L.contests.filter(c=>c.marketId!==dest.id);
-  // The city left behind joins it.
-  if(vacated){
-    const {market,sites}=worldMarket(r,vacated,s.completed);
-    for(const x of sites)x.expiresWeek=SEASON_TICKS+6+randInt(r,14);
-    S.world.markets.push(market);S.world.sites.push(...sites);
-    const M=leagueMarket(r,vacated);
-    Object.assign(M,{renewal:season});M.fans[S.club]=22;
-    L.markets[vacated.id]=M;
-  }
-  const g=S.world.leases[S.club],name=dest.name+' '+['Stadium','Field','Coliseum'][randInt(r,3)];
-  S.world.leases[S.club]={stadium:name,opened:2025+season,capacity:site.maxSeats,yearsLeft:30,condition:'Modern',parking:site.parking,landTerms:site.landTerms,siteId:site.id};
+  const vacated=A.vacates?vacatedMarket(A.from):null;
+  const {holder,stadium:name,oldStadium}=moveClub(S,r,{season,club:S.club,from:A.from,to,swap,vacated,destination:dest,siteId:A.siteId,costs:A.costs},site,SEASON_TICKS);
   F.naming={status:'none'};
   for(const p of F.projects)if(p.id==='upgrade'&&p.status!=='proposed'&&p.status!=='declined'){p.status='proposed';delete p.weeksLeft;delete p.funding;}
   cancelVisit(S);
   S.stadium.homeMood=NEW_CITY_MOOD+(A.nickname?REBRAND_MOOD:0);
   S.stadium.homeAware=false;
   A.status='done';A.effectiveSeason=season;
-  record(S,'relocated',{from:A.from.market+' '+A.from.nickname,to:to.market+' '+to.nickname,stadium:name,realigned:!!A.realign,division:to.conference+' '+to.division,oldStadium:g.stadium});
+  record(S,'relocated',{from:A.from.market+' '+A.from.nickname,to:to.market+' '+to.nickname,stadium:name,realigned:!!A.realign,division:to.conference+' '+to.division,oldStadium});
   news(S,A.from.market+' '+A.from.nickname+' become the '+to.market+' '+to.nickname);
   if(holder&&holder!==S.club)news(S,teamName(holder)+' lose the '+dest.name+' broadcast rights to the new club');
 }
 function relocationEventText(e){
+  if(e.type==='clubRelocated')return 'The owners voted '+e.yes+'–'+e.no+' to let the '+e.from+' move to '+e.dest+' '+(e.reason==='free'?'on a public offer that pays for nearly the whole stadium':'for a market '+e.ratio+' times the size')+'. They play there from season '+e.season+' as the '+e.to+'. You voted '+e.mine+'.'+(e.swapMine?' The league moves us to the '+e.division+' division to make room.':'')+(e.lostRights?' We lose our broadcast rights in '+e.dest+'.':'');
   switch(e.type){
     case 'relocationFiled':return 'We have filed to move the club from '+e.homeMarket+' to the '+e.siteName+' in '+e.marketName+'. The owners vote after '+weekLabel(e.week)+'. The news is out in '+e.homeMarket+', and the fans there are furious.';
     case 'relocationVote':return 'The owners voted '+e.yes+'–'+e.no+' on our move to '+e.marketName+'. It needed '+VOTE_THRESHOLD+'. '+
@@ -2078,6 +2090,70 @@ function relocationEventText(e){
     case 'relocated':return 'The move is done. The '+e.from+' are now the '+e.to+', and play at '+e.stadium+'.'+(e.realigned?' We now play in the '+e.division+' division.':'');
   }
   return '';
+}
+
+
+// AI clubs move too, but rarely. Once a year, at the new league year when offers
+// come back, the best case in the league gets a chance. A case needs a club with
+// real tenure, a destination far from home, and either a market at least twice
+// the size with the lease nearly up, or public money that covers most of the
+// stadium. At most one move a season, none within AI_MOVE_GAP seasons of any
+// other, and the owners vote on it like any other. First-guess numbers.
+const AI_MOVE_FROM=6;         // no AI moves before this season
+const AI_MOVE_TENURE=6;       // seasons in its city before a club may go
+const AI_MOVE_GAP=6;          // seasons between moves anywhere in the league
+const AI_MOVE_CHANCE=.1;      // chance the best case is taken up in a given year
+const AI_MOVE_RATIO=2;        // a genuine upgrade is at least this many times the market
+const AI_MOVE_MILES=150;      // a move to the next suburb is not a relocation
+const AI_FREE_SHARE=.85;      // public money, net of infrastructure, as a share of the stadium
+function aiMoveCandidates(S){
+  const s=cur(S),out=[];
+  for(const t of clubs){
+    if(t.id===S.club||s.number-clubSince(S,t.id)<AI_MOVE_TENURE)continue;
+    const here=localMetro(t),lease=S.world.leases[t.id],from=marketCoords(t.marketId);
+    for(const site of S.world.sites){
+      if(site.status!=='open')continue;
+      const m=marketById(S,site.marketId);
+      if(milesBetween(from,[m.lat,m.lon])<AI_MOVE_MILES)continue;
+      const cost=stadiumCost(site),net=site.publicOffer-site.infraTrue;
+      const free=net>=cost*AI_FREE_SHARE,upgrade=lease.yearsLeft<=2&&m.metro>=Math.max(here*AI_MOVE_RATIO,here+1);
+      if(free||upgrade)out.push({club:t.id,site,reason:free?'free':'upgrade',ratio:m.metro/here,score:Math.max(free?1+net/cost:0,upgrade?m.metro/here:0)});
+    }
+  }
+  return out.sort((a,b)=>b.score-a.score||a.club.localeCompare(b.club)||a.site.id.localeCompare(b.site.id));
+}
+function moveProposal(S,clubId,site){
+  const t=byId.get(clubId),dest={...marketById(S,site.marketId)};delete dest.officials;
+  return {mover:clubId,destination:dest,siteId:site.id,siteName:site.name,
+    from:{market:t.market,marketId:t.marketId,nickname:t.nickname,abbr:t.abbr,conference:t.conference,division:t.division},
+    fromMetro:homeMetro(t.marketId),fromCoords:marketCoords(t.marketId),vacates:!clubs.some(c=>c.marketId===t.marketId&&c.id!==clubId),
+    realign:realignmentPlan(S,dest,clubId),costs:relocationCosts(S,site,false,clubId)};
+}
+// The owner's club votes by a plain rule when an AI club moves: no to a rival next door, no to losing its own division or markets.
+function playerAiVote(S,A){
+  const d=A.destination;
+  return milesBetween([d.lat,d.lon],marketCoords(byId.get(S.club).marketId))<350||A.realign?.swap===S.club||S.league.markets[d.id]?.holder===S.club?'no':'yes';
+}
+function aiRelocations(S,r){
+  const s=cur(S);
+  if(s.number<AI_MOVE_FROM||pendingApplication(S)||S.relocations.some(m=>s.number-m.season<AI_MOVE_GAP))return;
+  const best=aiMoveCandidates(S)[0];
+  if(!best||r()>=AI_MOVE_CHANCE)return;
+  const t=byId.get(best.club),site=best.site,A=moveProposal(S,best.club,site),dest=A.destination,season=s.number+1;
+  const votes=Object.fromEntries(clubs.map(c=>[c.id,c.id===best.club?'yes':c.id===S.club?playerAiVote(S,A):relocationLean(S,c.id,A)>0?'yes':'no']));
+  const yes=Object.values(votes).filter(v=>v==='yes').length;
+  if(yes<VOTE_THRESHOLD){news(S,'Owners turn down the '+t.market+' '+t.nickname+' bid to move to '+dest.name+', '+yes+'–'+(32-yes));return;}
+  const names=freeNicknames(),nickname=r()<.3&&names.length?names[randInt(r,names.length)]:null;
+  const to={market:dest.name,marketId:dest.id,nickname:nickname??t.nickname,abbr:newAbbr(dest.name),
+    conference:A.realign?.to.conference??t.conference,division:A.realign?.to.division??t.division};
+  const swap=A.realign?{club:A.realign.swap,to:{conference:A.from.conference,division:A.from.division}}:null;
+  const v=plannedVisit(S);
+  if(v&&siteById(S,v.siteId).marketId===dest.id)cancelVisit(S);
+  const {holder}=moveClub(S,r,{season,club:best.club,from:A.from,to,swap,vacated:A.vacates?vacatedMarket(A.from):null,destination:dest,siteId:site.id,costs:{fee:A.costs.fee},ai:true,reason:best.reason},site,now(S));
+  record(S,'clubRelocated',{from:A.from.market+' '+A.from.nickname,to:to.market+' '+to.nickname,dest:dest.name,yes,no:32-yes,reason:best.reason,ratio:round1(best.ratio),season,
+    mine:S.club?votes[S.club]:null,realigned:!!A.realign,division:to.conference+' '+to.division,swapMine:swap?.club===S.club,lostRights:holder===S.club});
+  news(S,A.from.market+' '+A.from.nickname+' will become the '+to.market+' '+to.nickname+' in season '+season+', '+yes+'–'+(32-yes));
+  if(holder&&holder!==S.club)news(S,teamName(holder)+' lose the '+dest.name+' broadcast rights to the new club');
 }
 
 
@@ -3262,6 +3338,7 @@ function newLeagueYear(S,r){
     Object.assign(site,{status:'open',publicOffer:round5((180+m.potential*4)*between(r,k.offer)),expiresWeek:now(S)+6+randInt(r,14),renewals:(site.renewals??0)+1});
     if(S.stadium.knowledge.some(f=>f.siteId===site.id))revived.push(site.name+' in '+m.name);
   }
+  aiRelocations(S,r);
   if(S.club)record(S,'leagueYear',{retired,risers,revived,leaseYears:S.world.leases[S.club].yearsLeft});
   news(S,'The new league year opens; '+Object.values(S.rosters).flat().filter(p=>p.age===22).length+' second-year players report');
 }
@@ -5114,7 +5191,7 @@ function describeEvent(e,S=save){
     case 'staffFired':case 'staffHired':case 'candidateLost':case 'staffReview':case 'proposalExpired':return esc(staffEventText(S,e));
     case 'rosterMoves':case 'practicePoached':case 'coachUnhappy':return esc(depthEventText(S,e));
     case 'tradeAway':case 'autoHired':case 'tradeExpired':return esc(tradeEventText(S,e));
-    case 'relocationFiled':case 'relocationVote':case 'relocated':return esc(relocationEventText(e));
+    case 'relocationFiled':case 'relocationVote':case 'relocated':case 'clubRelocated':return esc(relocationEventText(e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');

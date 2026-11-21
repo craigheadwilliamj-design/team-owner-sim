@@ -24,7 +24,7 @@ const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
 const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
 const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
-const NAMES = ['fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -2365,6 +2365,83 @@ test('relocation pages render in every state, and names are escaped', () => {
   assert(html.includes('Moves so far') && html.includes('Toronto'));
   assert(api.leagueView().includes('Cincinnati') && api.ownershipDesk().length > 0);
   assert(api.mapPoints(S).some(p => p.id === 'toronto' && !p.open) && api.mapPoints(S).some(p => p.id === 'cincinnati' && p.open));
+});
+
+// ---- AI relocation -----------------------------------------------------------
+const aiYear = (api, seed, season = 10) => { const S = api.newSave(seed); S.club = 'club-06'; api.cur(S).number = season; return S; };
+const tryMove = (api, S, tries = 80) => {
+  for (let i = 0; i < tries && !S.relocations.length; i++) { S.rng.state = (i * 7919 + 13) >>> 0; api.aiRelocations(S, api.rngFor(S.rng)); }
+  return S.relocations[0];
+};
+
+test('AI clubs relocate rarely, and only for a market twice the size with the lease nearly up, or nearly free public money', () => {
+  const { api } = load();
+  let moves = 0, years = 0;
+  for (let seed = 1; seed <= 150; seed++) {
+    const S = aiYear(api, seed); years++;
+    const cands = api.aiMoveCandidates(S);
+    api.aiRelocations(S, api.rngFor(S.rng));
+    if (!S.relocations.length) continue;
+    moves++;
+    const m = S.relocations[0], site = S.world.sites.find(x => x.id === m.siteId), c = cands.find(x => x.club === m.club && x.site.id === m.siteId);
+    assert(c, 'the move was one of the qualifying cases');
+    assert(m.ai && m.club !== 'club-06');
+    assert(m.reason === 'free' ? site.publicOffer - site.infraTrue >= 0.85 * (650 + (site.maxSeats - 60000) / 1000 * 12) : c.ratio >= 2);
+  }
+  assert(moves >= 1 && moves <= 25, 'about one eligible year in ten, got ' + moves + ' of ' + years);
+});
+
+test('no AI moves early, none within six seasons of another move, and none while the owner has an application in', () => {
+  const { api } = load();
+  const never = S => { for (let i = 0; i < 60; i++) { S.rng.state = i * 104729; api.aiRelocations(S, api.rngFor(S.rng)); } return S.relocations.length; };
+  assert.equal(never(aiYear(api, 4, 5)), 0, 'season 5 is too early');
+  const gap = aiYear(api, 4, 10);
+  gap.relocations.push({ season: 8, club: 'club-02', from: {}, to: { market: 'X', marketId: 'x', nickname: 'Y', abbr: 'XX', conference: 'Charter', division: 'East' }, destination: { id: 'nowhere' } });
+  assert.equal(never(gap), 1, 'a move two seasons ago blocks another');
+  const busy = aiYear(api, 4, 10);
+  busy.stadium.application = { status: 'pending' };
+  assert.equal(never(busy), 0, 'the owner’s own application comes first');
+});
+
+test('an AI club that moves takes its new identity at once; the old city opens up, the new one closes, and the owners’ vote shows in the inbox', () => {
+  const { api } = load();
+  const S = aiYear(api, 21);
+  for (const l of Object.values(S.world.leases)) l.yearsLeft = 10; // no upgrade cases, only the free stadium
+  const target = S.world.sites.find(x => x.marketId === 'toronto' && x.kind === 'edge');
+  target.publicOffer = 3000; // outrageous free public money
+  for (const o of Object.values(S.league.owners)) { o.tradition = -.5; o.sponsorAffinity = .3; }
+  const m = tryMove(api, S);
+  assert(m, 'the club moved'); assert.equal(m.reason, 'free');
+  const t = api.clubs.find(c => c.id === m.club);
+  assert.deepEqual([t.market, t.marketId, t.abbr], ['Toronto', 'toronto', m.to.abbr]);
+  assert(!api.OPEN_MARKETS.some(x => x.id === 'toronto'));
+  assert.equal(api.OPEN_MARKETS.some(x => x.id === m.from.marketId), !!m.vacated);
+  assert(S.world.sites.filter(x => x.marketId === 'toronto').every(x => x.status === 'taken'));
+  assert.deepEqual(Object.keys(S.league.markets).sort(), api.OPEN_MARKETS.map(x => x.id).sort());
+  assert.equal(api.clubs.find(c => c.id === 'club-06').market, 'Cincinnati', 'the owner’s club stays put');
+  assert.equal(new Set(api.clubs.map(c => c.abbr)).size, 32);
+  assert(api.groups.every(g => g.length === 4));
+  const e = S.events.find(x => x.type === 'clubRelocated');
+  const text = api.describeEvent(e, S);
+  assert(/voted \d+–\d+ to let the/.test(text) && /public offer/.test(text) && /You voted (yes|no)/.test(text));
+  assert(S.league.news.some(n => n.text.includes('will become the')));
+  assert.deepEqual(api.validateSave(S), []);
+  // The owner's own tenure is counted from the owner's club, not the league's last move.
+  assert.equal(api.relocationBlock(S), null, 'another club’s move does not reset the owner’s tenure');
+  const again = load().api, T = again.upgrade(JSON.parse(JSON.stringify(S))).save;
+  again.applyIdentity(T);
+  assert.deepEqual(again.clubs, api.clubs);
+});
+
+test('AI clubs are turned down when the owners do not want it', () => {
+  const { api } = load();
+  const S = aiYear(api, 21);
+  for (const l of Object.values(S.world.leases)) l.yearsLeft = 10;
+  S.world.sites.find(x => x.marketId === 'salt-lake-city' && x.kind === 'edge').publicOffer = 3000;
+  for (const o of Object.values(S.league.owners)) { o.tradition = .5; o.sponsorAffinity = -.3; }
+  for (let i = 0; i < 80; i++) { S.rng.state = i * 7919 + 13; api.aiRelocations(S, api.rngFor(S.rng)); }
+  assert.equal(S.relocations.length, 0);
+  assert(S.league.news.some(n => /turn down/.test(n.text)));
 });
 
 let failed = 0;

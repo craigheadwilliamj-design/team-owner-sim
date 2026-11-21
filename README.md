@@ -27,6 +27,17 @@ buy a franchise, hire the people who run it, and choose when to interfere.
 - Stadium talks and private site visits in open markets, including
   unclaimed markets and relocation targets such as Salt Lake City and
   Calgary.
+- Relocation: after three seasons in a city you can file to move to an open
+  site. It costs a league fee, your share of a new stadium and a lease exit,
+  the home fans turn on you the day you file, and three quarters of the owners
+  must approve after you lobby them. If it passes, the club becomes the new
+  city's team when the next season opens (optionally under a new nickname),
+  the league realigns divisions to fit, and the city you left joins the open
+  markets.
+- AI clubs relocate too, rarely: at most one move every six seasons, only
+  for a market at least twice the size with the lease nearly up, or a public
+  offer that pays for most of the stadium, and only if the owners vote it
+  through. You get a vote, and hear about it in your inbox.
 - Club finances, naming rights, and league votes.
 - Broadcast markets on a map: rights deals renew, and fan bases shift with
   coverage.

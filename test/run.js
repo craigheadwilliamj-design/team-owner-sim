@@ -24,11 +24,12 @@ const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
 const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
 const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
+const v17Save = fs.readFileSync(path.join(FIX, 'v17-save.json'), 'utf8');
 const NAMES = ['waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
-  'fundProject', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
+  'fundProject', 'askCity', 'acceptCity', 'declineCity', 'cityBlock', 'cityLeverage', 'projectCost', 'projectBlock', 'projectDef', 'PROJECTS', 'gate', 'declineProject', 'startNaming', 'approveNaming', 'declineNaming', 'financesView', 'setLossPolicy', 'injuryFactor', 'payroll',
   'ensureContest', 'submitBid', 'withdrawBid', 'callOwner', 'setPlayerVote', 'ownerLean', 'coverage', 'coverageText', 'slotFor', 'voronoiCells', 'mapPoints', 'leagueView', 'drawMap',
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
@@ -354,7 +355,7 @@ test('v3 save upgrades with finances, and stadium talks survive', () => {
   const old = JSON.parse(v3Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.deepEqual(S.stadium, { ...old.stadium, application: null, coolingUntil: 0 });
+  assert.deepEqual(S.stadium, { ...old.stadium, application: null, coolingUntil: 0, city: { status: 'none' } });
   assert.deepEqual(S.world.markets.slice(0, old.world.markets.length), old.world.markets);
   assert.deepEqual(S.world.sites.slice(0, old.world.sites.length), old.world.sites);
   assert.deepEqual(S.world.leases, old.world.leases);
@@ -414,6 +415,149 @@ test('projects take effect when built: the plane cuts travel and injuries', () =
   const last = S.finance.ledger.at(-1).lines;
   assert.equal(last.travel, -Math.round(3 / 18 * 100) / 100);
   assert(api.injuryFactor(S) < before);
+});
+
+test('v17 save upgrades to v18: new stadium and facility projects join as proposals, old ones keep their status', () => {
+  const { api } = load();
+  const old = JSON.parse(v17Save);
+  const before = Object.fromEntries(old.finance.projects.map(p => [p.id, p]));
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.finance.projects.slice(0, old.finance.projects.length), JSON.parse(v17Save).finance.projects, 'existing projects untouched, in order');
+  assert.deepEqual(S.finance.projects.map(p => p.id).sort(), api.PROJECTS.map(d => d.id).sort());
+  for (const p of S.finance.projects) assert.deepEqual(p, before[p.id] ?? { id: p.id, status: 'proposed' });
+  assert.equal(S.finance.projects.find(p => p.id === 'upgrade').status, 'active');
+  assert.deepEqual(S.stadium.city, { status: 'none' }, 'no talks with the city yet');
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('stadium improvements: suites and plaza raise game-day money, the upper deck adds seats', () => {
+  const { api, S } = owned(34);
+  const L = S.world.leases['club-06'], base = api.gate(S, 'club-06');
+  for (const id of ['suites', 'plaza']) S.finance.projects.find(p => p.id === id).status = 'active';
+  const better = api.gate(S, 'club-06');
+  assert(better.premium > base.premium * 1.2);
+  assert(better.concessions > base.concessions * 1.07);
+  assert(better.attendance >= base.attendance);
+  L.capacity = 70000; S.finance.clubCash = 500;
+  assert.equal(api.fundProject(S, 'seats', 'club'), 'ok');
+  for (let i = 0; i < 22; i++) api.advance(S);
+  assert.equal(S.finance.projects.find(p => p.id === 'seats').status, 'active');
+  assert.equal(L.capacity, 76000);
+  assert(S.events.some(e => e.type === 'projectDone' && e.project === 'seats'));
+  const full = owned(35).S, fl = full.world.leases['club-06'];
+  fl.capacity = 78000;
+  assert(api.projectBlock(full, api.projectDef('seats')));
+  assert.equal(api.fundProject(full, 'seats', 'owner'), 'unavailable');
+});
+
+test('a renovation costs more for a worn stadium, modernizes it and extends the lease', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const L = S.world.leases['club-06'], def = api.projectDef('renovation');
+  L.condition = 'Modern';
+  assert(api.projectBlock(S, def));
+  assert.equal(api.fundProject(S, 'renovation', 'owner'), 'unavailable');
+  assert(api.financesView().includes('The stadium is already modern.'));
+  L.condition = 'Serviceable';
+  const mid = api.projectCost(S, def);
+  L.condition = 'Worn';
+  assert(api.projectCost(S, def) > mid);
+  const years = L.yearsLeft, owner = S.finance.ownerCash = 1000;
+  assert.equal(api.fundProject(S, 'renovation', 'owner'), 'ok');
+  assert.equal(S.finance.ownerCash, owner - 240);
+  assert.equal(S.finance.capitalLog.at(-1).amount, 240);
+  for (let i = 0; i < 30; i++) api.advance(S);
+  assert.equal(L.condition, 'Modern');
+  assert(L.yearsLeft >= years + 10 - 1, 'ten years added, less any league year that turned during the work');
+  assert(api.projectBlock(S, def), 'nothing left to renovate');
+  assert(S.events.some(e => e.type === 'projectDone' && e.project === 'renovation'));
+});
+
+test('the city pays part of a renovation: leverage gets money, strings come attached, and the owner funds the rest', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const L = S.world.leases['club-06'];
+  Object.assign(L, { condition: 'Worn', yearsLeft: 2 });
+  S.stadium.homeAware = true; S.stadium.homeMood = 70; // a credible threat, and goodwill to spend
+  assert.equal(api.askCity(S, { ask: .9, approach: 'threat' }), 'invalid');
+  const mood = S.stadium.homeMood;
+  assert.equal(api.askCity(S, { ask: .5, approach: 'threat' }), 'ok');
+  assert.equal(S.stadium.homeMood, mood - 8, 'a threat costs goodwill at home');
+  assert(S.stadium.knowledge.some(f => f.kind === 'cityThreat' && f.knownBy.includes('press')));
+  assert.equal(api.askCity(S, { ask: .5, approach: 'threat' }), 'busy');
+  assert.equal(api.fundProject(S, 'renovation', 'owner'), 'unavailable', 'no funding while the city decides');
+  api.advance(S); api.advance(S);
+  const C = S.stadium.city;
+  assert.equal(C.status, 'offer');
+  assert.equal(C.offer.share, .5, 'with this much leverage the city meets the ask');
+  assert.equal(C.offer.amount, 120);
+  assert.equal(C.offer.extraYears, 10);
+  assert(S.events.some(e => e.type === 'cityOffer'));
+  assert(api.pendingItems(S).some(x => x.id === 'city'));
+  assert(api.stadiumView().includes('Accept the city’s money'));
+  assert.equal(api.acceptCity(S), 'ok');
+  assert.equal(api.projectCost(S, api.projectDef('renovation')), 120);
+  S.finance.ownerCash = 500;
+  assert.equal(api.fundProject(S, 'renovation', 'owner'), 'ok');
+  assert.equal(S.finance.ownerCash, 380);
+  assert.deepEqual([S.finance.capitalLog.at(-1).amount, S.finance.capitalLog.at(-1).city], [120, 120]);
+  assert.equal(C.status, 'committed');
+  assert.deepEqual(api.validateSave(S), []);
+  const years = L.yearsLeft;
+  for (let i = 0; i < 30; i++) api.advance(S);
+  assert.equal(L.condition, 'Modern');
+  assert(L.yearsLeft >= years + 20 - 1, 'the usual ten years plus the city’s ten');
+  assert.equal(S.stadium.city.status, 'none');
+  assert.equal(api.cityBlock(S), 'nothing');
+});
+
+test('the city calls a bluff: a threat with nowhere to go and no reason to pay gets nothing, once a season', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  Object.assign(S.world.leases['club-06'], { condition: 'Serviceable', yearsLeft: 14 });
+  S.stadium.homeMood = 55;
+  assert(!api.cityLeverage(S).credible);
+  assert.equal(api.askCity(S, { ask: .75, approach: 'threat' }), 'ok');
+  api.advance(S); api.advance(S);
+  const e = S.events.find(x => x.type === 'cityRefused');
+  assert(e && e.bluff);
+  assert.equal(S.stadium.city.status, 'none');
+  assert.equal(api.askCity(S, { ask: .25, approach: 'partner' }), 'season');
+  assert(api.stadiumView().includes('next season'));
+  assert.equal(api.fundProject(S, 'renovation', 'debt'), 'ok', 'the owner can still pay for it all');
+});
+
+test('a city offer lapses, or can be turned down, and nothing changes hands', () => {
+  for (const how of ['lapse', 'decline']) {
+    const { api } = load();
+    const S = api.save; S.club = 'club-06';
+    Object.assign(S.world.leases['club-06'], { condition: 'Worn', yearsLeft: 4 });
+    assert.equal(api.askCity(S, { ask: .25, approach: 'partner' }), 'ok');
+    api.advance(S); api.advance(S);
+    assert.equal(S.stadium.city.status, 'offer');
+    if (how === 'decline') assert.equal(api.declineCity(S), 'ok');
+    else for (let i = 0; i < 4; i++) api.advance(S);
+    assert.equal(S.stadium.city.status, 'none');
+    assert(S.events.some(x => x.type === (how === 'decline' ? 'cityDeclined' : 'cityLapsed')));
+    assert.equal(api.projectCost(S, api.projectDef('renovation')), 240);
+  }
+});
+
+test('team facilities: the development center speeds growth, and the Finances page groups both kinds', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const before = api.devFactor(S, 'club-06'), other = api.devFactor(S, 'club-01');
+  S.finance.projects.find(p => p.id === 'devcenter').status = 'active';
+  assert(Math.abs(api.devFactor(S, 'club-06') - before * 1.1) < 1e-9);
+  assert.equal(api.devFactor(S, 'club-01'), other, 'only the owner’s club');
+  S.finance.projects.find(p => p.id === 'rehab').status = 'active';
+  assert.equal(api.injuryFactor(S), 1, 'rehab shortens absences, it does not prevent injuries');
+  const html = api.financesView();
+  assert(html.indexOf('Stadium improvements') < html.indexOf('Upper-deck expansion'));
+  assert(html.indexOf('Team facilities') < html.indexOf('Player development center'));
+  assert(api.stadiumView().includes('Improvements'));
 });
 
 test('loss policy: borrow by default, or the owner covers the shortfall', () => {
@@ -532,7 +676,7 @@ test('v4 save upgrades: owners, markets with renewal seasons, and this season’
   const old = JSON.parse(v4Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.deepEqual(S.finance, old.finance);
+  assert.deepEqual({ ...S.finance, projects: S.finance.projects.slice(0, old.finance.projects.length) }, old.finance, 'v18 adds projects after the original four');
   assert.equal(Object.keys(S.league.owners).length, 32);
   assert.equal(S.league.rules.firstRefusal, false);
   const season = api.cur(S).number;

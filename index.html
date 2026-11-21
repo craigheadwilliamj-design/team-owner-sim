@@ -729,7 +729,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=17;     // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=18;     // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -1437,6 +1437,7 @@ function finishMedicalWeek(S,units,r,games){
       if(healthy.length<=starters)continue;
       p.out=r()<.12?IR_THRESHOLD+randInt(r,11):1+randInt(r,5);
       if(t.id===S.club&&effectActive(S,'facility')&&p.out>1&&r()<.4)p.out--;
+      if(t.id===S.club&&effectActive(S,'rehab')&&p.out>1&&r()<.35)p.out--;
       if(t.id===S.club&&starter){
         const backup=personnel(S.rosters[t.id]).chart[p.pos][starters-1];
         record(S,'injury',{player:snap(p),weeks:p.out,backup:snap(backup)});
@@ -1770,7 +1771,7 @@ function makeWorld(r,completed){
   }));
   return {markets,sites,leases};
 }
-const newStadiumState=()=>({visits:[],studies:[],knowledge:[],nextFactId:1,homeMood:60,homeAware:false,application:null,coolingUntil:0});
+const newStadiumState=()=>({visits:[],studies:[],knowledge:[],nextFactId:1,homeMood:60,homeAware:false,application:null,coolingUntil:0,city:{status:'none'}});
 const makeStaff=r=>({president:{name:personName(r)}});
 
 const siteById=(S,id)=>S.world.sites.find(s=>s.id===id);
@@ -1823,6 +1824,7 @@ function commissionStudy(S,siteId){
 function processStadium(S,r){
   if(!S.club)return;
   const s=cur(S);
+  processCity(S,r);
   const v=plannedVisit(S);
   if(v)resolveVisit(S,v,r);
   for(const study of S.stadium.studies.filter(x=>x.status==='underway'&&x.due<=s.tick)){
@@ -1914,6 +1916,8 @@ function factText(S,f){
   if(f.kind==='relocation')return 'Your application to relocate to '+where;
   if(f.kind==='ownerFunding')return 'You paid personally for the '+projectDef(f.project).name.toLowerCase();
   if(f.kind==='namingTalks')return 'Naming-rights talks for your stadium';
+  if(f.kind==='cityTalks')return 'You asked the city to help pay for a renovation';
+  if(f.kind==='cityThreat')return 'You told City Hall the club could leave unless the city pays for a renovation';
   if(f.kind==='stationVisit')return 'Your visit to the '+openMarket(f.marketId).name+' TV station';
   return 'Note about '+where;
 }
@@ -1976,7 +1980,38 @@ function stadiumView(){
   const knows='<h2>Who knows</h2>'+(facts.length?'<ul>'+facts.map(f=>'<li><div><strong>'+esc(factText(S,f))+'</strong><small>'+esc((f.week?'Since '+weekLabel(f.week):'Preseason')+' · '+f.knownBy.map(w=>whoLabel(S,w)).join(', '))+'</small></div></li>').join('')+'</ul>':
     '<p>Nobody outside your office knows anything yet. Visits and studies you authorize appear here with everyone who knows about them.</p>');
 
-  return heading('STADIUM AND RELOCATION',lease.stadium)+summary+compare+visit+relocationPanel(S)+knows;
+  const works=PROJECTS.filter(d=>d.group==='stadium').map(d=>S.finance.projects.find(p=>p.id===d.id)).filter(Boolean).map(p=>{
+    const d=projectDef(p.id),why=p.status==='proposed'&&projectBlock(S,d);
+    return '<li><div><strong>'+esc(d.name)+'</strong><small>'+esc(why||{building:'Under construction · '+p.weeksLeft+' week'+(p.weeksLeft===1?'':'s')+' left',active:'In service',declined:'Declined'}[p.status]||'Proposed · '+money(projectCost(S,d))+' up front')+'</small></div></li>';
+  }).join('');
+  const improve='<h2>Improvements</h2><p>Work on the building you play in now. Funding decisions are on the Finances page.</p><ul>'+works+'</ul><div class="controls"><button data-tab="finances">Finances</button></div>'+cityPanel(S);
+  return heading('STADIUM AND RELOCATION',lease.stadium)+summary+improve+compare+visit+relocationPanel(S)+knows;
+}
+// The Stadium page panel for asking the city to pay for a renovation.
+function cityPanel(S){
+  const C=S.stadium.city,u=stadiumUi.city,lease=S.world.leases[S.club],president=S.staff.president.name,block=cityBlock(S);
+  if(block==='nothing'&&C.status==='none')return '';
+  const pct=x=>Math.round(x*100)+'%',gross=renovationGross(lease);
+  let html='<h3>City money for a renovation</h3>';
+  if(C.status==='talks')return html+'<p>'+esc(president+' is at City Hall asking for '+pct(C.ask)+' of the $'+gross+'M renovation ('+CITY_APPROACH[C.approach].label.toLowerCase()+'). '+cityMayor(S)+' answers after '+weekLabel(C.dueWeek)+'.')+'</p>';
+  if(C.status==='offer'){const o=C.offer;
+    return html+'<p>'+esc(cityMayor(S)+' offers $'+o.amount+'M, '+pct(o.share)+' of the cost'+(o.extraYears?', if we add '+o.extraYears+' years to the lease beyond the usual '+RENOVATION_LEASE_YEARS:'')+'. That leaves $'+(gross-o.amount)+'M for us. The offer stands through '+weekLabel(o.expiresWeek)+'.')+'</p>'+
+      '<div class="controls"><button id="acceptCity">Accept the city’s money</button><button id="declineCity">Turn it down</button></div>';}
+  if(C.status==='agreed')return html+'<p>'+esc('The city has agreed to put $'+C.offer.amount+'M into the renovation'+(C.offer.extraYears?', for '+C.offer.extraYears+' more lease years':'')+'. Fund the rest on the Finances page.')+'</p>';
+  if(C.status==='committed')return html+'<p>'+esc('The city is paying $'+C.offer.amount+'M of the renovation now under way.')+'</p>';
+  if(block==='season')return html+'<p>'+esc(cityMayor(S)[0].toUpperCase()+cityMayor(S).slice(1)+' will not reopen the question this season. You can ask again next season.')+'</p>';
+  const L=cityLeverage(S),reads=[
+    lease.yearsLeft<=3?'With '+lease.yearsLeft+' year'+(lease.yearsLeft===1?'':'s')+' left on the lease, the city is worried about losing us.':lease.yearsLeft<=6?'The lease has '+lease.yearsLeft+' years left, close enough that the city is paying attention.':'With '+lease.yearsLeft+' years left on the lease, the city feels no hurry.',
+    L.worn?'Everyone can see the building is worn.':'The building is serviceable, so the need is harder to sell.',
+    S.stadium.homeMood>=65?'Goodwill at home is strong.':S.stadium.homeMood<50?'Feeling at home is sour, and the council knows it.':'Feeling at home is middling.',
+    L.credible?'A threat to leave would be believed: '+(S.stadium.homeAware?'the city already knows we have looked elsewhere.':'we have looked at other cities.'):'A threat to leave would not be believed yet: we have not looked at any other city.'];
+  return html+'<p>'+esc('The renovation costs $'+gross+'M. '+president+' can ask '+cityMayor(S)+' to pay part of it. The city answers after '+CITY_TALK_WEEKS+' weeks, and the more it pays, the more lease years it will want in return. One round of talks a season.')+'</p>'+
+    '<p>'+esc(president+'’s read: '+reads.join(' '))+'</p>'+
+    '<div class="controls"><label>Ask for <select id="cityAsk">'+CITY_ASKS.map(a=>option(a,pct(a)+' ($'+round5(a*gross)+'M)',a===u.ask)).join('')+'</select></label>'+
+    '<label>Approach <select id="cityApproach">'+Object.entries(CITY_APPROACH).map(([k,a])=>option(k,a.label,k===u.approach)).join('')+'</select></label>'+
+    '<button id="askCity">Send '+esc(president)+' to City Hall</button></div>'+
+    '<p>'+esc({compare:'Comparing cities costs a little goodwill at home.',threat:'A threat goes public and costs real goodwill at home. It only works if the city believes it.',partner:'Asking as partners costs nothing, but gives the city no reason to stretch.'}[u.approach])+'</p>'+
+    (u.notice?'<p><b>'+esc(u.notice)+'</b></p>':'');
 }
 // The relocation panel on the Stadium tab.
 function relocationPanel(S){
@@ -2028,7 +2063,7 @@ function relocationPanel(S){
   return html;
 }
 const stadiumUi={a:null,b:null,notice:'',plan:{site:'',who:'president',discretion:'quiet',ask:'publicMoney',signal:'exploring'},
-  reloc:{site:'',funding:'mix',nickname:'keep',notice:''}};
+  reloc:{site:'',funding:'mix',nickname:'keep',notice:''},city:{ask:.5,approach:'partner',notice:''}};
 
 // ---------------------------------------------------------------------------
 // Relocation
@@ -2275,10 +2310,11 @@ function executeRelocation(S,r){
   const vacated=A.vacates?vacatedMarket(A.from):null;
   const {holder,stadium:name,oldStadium}=moveClub(S,r,{season,club:S.club,from:A.from,to,swap,vacated,destination:dest,siteId:A.siteId,costs:A.costs},site,SEASON_TICKS);
   F.naming={status:'none'};
-  for(const p of F.projects)if(p.id==='upgrade'&&p.status!=='proposed'&&p.status!=='declined'){p.status='proposed';delete p.weeksLeft;delete p.funding;}
+  for(const p of F.projects)if(projectDef(p.id).group==='stadium'&&p.status!=='proposed'&&p.status!=='declined'){p.status='proposed';delete p.weeksLeft;delete p.funding;}
   cancelVisit(S);
   S.stadium.homeMood=NEW_CITY_MOOD+(A.nickname?REBRAND_MOOD:0);
   S.stadium.homeAware=false;
+  S.stadium.city={status:'none'};
   A.status='done';A.effectiveSeason=season;
   record(S,'relocated',{from:A.from.market+' '+A.from.nickname,to:to.market+' '+to.nickname,stadium:name,realigned:!!A.realign,division:to.conference+' '+to.division,oldStadium});
   news(S,A.from.market+' '+A.from.nickname+' become the '+to.market+' '+to.nickname);
@@ -2377,18 +2413,44 @@ const HOME_METRO={buffalo:1.2,miami:6.1,'new-england':4.9,'new-york':19.6,baltim
   houston:7.3,indianapolis:2.1,jacksonville:1.7,tennessee:2.0,denver:3.0,'kansas-city':2.2,'las-vegas':2.3,'los-angeles':13.0,
   dallas:7.9,philadelphia:6.2,washington:6.3,'green-bay':0.33,chicago:9.3,detroit:4.4,minnesota:3.7,atlanta:6.3,carolina:2.8,
   'new-orleans':1.3,'tampa-bay':3.3,arizona:5.0,'san-francisco':4.6,seattle:4.0};
+// group 'stadium' improvements belong to the building and stay behind if the
+// club moves; group 'team' facilities go with the club. cost may depend on the
+// building (a renovation costs more the older it is); block says why a project
+// cannot be funded now; opens runs once, the week construction finishes.
+const SEAT_EXPANSION=6000,SEAT_CEILING=82000,RENOVATION_LEASE_YEARS=10,PLAZA_MOOD=4;
 const PROJECTS=[
-  {id:'plane',name:'Team plane',cost:85,recurring:5,build:4,
+  {id:'upgrade',group:'stadium',name:'Video boards and concourses',cost:60,recurring:1,build:6,
+    effect:'Raises suite and concession revenue about 12% and helps attendance.'},
+  {id:'suites',group:'stadium',name:'Luxury suites and club seats',cost:95,recurring:2,build:14,
+    effect:'Rebuilds the premium levels: suite and club-seat revenue up about 25%.'},
+  {id:'plaza',group:'stadium',name:'Fan plaza and tailgate lots',cost:40,recurring:1,build:8,
+    effect:'Concessions and parking up about 8%, a little more attendance, and the city likes it.',
+    opens:S=>{S.stadium.homeMood=Math.min(100,S.stadium.homeMood+PLAZA_MOOD);}},
+  {id:'seats',group:'stadium',name:'Upper-deck expansion',cost:160,recurring:2,build:22,
+    effect:'Adds '+SEAT_EXPANSION.toLocaleString('en-US')+' seats. More tickets to sell, though rent rises with capacity and a losing team will not fill them.',
+    note:'Construction runs through games and the offseason.',
+    block:(S,lease)=>lease.capacity+SEAT_EXPANSION>SEAT_CEILING?'The building has no room for another deck.':null,
+    opens:(S,lease)=>{lease.capacity+=SEAT_EXPANSION;}},
+  {id:'renovation',group:'stadium',name:'Stadium renovation',cost:(S,lease)=>renovationGross(lease)-(S.stadium.city?.status==='agreed'?S.stadium.city.offer.amount:0),recurring:0,build:30,
+    effect:'Brings the building up to modern standard: better attendance, premium and naming value. The city adds '+RENOVATION_LEASE_YEARS+' years to the lease.',
+    note:'A modern stadium pays more rent. The cost depends on the building’s condition, and the city can be asked to pay part of it.',
+    block:(S,lease)=>lease.condition==='Modern'?'The stadium is already modern.':S.stadium.city?.status==='talks'?'Wait for the city’s answer before you fund it.':S.stadium.city?.status==='offer'?'Answer the city’s offer on the Stadium page first.':null,
+    opens:(S,lease)=>{const C=S.stadium.city;lease.condition='Modern';lease.yearsLeft+=RENOVATION_LEASE_YEARS+(C?.status==='committed'?C.offer.extraYears:0);if(C)S.stadium.city={status:'none',mayor:C.mayor};}},
+  {id:'facility',group:'team',name:'Training facility rebuild',cost:140,recurring:3,build:10,
+    effect:'Cuts injuries about 20% and shortens some absences once it opens.'},
+  {id:'rehab',group:'team',name:'Rehab and recovery center',cost:45,recurring:2,build:8,
+    effect:'Injured players come back sooner: about a third of multi-week absences lose a week.'},
+  {id:'devcenter',group:'team',name:'Player development center',cost:70,recurring:4,build:12,
+    effect:'Young players grow about 10% faster, in camp and over the offseason.'},
+  {id:'plane',group:'team',name:'Team plane',cost:85,recurring:5,build:4,
     effect:'Replaces $8M a season of charter flights with $3M of travel, and trims injuries about 10%.',
     note:'Some owners treat a personally funded plane as an ordinary perk. Others ask why their own players still fly charter.'},
-  {id:'facility',name:'Training facility rebuild',cost:140,recurring:3,build:10,
-    effect:'Cuts injuries about 20% and shortens some absences once it opens.'},
-  {id:'upgrade',name:'Video boards and concourses',cost:60,recurring:1,build:6,
-    effect:'Raises suite and concession revenue about 12% and helps attendance.',note:'Money spent here stays behind if the club moves.'},
-  {id:'science',name:'Sports science department',cost:0,recurring:8,build:0,
+  {id:'science',group:'team',name:'Sports science department',cost:0,recurring:8,build:0,
     effect:'Cuts injuries about 10%. Nothing to build: it costs $8M a season from the day you approve it.'},
 ];
 const projectDef=id=>PROJECTS.find(p=>p.id===id);
+const projectCost=(S,def)=>typeof def.cost==='function'?def.cost(S,S.world.leases[S.club]):def.cost;
+const projectBlock=(S,def)=>def.block?.(S,S.world.leases[S.club])??null;
 const NAMING_SPONSORS={
   bank:['Riverline Bank','Keystone Federal','First Meridian Bank'],insurance:['Summit Mutual','Harborview Insurance','Granite Life'],
   airline:['Northstar Air','Skyway Airlines'],telecom:['Beacon Wireless','Lattice Telecom'],sportsbook:['Lucky Lane Sportsbook','Overtime Bet'],
@@ -2431,12 +2493,12 @@ function winPct(S,id){
 }
 function gate(S,clubId){
   const lease=S.world.leases[clubId],metro=localMetro(byId.get(clubId)),owned=clubId===S.club;
-  const upgraded=owned&&effectActive(S,'upgrade'),mood=owned?S.stadium.homeMood:60;
-  const fill=Math.max(.55,Math.min(1,.8+(winPct(S,clubId)-.5)*.3+(mood-60)/300+(upgraded?.02:0)+({Modern:.03,Worn:-.03}[lease.condition]??0)));
+  const upgraded=owned&&effectActive(S,'upgrade'),suites=owned&&effectActive(S,'suites'),plaza=owned&&effectActive(S,'plaza'),mood=owned?S.stadium.homeMood:60;
+  const fill=Math.max(.55,Math.min(1,.8+(winPct(S,clubId)-.5)*.3+(mood-60)/300+(upgraded?.02:0)+(plaza?.015:0)+({Modern:.03,Worn:-.03}[lease.condition]??0)));
   const attendance=lease.capacity*fill,price=90+12*Math.sqrt(metro);
   return {attendance,tickets:attendance*price/1e6,
-    premium:lease.capacity/1000*.09*({Modern:1.15,Worn:.85}[lease.condition]??1)*(upgraded?1.12:1),
-    concessions:attendance*32/1e6*(upgraded?1.12:1)+(lease.parking??0)/8.5}; // a new stadium's parking share, spread over the home games
+    premium:lease.capacity/1000*.09*({Modern:1.15,Worn:.85}[lease.condition]??1)*(upgraded?1.12:1)*(suites?1.25:1),
+    concessions:(attendance*32/1e6*(upgraded?1.12:1)+(lease.parking??0)/8.5)*(plaza?1.08:1)}; // a new stadium's parking share, spread over the home games
 }
 const salaryRaw=p=>.9+playerValue(p)*.06;
 // Cash salaries for a season. Signing bonuses were paid in cash when signed.
@@ -2478,32 +2540,117 @@ function processFinance(S){
 // Construction runs on the calendar, offseason included.
 function processProjects(S){
   for(const p of S.finance.projects.filter(x=>x.status==='building')){
-    if(--p.weeksLeft<=0){p.status='active';delete p.weeksLeft;record(S,'projectDone',{project:p.id});}
+    if(--p.weeksLeft<=0){p.status='active';delete p.weeksLeft;if(S.club)projectDef(p.id).opens?.(S,S.world.leases[S.club]);record(S,'projectDone',{project:p.id});}
   }
 }
 
 // Owner decisions. Each returns a status code the page turns into words.
 function fundProject(S,id,funding){
   const F=S.finance,p=F.projects.find(x=>x.id===id),def=projectDef(id),s=cur(S);
-  if(!S.club||!p||p.status!=='proposed')return 'unavailable';
+  if(!S.club||!p||p.status!=='proposed'||projectBlock(S,def))return 'unavailable';
+  const cost=projectCost(S,def);
   if(!['club','debt','owner'].includes(funding))return 'invalid';
-  if(def.cost>0){
-    if(funding==='club'&&F.clubCash<def.cost)return 'clubShort';
-    if(funding==='owner'&&F.ownerCash<def.cost)return 'ownerShort';
-    if(funding==='debt'&&F.debt+def.cost>DEBT_LIMIT)return 'debtLimit';
-    if(funding==='club')F.clubCash=round2(F.clubCash-def.cost);
-    if(funding==='debt')F.debt=round2(F.debt+def.cost);
-    if(funding==='owner'){F.ownerCash=round2(F.ownerCash-def.cost);F.contributions.capital=round2(F.contributions.capital+def.cost);}
-    F.capitalLog.push({season:s.number,week:s.tick,project:id,amount:def.cost,funding});
+  if(cost>0){
+    if(funding==='club'&&F.clubCash<cost)return 'clubShort';
+    if(funding==='owner'&&F.ownerCash<cost)return 'ownerShort';
+    if(funding==='debt'&&F.debt+cost>DEBT_LIMIT)return 'debtLimit';
+    if(funding==='club')F.clubCash=round2(F.clubCash-cost);
+    if(funding==='debt')F.debt=round2(F.debt+cost);
+    if(funding==='owner'){F.ownerCash=round2(F.ownerCash-cost);F.contributions.capital=round2(F.contributions.capital+cost);}
+    const C=S.stadium.city,city=id==='renovation'&&C?.status==='agreed'?C.offer.amount:0;
+    F.capitalLog.push({season:s.number,week:s.tick,project:id,amount:cost,funding,...(city?{city}:{})});
+    if(city)C.status='committed';
     if(funding==='owner')learn(S,{kind:'ownerFunding',project:id},['owner','president','league']);
   }
-  p.funding=def.cost>0?funding:'club';
+  p.funding=cost>0?funding:'club';
   if(def.build>0){p.status='building';p.weeksLeft=def.build;}else p.status='active';
   return 'ok';
 }
 function declineProject(S,id){const p=S.finance.projects.find(x=>x.id===id);if(p?.status==='proposed')p.status='declined';}
 function reopenProject(S,id){const p=S.finance.projects.find(x=>x.id===id);if(p?.status==='declined')p.status='proposed';}
 function setLossPolicy(S,policy){if(['borrow','owner'].includes(policy))S.finance.lossPolicy=policy;}
+
+// City money for a renovation. The owner sets the ask and the approach; the
+// team president takes it to City Hall and the city answers after
+// CITY_TALK_WEEKS. What the city will pay depends on leverage: a short lease,
+// a worn building, goodwill at home, a small market's fear of losing its team,
+// and whether a threat to leave is believable (the owner has looked at other
+// cities). Money comes with strings: a bigger share buys the city more lease
+// years. One round of talks a season.
+// stadium.city  {status:'none'|'talks'|'offer'|'agreed'|'committed', mayor,
+//                ask, approach, dueWeek, offer:{amount,share,extraYears,expiresWeek}, lastSeason}
+const CITY_TALK_WEEKS=2,CITY_OFFER_WEEKS=4,CITY_ASKS=[.25,.5,.75],CITY_MAX_SHARE=.75;
+const CITY_APPROACH={
+  partner:{label:'A partnership: the stadium is a city asset',mood:0,push:0},
+  compare:{label:'Point to what other cities pay',mood:-3,push:.08},
+  threat:{label:'Make clear we could leave',mood:-8,push:.2}};
+const renovationGross=lease=>lease.condition==='Worn'?240:150;
+const cityMayor=S=>S.stadium.city?.mayor?'Mayor '+S.stadium.city.mayor:'the mayor';
+// The pieces of the city's willingness the president can read in advance.
+function cityLeverage(S){
+  const lease=S.world.leases[S.club],st=S.stadium;
+  const credible=st.homeAware||st.knowledge.some(f=>f.siteId)||!!pendingApplication(S);
+  return {lease:lease.yearsLeft<=3?.18:lease.yearsLeft<=6?.09:0,worn:lease.condition==='Worn'?.1:0,
+    mood:(st.homeMood-60)/250,small:homeMetro(byId.get(S.club).marketId)<2.5?.05:0,credible};
+}
+function cityWillingness(S,approach,r,credible=cityLeverage(S).credible){
+  const L=cityLeverage(S),a=CITY_APPROACH[approach];
+  // Comparing cities without having looked at any is weak; a threat nobody believes backfires.
+  const push=credible?a.push:approach==='threat'?-.05:a.push*.35;
+  return Math.max(0,Math.min(CITY_MAX_SHARE,.12+L.lease+L.worn+L.mood+L.small+push+between(r,[-.06,.06])));
+}
+function cityBlock(S){
+  if(!S.club)return 'closed';
+  const C=S.stadium.city,p=S.finance.projects.find(x=>x.id==='renovation');
+  if(C.status==='talks'||C.status==='offer')return 'busy';
+  if(C.status==='agreed'||C.status==='committed')return 'agreed';
+  if(S.world.leases[S.club].condition==='Modern'||p?.status!=='proposed')return 'nothing';
+  if(C.lastSeason===cur(S).number)return 'season';
+  return null;
+}
+function askCity(S,terms){
+  const block=cityBlock(S);if(block)return block;
+  const ask=Number(terms?.ask),approach=terms?.approach;
+  if(!CITY_ASKS.includes(ask)||!(approach in CITY_APPROACH))return 'invalid';
+  const r=rngFor(S.rng),C=S.stadium.city,st=S.stadium,s=cur(S);
+  C.mayor??=personName(r);
+  Object.assign(C,{status:'talks',ask,approach,dueWeek:s.tick+CITY_TALK_WEEKS,lastSeason:s.number,credible:cityLeverage(S).credible}); // as it stood when we asked
+  delete C.offer;
+  st.homeMood=Math.max(0,st.homeMood+CITY_APPROACH[approach].mood);
+  if(approach==='threat'){st.homeAware=true;learn(S,{kind:'cityThreat'},['owner','president','home','press']);}
+  else learn(S,{kind:'cityTalks'},['owner','president','home']);
+  return 'ok';
+}
+function processCity(S,r){
+  const C=S.stadium.city,s=cur(S);
+  if(C.status==='offer'&&s.tick>=C.offer.expiresWeek){record(S,'cityLapsed',{mayor:C.mayor,amount:C.offer.amount});S.stadium.city={status:'none',mayor:C.mayor,lastSeason:C.lastSeason};return;}
+  if(C.status!=='talks'||s.tick<C.dueWeek)return;
+  const lease=S.world.leases[S.club],gross=renovationGross(lease),credible=C.credible??cityLeverage(S).credible,willing=cityWillingness(S,C.approach,r,credible);
+  if(willing<C.ask*.5){
+    if(C.approach!=='partner')S.stadium.homeMood=Math.max(0,S.stadium.homeMood-3);
+    record(S,'cityRefused',{mayor:C.mayor,ask:C.ask,approach:C.approach,bluff:C.approach==='threat'&&!credible});
+    S.stadium.city={status:'none',mayor:C.mayor,lastSeason:C.lastSeason};return;
+  }
+  const share=Math.max(.05,Math.floor(Math.min(C.ask,willing)*20)/20),amount=round5(share*gross);
+  const extraYears=share>=.5?10:share>=.3?5:0;
+  C.offer={amount,share,extraYears,expiresWeek:s.tick+CITY_OFFER_WEEKS,gross};
+  C.status='offer';
+  record(S,'cityOffer',{mayor:C.mayor,ask:C.ask,share,amount,gross,extraYears,expiresWeek:C.offer.expiresWeek,approach:C.approach,bluff:C.approach==='threat'&&!credible});
+}
+function acceptCity(S){const C=S.stadium.city;if(C.status!=='offer')return 'unavailable';C.status='agreed';record(S,'cityAgreed',{mayor:C.mayor,amount:C.offer.amount,extraYears:C.offer.extraYears});return 'ok';}
+function declineCity(S){const C=S.stadium.city;if(C.status!=='offer')return 'unavailable';record(S,'cityDeclined',{mayor:C.mayor,amount:C.offer.amount});S.stadium.city={status:'none',mayor:C.mayor,lastSeason:C.lastSeason};return 'ok';}
+function cityEventText(e){
+  const pct=x=>Math.round(x*100)+'%',mayor='Mayor '+e.mayor;
+  switch(e.type){
+    case 'cityOffer':return (e.bluff?mayor+' does not believe we would leave, and said so. ':'')+mayor+' will put $'+e.amount+'M toward the renovation, '+pct(e.share)+' of $'+e.gross+'M'+(e.share<e.ask?', short of the '+pct(e.ask)+' we asked for':', what we asked for')+'. '+
+      (e.extraYears?'In return the city wants '+e.extraYears+' more years on the lease, on top of the usual extension. ':'')+'The offer stands through '+weekLabel(e.expiresWeek)+'; it is on the Stadium page.';
+    case 'cityRefused':return (e.bluff?mayor+' called our bluff: nobody at City Hall believes we have anywhere to go. ':'')+mayor+' turned down our request for '+pct(e.ask)+' of the renovation. The council will not take it up again this season.'+(e.approach!=='partner'?' The way we asked did not help us at home.':'');
+    case 'cityAgreed':return 'We accepted. The city puts $'+e.amount+'M into the renovation'+(e.extraYears?' and the lease grows by '+e.extraYears+' more years when the work is done':'')+'. Fund the rest on the Finances page.';
+    case 'cityDeclined':return 'I told '+mayor+' we will pass on the $'+e.amount+'M.';
+    case 'cityLapsed':return 'The city’s $'+e.amount+'M offer for the renovation lapsed without an answer.';
+  }
+  return '';
+}
 
 // Naming rights: the president negotiates on the owner's mandate.
 function namingValue(S){
@@ -2580,7 +2727,10 @@ function declineNaming(S){
 function financeEventText(e){
   const def=e.project&&projectDef(e.project);
   switch(e.type){
-    case 'projectDone':return e.project==='plane'?'The team plane is in service.':e.project==='science'?'The sports science department is running.':def.name+' is finished.';
+    case 'projectDone':return {plane:'The team plane is in service.',science:'The sports science department is running.',
+      seats:'The upper deck is open: '+SEAT_EXPANSION.toLocaleString('en-US')+' more seats on sale from the next home game.',
+      renovation:'The renovation is finished. The stadium is modern again, and the city has added '+RENOVATION_LEASE_YEARS+' years to our lease.',
+      plaza:'The fan plaza and tailgate lots are open.'}[e.project]??def.name+' is finished.';
     case 'namingSigned':{const d=e.deal;return (d.delegated?'Done. Inside your terms, I signed ':'Signed, as you approved: ')+d.company+' names the stadium for '+d.years+' years at $'+d.annual+'M a year. '+d.originalName+' becomes '+d.newName+'.';}
     case 'namingAwaiting':{const o=e.offer;return e.outside?
       'After '+e.rounds+' rounds nobody met your terms. The best offer is '+o.company+' ('+CATEGORY_LABEL[o.category].toLowerCase()+') at $'+o.annual+'M a year for '+o.years+' years, but '+o.reason+'. It is on the Finances page through '+weekLabel(e.expiresWeek)+' if you want it anyway.':
@@ -2599,7 +2749,7 @@ const financeUi={notice:'',mandate:null};
 function financesView(){
   const S=save,id=S.club;
   if(!id)return heading('FINANCES','Choose a club first')+'<p>Take ownership on the Owner desk to open the books.</p>';
-  const s=cur(),F=S.finance,season=F.ledger.filter(x=>x.season===s.number),last=season.at(-1);
+  const s=cur(),F=S.finance,season=F.ledger.filter(x=>x.season===s.number),last=season.at(-1),lease=S.world.leases[id];
   const total=k=>round2(season.reduce((sum,x)=>sum+(x.lines[k]??0),0));
   const result=round2(season.reduce((sum,x)=>sum+x.result,0));
   const ownerCapital=round2(F.capitalLog.filter(x=>x.season===s.number&&x.funding==='owner').reduce((a,x)=>a+x.amount,0));
@@ -2625,18 +2775,23 @@ function financesView(){
     '<div class="controls"><label>When club cash runs out <select id="lossPolicy">'+option('borrow','Borrow on the club’s credit line',F.lossPolicy==='borrow')+option('owner','Cover it with your own money',F.lossPolicy==='owner')+'</select></label></div>';
 
   const statusText=p=>({building:'Under construction · '+p.weeksLeft+' week'+(p.weeksLeft===1?'':'s')+' left',active:'In service',declined:'Declined'}[p.status]??'Awaiting your decision')+
-    (p.funding&&projectDef(p.id).cost>0?' · paid by '+{club:'the club',debt:'borrowing',owner:'you'}[p.funding]:'');
-  const projects='<h2>Funding decisions</h2>'+(financeUi.notice?'<p><b>'+esc(financeUi.notice)+'</b></p>':'')+'<div class="projects">'+F.projects.map(p=>{
-    const d=projectDef(p.id);
-    const buttons=p.status==='proposed'?(d.cost>0?
-      '<button data-fund="'+d.id+':club"'+(F.clubCash<d.cost?' disabled':'')+'>Club pays</button><button data-fund="'+d.id+':debt"'+(F.debt+d.cost>DEBT_LIMIT?' disabled':'')+'>Borrow</button><button data-fund="'+d.id+':owner"'+(F.ownerCash<d.cost?' disabled':'')+'>Pay personally</button>':
+    (p.funding&&projectDef(p.id).cost!==0?' · paid by '+{club:'the club',debt:'borrowing',owner:'you'}[p.funding]:'');
+  const card=p=>{
+    const d=projectDef(p.id),cost=projectCost(S,d),blocked=p.status==='proposed'&&projectBlock(S,d);
+    const buttons=blocked?'':p.status==='proposed'?(cost>0?
+      '<button data-fund="'+d.id+':club"'+(F.clubCash<cost?' disabled':'')+'>Club pays</button><button data-fund="'+d.id+':debt"'+(F.debt+cost>DEBT_LIMIT?' disabled':'')+'>Borrow</button><button data-fund="'+d.id+':owner"'+(F.ownerCash<cost?' disabled':'')+'>Pay personally</button>':
       '<button data-fund="'+d.id+':club">Approve</button>')+'<button data-decline="'+d.id+'">Decline</button>':p.status==='declined'?'<button data-reopen="'+d.id+'">Reconsider</button>':'';
     return '<article><h3>'+esc(d.name)+'</h3><div class="project"><p>'+esc(d.effect)+'</p>'+(d.note?'<small>'+esc(d.note)+'</small>':'')+
-      '<p class="terms">'+(d.cost?m1(d.cost)+' up front · ':'')+m1(d.recurring)+' a season'+(d.build?' · '+d.build+' weeks to build':'')+'</p>'+
-      '<small>'+esc(statusText(p))+'</small><div class="controls">'+buttons+'</div></div></article>';
-  }).join('')+'</div>';
+      (d.id==='renovation'&&S.stadium.city.status==='agreed'?'<small>'+esc('After the city’s $'+S.stadium.city.offer.amount+'M share.')+'</small>':d.id==='renovation'&&!blocked&&p.status==='proposed'&&!cityBlock(S)?'<small>The city might pay part of this. <button class="link" data-tab="stadium">Ask the city</button></small>':'')+
+      '<p class="terms">'+(cost?m1(cost)+' up front · ':'')+(d.recurring?m1(d.recurring)+' a season':'No running cost')+(d.build?' · '+d.build+' weeks to build':'')+'</p>'+
+      '<small>'+esc(blocked||statusText(p))+'</small><div class="controls">'+buttons+'</div></div></article>';
+  };
+  const group=g=>'<div class="projects">'+PROJECTS.filter(d=>d.group===g).map(d=>F.projects.find(p=>p.id===d.id)).filter(Boolean).map(card).join('')+'</div>';
+  const projects='<h2>Funding decisions</h2>'+(financeUi.notice?'<p><b>'+esc(financeUi.notice)+'</b></p>':'')+
+    '<h3>Stadium improvements</h3><p>'+esc('Work on '+lease.stadium+' ('+lease.capacity.toLocaleString('en-US')+' seats, '+lease.condition.toLowerCase()+'). It belongs to the building: if the club moves, it stays behind.')+'</p>'+group('stadium')+
+    '<h3>Team facilities</h3><p>Where the players train, heal and travel. These go with the club wherever it plays.</p>'+group('team');
 
-  const N=F.naming,president=S.staff.president.name,lease=S.world.leases[id];
+  const N=F.naming,president=S.staff.president.name;
   let naming='<h2>Naming rights</h2>';
   if(N.status==='signed'){const d=N.deal;naming+='<p>'+esc(d.newName+': '+d.company+' pays $'+d.annual+'M a year for '+d.years+' years. '+(d.delegated?president+' signed it within your mandate':'You approved it')+' after '+weekLabel(d.week)+'.')+'</p>';}
   else if(N.status==='negotiating'){
@@ -3570,6 +3725,7 @@ function rollover(S,r){
   for(const site of S.world.sites)if(site.status==='open')site.expiresWeek=shift(site.expiresWeek);
   for(const st of S.stadium.studies)if(st.status==='underway')st.due=shift(st.due);
   if(S.finance.naming.status==='awaiting')S.finance.naming.expiresWeek=shift(S.finance.naming.expiresWeek);
+  {const C=S.stadium.city;if(C.status==='talks')C.dueWeek=shift(C.dueWeek);if(C.status==='offer')C.offer.expiresWeek=shift(C.offer.expiresWeek);}
   if(S.league.meeting?.status==='scheduled')S.league.meeting.week=shift(S.league.meeting.week);
   S.offer=null;
   if(S.depth){S.depth.overrides=0;S.depth.warned=false;}
@@ -3640,6 +3796,9 @@ function pendingItems(S){
   const N=S.finance.naming;
   if(N.status==='awaiting')add({id:'naming',title:'Naming-rights offer from '+N.offer.company,detail:'Your negotiator has terms for you to sign or turn down.',
     route:'finances',deadline:N.expiresWeek,fate:'The offer lapses.',actions:[['Review the deal','tab','finances']]});
+  const CD=S.stadium.city;
+  if(CD?.status==='offer')add({id:'city',title:'City offer: $'+CD.offer.amount+'M toward the renovation',detail:'Mayor '+CD.mayor+' wants an answer'+(CD.offer.extraYears?', and '+CD.offer.extraYears+' more lease years in return.':'.'),
+    route:'stadium',deadline:CD.offer.expiresWeek,fate:'The offer lapses.',actions:[['Stadium page','tab','stadium']]});
   const tracked=new Set(S.stadium.knowledge.map(f=>f.siteId)),filed=pendingApplication(S)?.siteId;
   for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed)
     add({id:'site-'+x.id,title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),detail:'A stadium site you have looked into. The offer is open until it expires.',
@@ -4525,7 +4684,7 @@ function clubUnits(S,id){
   return u;
 }
 // An average development coach (about 70) leaves growth where it was; the best add about 7%.
-const devFactor=(S,id)=>{const hc=S.staff?.clubs?.[id]?.hc;return hc?.72+hc.ratings.development/250:1;};
+const devFactor=(S,id)=>{const hc=S.staff?.clubs?.[id]?.hc;return (hc?.72+hc.ratings.development/250:1)*(id===S.club&&S.finance&&effectActive(S,'devcenter')?1.1:1);};
 // What a GM thinks a prospect is worth: the consensus grade, blurred by his scouting.
 
 const approachFor=(S,id)=>id===S.club&&S.staff.directives.approach!=='gm'?S.staff.directives.approach:gmOf(S,id).philosophy;
@@ -5595,6 +5754,7 @@ function describeEvent(e,S=save){
     case 'rosterMoves':case 'practicePoached':case 'coachUnhappy':return esc(depthEventText(S,e));
     case 'tradeAway':case 'autoHired':case 'tradeExpired':return esc(tradeEventText(S,e));
     case 'relocationFiled':case 'relocationVote':case 'relocated':case 'clubRelocated':return esc(relocationEventText(e));
+    case 'cityOffer':case 'cityRefused':case 'cityAgreed':case 'cityDeclined':case 'cityLapsed':return esc(cityEventText(e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
     default:return esc('Unrecognized staff report ('+e.type+').');
@@ -5641,7 +5801,19 @@ const migrations={
   14:migrateV14,
   15:migrateV15,
   16:migrateV16,
+  17:migrateV17,
 };
+// v17 -> v18: more stadium and facility projects. The new ones join the list
+// as proposals after the four the owner already had, which keep their status.
+// No talks with the city about a renovation yet.
+function migrateV17(old){
+  const F=old.finance;
+  for(const d of PROJECTS)if(!F.projects.some(p=>p.id===d.id))F.projects.push({id:d.id,status:'proposed'});
+  old.stadium.city??={status:'none'};
+  old.schemaVersion=18;
+  (old.migrations??=[]).push({from:17,to:18,at:new Date().toISOString()});
+  return old;
+}
 // v16 -> v17: relocation. No club has moved yet, and no application is in.
 function migrateV16(old){
   old.relocations=[];
@@ -5942,6 +6114,7 @@ function validateSave(S){
   }
   const st=S.stadium;
   if(!st||!Array.isArray(st.visits)||!Array.isArray(st.studies)||!Array.isArray(st.knowledge)||!Number.isFinite(st.homeMood)||!isInt(st.nextFactId,1))fail('Stadium records are missing.');
+  if(!st.city||!['none','talks','offer','agreed','committed'].includes(st.city.status)||(['offer','agreed','committed'].includes(st.city.status)&&!Number.isFinite(st.city.offer?.amount)))fail('The city renovation talks are invalid.');
   else{
     if(st.visits.filter(v=>v?.status==='planned').length>1)fail('More than one visit is planned.');
     const A=st.application;
@@ -6874,6 +7047,9 @@ document.addEventListener('click',e=>{
     if(result==='ok')commit();else draw();
   }
   if(b.id==='cancelVisit'){cancelVisit(save);commit();}
+  if(b.id==='askCity'){const res=askCity(save,stadiumUi.city);stadiumUi.city.notice={busy:'Talks with the city are already under way.',season:'The city will not hear it again this season.',nothing:'There is no renovation to pay for.',agreed:'The city has already agreed.',invalid:'Choose an ask and an approach.'}[res]??'';res==='ok'?commit():draw();}
+  if(b.id==='acceptCity'){acceptCity(save);commit();}
+  if(b.id==='declineCity'){declineCity(save);commit();}
   if(b.id==='fileRelocation'){
     const u=stadiumUi.reloc,result=fileRelocation(save,u.site,u);
     u.notice={short:'You cannot cover that. Your cash and the league’s borrowing limit fall short of the total.',unavailable:'That offer is no longer open.',invalid:'That nickname is not available.'}[result]??(result==='ok'?'':relocationBlockText(save,result));
@@ -6985,6 +7161,8 @@ app.onchange=e=>{
   }
   const planKeys={visitSite:'site',visitWho:'who',visitDiscretion:'discretion',visitAsk:'ask',visitSignal:'signal'};
   if(planKeys[e.target.id]){stadiumUi.plan[planKeys[e.target.id]]=e.target.value;stadiumUi.notice='';return;}
+  if(e.target.id==='cityAsk'){stadiumUi.city.ask=Number(e.target.value);stadiumUi.city.notice='';draw();return;}
+  if(e.target.id==='cityApproach'){stadiumUi.city.approach=e.target.value;stadiumUi.city.notice='';draw();return;}
   if(e.target.id==='lossPolicy'){setLossPolicy(save,e.target.value);commit();return;}
   if(e.target.id==='playerVote'){setPlayerVote(save,e.target.value);commit();return;}
   if(e.target.id==='gmHandles'){setGmHandles(save,e.target.value==='gm');commit();return;}

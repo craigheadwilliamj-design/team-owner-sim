@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'draftBook', 'corkBoard', 'clipboard', 'draftGroupOf', 'clubView', 'clubsView', 'clubFromHash', 'standingsView', 'setClub:(id,t)=>{selected=id;clubTab=t;}', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2442,6 +2442,209 @@ test('AI clubs are turned down when the owners do not want it', () => {
   for (let i = 0; i < 80; i++) { S.rng.state = i * 7919 + 13; api.aiRelocations(S, api.rngFor(S.rng)); }
   assert.equal(S.relocations.length, 0);
   assert(S.league.news.some(n => /turn down/.test(n.text)));
+});
+
+test('team colors: every club gets a shade that carries white text, and no club before one is owned', () => {
+  const { api } = load();
+  for (const t of api.clubs) {
+    const c = api.inkable(t.primary);
+    assert.match(c, /^#[0-9a-f]{6}$/);
+    assert(api.contrast(c, '#ffffff') >= 4.5, t.id + ' ' + t.primary + ' -> ' + c);
+  }
+  assert(api.contrast(api.inkable('#ffe2a3'), '#ffffff') >= 4.5, 'a pale color is darkened until it passes');
+  assert.equal(api.inkable('#193c56'), '#193c56', 'a dark color is left alone');
+  const { S } = owned();
+  assert.equal(api.setTeamColors(S)['--team'], api.inkable(api.clubs.find(t => t.id === 'club-06').primary));
+  assert.equal(api.setTeamColors({ club: null })['--team'], '#1e5b37');
+});
+
+test('navigation: every page belongs to one section, routes round-trip through the address bar, old tab names still work', () => {
+  const { api } = load();
+  const pages = api.SECTIONS.flatMap(x => x.views.map(([id]) => id));
+  assert.equal(new Set(pages).size, pages.length, 'no page in two sections');
+  for (const id of pages) {
+    assert(typeof api.VIEWS[id] === 'function', id + ' has a view');
+    assert.equal(api.routeFromHash(api.hashOf(id)), id);
+  }
+  assert.equal(api.hashOf('desk'), '#desk');
+  assert.equal(api.hashOf('depth'), '#football/depth');
+  assert.equal(api.routeFromHash('#game'), 'game');
+  assert.equal(api.routeFromHash('#business/depth'), null, 'a page under the wrong section is not a route');
+  assert.equal(api.routeFromHash('#nowhere'), null);
+  assert.equal(api.routeFromHash('#__proto__'), null);
+  for (const [old, route] of [['Owner desk', 'desk'], ['League', 'markets'], ['Club directory', 'clubs'], ['Team schedule', 'club'], ['Rosters', 'club'], ['Game', 'game']]) assert.equal(api.routeOf(old), route);
+  assert.equal(api.routeOf('constructor'), null);
+  const nav = api.navHtml('contracts');
+  assert.match(nav.top, /data-section="football" aria-current="page"/);
+  assert.match(nav.sub, /data-tab="contracts" aria-current="page"/);
+  assert.equal(api.navHtml('desk').sub, '', 'a one-page section has no sub-tabs');
+});
+
+test('league office pages split the old League tab without losing anything', () => {
+  const { api, S } = owned();
+  api.save.club = S.club;
+  const whole = api.marketsView() + api.ownersView() + api.newsView();
+  assert.match(api.marketsView(), /Broadcast rights/);
+  assert.match(api.ownersView(), /Owners and votes/);
+  assert.match(api.ownersView(), /What they remember/, 'owners are listed even with no vote scheduled');
+  assert.match(api.newsView(), /Headlines/);
+  assert(whole.length > 0);
+});
+
+test('Advance lists exactly the offers and proposals that lapse when the clock moves', () => {
+  const { api, S } = owned(5);
+  let checked = 0;
+  for (let w = 0; w < 40 && api.cur(S).number === 1; w++) {
+    const t = api.now(S), due = api.dueBy(S, t + 1);
+    const listed = new Set(due.map(x => x.title));
+    const before = S.staff.proposals.filter(P => ['trade', 'offer', 'fa'].includes(P.kind));
+    const quote = !!S.offer;
+    if (quote) assert(due.some(x => /price on/.test(x.title)), 'an open quote is listed');
+    api.advance(S);
+    const after = new Set(S.staff.proposals.map(P => P.id));
+    for (const P of before) {
+      const title = P.kind === 'fa' ? 'Sign free agent ' + P.pos + ' ' + P.name : api.tradeSummary(S, P);
+      assert.equal(!after.has(P.id), listed.has(title), (after.has(P.id) ? 'still open but listed: ' : 'lapsed but not listed: ') + title);
+      checked++;
+    }
+    if (quote) assert.equal(S.offer, null);
+  }
+  assert(checked > 0, 'the season produced proposals to check');
+});
+
+test('Jump ahead offers the nearest milestone first, and the confirm names what comes due on the way', () => {
+  const { api, S } = owned();
+  const targets = api.jumpTargets(S);
+  assert.deepEqual(targets.map(([t]) => t), [...targets.map(([t]) => t)].sort((a, b) => a - b));
+  assert.match(targets[0][1], /trade deadline/);
+  S.finance.naming = { status: 'awaiting', expiresWeek: 6, offer: { company: 'Ohio Valley Bank' } };
+  assert(!api.dueBy(S, api.now(S) + 1).some(x => /Naming/.test(x.title)), 'not due on this advance');
+  assert(api.dueBy(S, 10).some(x => /Ohio Valley Bank/.test(x.title)), 'due on the way to week 10');
+  const html = api.confirmHtml(S, { kind: 'jump', target: targets[0][0] });
+  assert.match(html, /Ohio Valley Bank/);
+  assert.match(html, /role="dialog"/);
+  const cells = api.scoreboardCells(S);
+  assert.deepEqual(cells.map(c => c[0]), ['Record', 'Week', 'Cap room', 'Cash']);
+  assert.equal(cells[1][1], 'PRE');
+});
+
+test('one list of pending items drives the desk inbox, the nav badges and the Advance count', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 6 && !S.staff.proposals.some(P => P.kind === 'trade' || P.kind === 'offer'); i++) api.playWeek(S);
+  S.finance.naming = { status: 'awaiting', expiresWeek: api.now(S) + 2, offer: { company: 'Ohio Valley <b>Bank</b>' } };
+  const items = api.pendingItems(S);
+  assert(items.some(x => x.route === 'finances'), 'the naming offer is waiting');
+  for (const x of items) {
+    assert(typeof x.title === 'string' && x.title && api.VIEWS[x.route], x.id);
+    assert(x.actions.length > 0, x.id + ' can be acted on');
+  }
+  const desk = api.ownershipDesk();
+  assert(desk.includes(items.length + (items.length === 1 ? ' thing needs' : ' things need')));
+  assert(!desk.includes('<b>Bank'), 'item text is escaped');
+  const nav = api.navHtml('desk', items);
+  assert.match(nav.top, new RegExp('data-section="desk".*?<span class="full">Desk</span><span class="badge"[^>]*>' + items.length + '<'));
+  const biz = items.filter(x => x.route === 'finances' || x.route === 'stadium').length;
+  assert.match(nav.top, new RegExp('<span class="full">Business</span>' + (biz ? '<span class="badge"[^>]*>' + biz + '<' : '</button>')));
+  const expiring = items.filter(x => api.urgency(S, x) === 'expire').map(x => x.id).sort();
+  assert.deepEqual(api.dueBy(S, api.now(S) + 1).map(x => x.id).sort(), expiring, 'Advance counts exactly the items decided this week');
+  const talk = S.staff.proposals.find(P => P.kind === 'trade' || P.kind === 'offer');
+  if (talk) assert(api.tradesView().includes('data-approve="' + talk.id + '"'), 'trade talk can be answered on the Trades page');
+  assert(api.tradesView().includes('GM’s trade desk'));
+  assert(api.depthView().includes('Medical report'));
+  S.club = null;
+  assert.deepEqual(api.pendingItems(S), []);
+});
+
+test('player card: every player has a card on every tab, other clubs get a trade button, and hostile names are escaped', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 3; i++) api.playWeek(S);
+  const mine = S.rosters['club-06'][0], theirs = S.rosters['club-01'].find(p => !p.out);
+  theirs.name = 'Evil <img src=x onerror=alert(1)> Guy';
+  assert.equal(api.findPlayer(S, mine.id).club, 'club-06');
+  assert.equal(api.findPlayer(S, 'nobody'), null);
+  for (const tab of ['overview', 'contract', 'stats', 'history']) {
+    api.setCard(mine.id, tab);
+    const html = api.playerView();
+    assert(html.includes('data-release="' + mine.id + '"'), 'your own player can be released from his card');
+    assert(html.includes('aria-selected="true">' + { overview: 'Overview', contract: 'Contract', stats: 'Stats', history: 'History' }[tab]));
+    api.setCard(theirs.id, tab);
+    const other = api.playerView();
+    assert(!other.includes('<img src=x'), 'name escaped on ' + tab);
+    assert(!other.includes('data-release'), 'no release button for another club');
+  }
+  api.setCard(theirs.id, 'overview');
+  assert(api.playerView().includes('data-pquote="club-01/' + theirs.id + '"'));
+  api.setCard('gone', 'overview');
+  assert.match(api.playerView(), /No longer in the league/);
+  const hits = api.findPlayers(S, mine.name.split(' ').at(-1));
+  assert(hits.length > 0 && hits.length <= 8);
+  assert(hits.some(h => h.p.id === mine.id));
+  assert.deepEqual(api.findPlayers(S, 'a'), [], 'one letter is not a search');
+  assert.equal(api.routeFromHash('#player/' + encodeURIComponent(mine.id)), 'player');
+  assert.equal(api.playerFromHash('#player/' + encodeURIComponent(mine.id)), mine.id);
+  assert.equal(api.routeFromHash('#player'), null);
+  assert(api.depthView().includes('data-player="' + mine.id + '"') || S.rosters['club-06'].some(p => api.depthView().includes('data-player="' + p.id + '"')), 'depth chart names link to cards');
+});
+
+test('draft room: cork board tiers, a sortable and filterable clipboard, and taken players marked on draft day', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 3; i++) api.advance(S);
+  const D = S.draft;
+  D.prospects[0].name = 'Bad <img src=x onerror=alert(1)>';
+  api.draftUi.view = 'board';
+  let html = api.draftView();
+  assert(html.includes('class="cork"') && html.includes('1st round') && html.includes('Day 2'));
+  assert(!html.includes('<img src=x'), 'prospect names are escaped on the board');
+  const B = api.draftBook(S);
+  const top = B.ranked.slice(0, 32);
+  for (const p of top) assert(html.includes('data-profile="' + p.id + '"'), 'every first-round grade is on the board');
+  api.draftUi.view = 'list'; api.draftUi.group = 'qb'; api.draftUi.sort = 'grade'; api.draftUi.dir = -1;
+  html = api.draftView();
+  const ids = [...html.matchAll(/class="plink" data-profile="([^"]+)"/g)].map(m => m[1]);
+  assert(ids.length > 0);
+  for (const id of ids) assert.equal(api.draftGroupOf(D.prospects.find(p => p.id === id).pos), 'qb', 'only quarterbacks with the QB chip');
+  const grades = ids.map(id => B.grade(D.prospects.find(p => p.id === id)));
+  assert.deepEqual(grades, [...grades].sort((a, b) => b - a), 'sorted by your grade, high to low');
+  api.draftUi.group = 'All'; api.draftUi.q = D.prospects[5].name;
+  assert(api.draftView().includes('data-profile="' + D.prospects[5].id + '"'));
+  api.draftUi.q = ''; api.draftUi.watchOnly = true;
+  assert.match(api.draftView(), /0 of \d+ prospects|Nobody on the sheet/);
+  api.draftUi.watchOnly = false;
+  api.jumpTo(S, 34);
+  api.simToMyPick(S);
+  api.draftUi.view = 'board';
+  html = api.draftView();
+  assert.match(html, /On the clock/);
+  const taken = S.draft.picks[0];
+  if (taken) assert(html.includes('#' + taken.overall), 'a taken prospect carries his pick sticker');
+  api.draftUi.view = 'list';
+  assert(api.draftView().includes('data-draft='), 'your pick can be made from the clipboard');
+  Object.assign(api.draftUi, { view: 'board', group: 'All', q: '' });
+});
+
+test('club pages: one page per club with schedule and roster, a directory, and club names that link to it', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 2; i++) api.playWeek(S);
+  const dir = api.clubsView();
+  for (const t of api.clubs) assert(dir.includes('data-id="' + t.id + '"'), t.id + ' is in the directory');
+  S.league.owners['club-03'].name = 'Rich <script>x</script>';
+  api.setClub('club-03', 'schedule');
+  let html = api.clubView();
+  assert(html.includes('Schedule') && html.includes('Toward you') && !html.includes('<script>x'));
+  assert.match(html, /data-id="club-\d\d"/, 'opponents link to their club pages');
+  api.setClub('club-03', 'roster');
+  html = api.clubView();
+  assert(html.includes('data-player="' + S.rosters['club-03'][0].id + '"') || S.rosters['club-03'].some(p => html.includes('data-player="' + p.id + '"')), 'roster names open player cards');
+  api.setClub('club-06', 'schedule');
+  assert(api.clubView().includes('<dd>You</dd>'), 'your own club shows you as owner');
+  assert.equal(api.routeFromHash('#club/club-03'), 'club');
+  assert.equal(api.clubFromHash('#club/club-03'), 'club-03');
+  assert.equal(api.routeFromHash('#club/club-99'), null);
+  assert(api.standingsView().includes('data-id="club-06"'), 'standings link to club pages');
 });
 
 let failed = 0;

@@ -1,53 +1,244 @@
 <title>CGL Season Desk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;family=Big+Shoulders+Display:wght@700;800;900&amp;family=Graduate&amp;family=Courier+Prime:wght@400;700&amp;family=Permanent+Marker&amp;display=swap">
 <style>
 /* Layout: one desk column. Header with the advance button, a tab strip, the working pane, then the save footer. */
+/* Look: Gameday. Turf band, chalk page, scoreboard numerals in amber, penalty-flag yellow for anything that expires.
+   The night set is the same stadium under the lights. --team, --team-fg and --team2 follow the owner's club (setTeamColors). */
 :root{
-  --bg:#f5f3eb;--surface:#fffefa;--fg:#192d36;--muted:#4d6266;
-  --rule:#c4ccc5;--rule-strong:#a7afa7;--rule-soft:#ebe9e0;--rule-table:#d7dace;--control-border:#a5afaa;
-  --band:#213e43;--band-fg:#ffffff;--accent:#174b46;--accent-fg:#ffffff;--accent-muted:#526662;
-  --link:#163e40;--focus:#db8742;
-  --display:Georgia,'Times New Roman',serif;--body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --bg:#f1efe6;--surface:#ffffff;--fg:#17201b;--muted:#4f5a52;
+  --rule:#d3d6cc;--rule-strong:#9ea79f;--rule-soft:#e6e8e0;--rule-table:#dde0d6;--control-border:#9ea79f;
+  --band:#1e5b37;--band-fg:#ffffff;--accent:#1e5b37;--accent-fg:#ffffff;--accent-muted:#5d7a68;
+  --link:#1e5b37;--focus:#c25e12;
+  --turf:#1e5b37;--turf-2:#226640;--yard:rgba(255,255,255,.22);
+  --board:#0c0d0c;--board-cell:#141514;--board-edge:#2a2c2a;--board-label:#d9d9d0;--amber:#ffb000;
+  --flag:#f7d117;--flag-fg:#17201b;--warn:#8a3b0c;
+  --team:#1e5b37;--team-fg:#ffffff;--team2:#f7d117;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;--label:Graduate,Georgia,serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
-  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
-  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
-  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}}
+  --bg:#0e1411;--surface:#17201b;--fg:#e6ebe7;--muted:#a3afa7;
+  --rule:#2a3530;--rule-strong:#3a4740;--rule-soft:#1f2924;--rule-table:#2a3530;--control-border:#47554d;
+  --band:#173f28;--band-fg:#eef5f0;--accent:#2a7d4c;--accent-fg:#ffffff;--accent-muted:#34493d;
+  --link:#8fd6a8;--focus:#f7d117;--turf:#173f28;--turf-2:#1a4a2f;--yard:rgba(255,255,255,.14);--warn:#ff9a66;color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
-  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
-  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
-  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}
+  --bg:#0e1411;--surface:#17201b;--fg:#e6ebe7;--muted:#a3afa7;
+  --rule:#2a3530;--rule-strong:#3a4740;--rule-soft:#1f2924;--rule-table:#2a3530;--control-border:#47554d;
+  --band:#173f28;--band-fg:#eef5f0;--accent:#2a7d4c;--accent-fg:#ffffff;--accent-muted:#34493d;
+  --link:#8fd6a8;--focus:#f7d117;--turf:#173f28;--turf-2:#1a4a2f;--yard:rgba(255,255,255,.14);--warn:#ff9a66;color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);margin:0;font:16px/1.45 var(--body)}
 main{max-width:1240px;margin:0 auto;padding-block:36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{border-top:6px solid var(--band);border-bottom:1px solid var(--rule-strong);padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-h1{font:700 clamp(2.3rem,6vw,4.8rem)/1 var(--display);letter-spacing:-.05em;margin:8px 0 18px;text-wrap:balance}
-header p{margin:0;color:var(--muted)}
+header{background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 118px,var(--yard) 118px 121px),repeating-linear-gradient(90deg,var(--turf) 0 120px,var(--turf-2) 120px 240px);color:var(--band-fg);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;position:relative;z-index:3}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand .chip{width:40px;height:40px;border-width:6px;background:var(--board)}
+.scoreboard{display:flex;gap:3px;margin:0;background:var(--board);padding:5px;border:3px solid var(--board-edge);flex-wrap:wrap}
+.scoreboard div{padding:3px 9px;text-align:center;background-color:var(--board-cell);background-image:radial-gradient(#1f211f 1px,transparent 1px);background-size:4px 4px}
+.scoreboard dt{font:700 .62rem var(--body);letter-spacing:.16em;color:var(--board-label);text-transform:uppercase}
+.scoreboard dd{margin:0;font:800 1.6rem/1 var(--display);color:var(--amber);letter-spacing:.05em;font-variant-numeric:tabular-nums}
+header .clock{margin-left:auto;align-items:flex-end;position:relative}
+.advance{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+header button.outline{background:transparent;color:var(--band-fg);border:2px solid var(--band-fg);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;min-height:48px;padding:8px 12px}
+header button.icon{width:48px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+#advance .due{display:inline-block;margin-left:8px;background:var(--flag);color:var(--flag-fg);font:700 .75rem var(--body);letter-spacing:0;padding:2px 8px;border-radius:2px;vertical-align:2px}
+.menu{position:absolute;right:0;top:calc(100% + 8px);z-index:5;min-width:260px;max-width:min(360px,calc(100vw - 32px));background:var(--surface);color:var(--fg);border:1px solid var(--rule-strong);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:8px;display:flex;flex-direction:column;gap:2px}
+.menu button{border:0;background:transparent;text-align:left;padding:10px;min-height:44px;border-radius:4px}
+.menu button:hover{background:var(--rule-soft)}
+.menu button small{font-weight:400}
+.menu label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;color:var(--fg)}
+.menu .note{color:var(--muted);font-size:.85rem;padding:6px 10px;margin:0}
+.menu .head{font:400 .75rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 10px 4px}
+#confirmPane{position:fixed;inset:0;z-index:10;background:rgba(10,16,12,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+#confirmPane>div{background:var(--surface);color:var(--fg);border-radius:8px;max-width:540px;width:100%;max-height:calc(100vh - 32px);overflow-y:auto;padding:22px 24px;box-shadow:0 20px 48px rgba(0,0,0,.35)}
+#confirmPane h2{margin:0 0 6px}
+#confirmPane ul{border:1px solid var(--rule);border-radius:6px;margin:10px 0 16px}
+#confirmPane li{display:block;padding:9px 12px}
+#confirmPane .controls{justify-content:flex-end;margin:0}
+#confirmPane .flag{display:inline-block;background:var(--flag);color:var(--flag-fg);font:800 .8rem var(--display);letter-spacing:.08em;padding:1px 7px;border-radius:2px;margin-right:6px}
+h1{font:900 clamp(1.8rem,4.5vw,2.6rem)/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0;text-wrap:balance}
+.brand p{margin:0;font:400 .78rem var(--label);letter-spacing:.12em;text-transform:uppercase}
 nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}
-select,button{font:inherit;padding:8px 12px;background:var(--surface);color:inherit;border:1px solid var(--control-border);border-radius:5px;margin:0}
+select,button{font:inherit;padding:8px 12px;background:var(--surface);color:var(--fg);border:1px solid var(--control-border);border-radius:4px;margin:0}
+button{font-weight:600}
 button{cursor:pointer}
 button:disabled{cursor:default;opacity:.6}
-h2{font:700 1.85rem var(--display);margin:22px 0 12px;text-wrap:balance}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+h2{font:900 2rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:22px 0 12px;text-wrap:balance}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
 article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
-h3{background:var(--band);color:var(--band-fg);padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}
+h3{background:var(--band);color:var(--band-fg);padding:8px 12px;margin:0;font:400 .8rem var(--label);letter-spacing:.12em;text-transform:uppercase}
 ul{padding:0;margin:0;list-style:none}
 li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--rule-soft);flex-wrap:wrap}
 li:last-child{border:0}
 .chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}
+strong{font-weight:700}
 small{display:block;color:var(--muted)}
 strong{font-size:1.05rem}
-#advance{background:var(--accent);color:var(--accent-fg);border:0;font-weight:700;padding:14px 20px}
-#advance:disabled{background:var(--accent-muted);opacity:1}
-#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--rule)}
-#tabs button{border:0;background:transparent}
-#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+#advance{background:#ffffff;color:#17201b;border:0;font:900 1.2rem var(--display);letter-spacing:.05em;text-transform:uppercase;padding:10px 16px;min-height:48px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+#advance:disabled{background:#d8ddd6;color:#4f5a52;box-shadow:none;opacity:1}
+#tabs{justify-content:flex-start;gap:4px;border-bottom:3px solid var(--turf);padding:16px 0 0;flex-wrap:nowrap;overflow-x:auto}
+#tabs button{border:0;border-radius:4px 4px 0 0;background:transparent;font:800 1.15rem var(--display);letter-spacing:.07em;text-transform:uppercase;padding:10px 18px;min-height:46px;white-space:nowrap}
+#tabs [aria-current=page]{background:var(--turf);color:var(--band-fg);box-shadow:inset 0 -4px 0 var(--team)}
+#subtabs{justify-content:flex-start;gap:6px;padding:12px 0 0;flex-wrap:nowrap;overflow-x:auto}
+#subtabs button{border:0;border-radius:999px;background:var(--rule-soft);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:40px;white-space:nowrap}
+#subtabs [aria-current=page]{background:var(--fg);color:var(--bg)}
+.badge{display:inline-block;min-width:20px;margin-left:7px;padding:1px 6px;border-radius:999px;background:var(--team);color:var(--team-fg);font:700 .75rem/1.4 var(--body);letter-spacing:0;text-align:center;vertical-align:2px}
+h3.group{background:none;color:var(--muted);padding:18px 0 8px;font:400 .78rem var(--label);letter-spacing:.12em}
+ul.inbox{display:flex;flex-direction:column;gap:10px}
+ul.inbox li.item{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;gap:16px;flex-wrap:wrap;justify-content:space-between}
+li.item .what{flex:1 1 320px;min-width:0}
+li.item strong{display:block;font:800 1.25rem/1.15 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:3px 0 2px}
+li.item .when{display:inline-block;margin-right:10px;background:var(--rule-soft);color:var(--link);font:800 .82rem var(--display);letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:2px}
+li.item.expire .when{background:var(--flag);color:var(--flag-fg)}
+li.item .where{border:0;background:none;padding:0;color:var(--link);text-decoration:underline;font:600 .85rem var(--body)}
+li.item .acts{display:flex;gap:8px;flex-wrap:wrap}
+li.item .acts button{min-height:44px}
+.desk{display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start}
+.desk>section{flex:999 1 560px;min-width:0}
+.desk>aside{flex:1 1 300px;min-width:0}
+.desk>aside ul{background:var(--surface);border:1px solid var(--rule);border-radius:6px;max-height:34rem;overflow-y:auto}
+.desk>aside li{display:block;padding:10px 12px}
+.plink{border:0;background:none;padding:0;color:var(--link);font:inherit;font-weight:600;text-align:left;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:2px}
+.plink:hover{text-decoration-color:currentColor}
+.find{position:relative}
+.find input{font:inherit;width:220px;max-width:100%;min-height:44px;box-sizing:border-box;padding:8px 12px;border:0;border-radius:4px;background:#ffffff;color:#17201b}
+.find .menu{left:0;right:auto}
+.find .menu button small{display:block}
+.crumbs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.pcard-page{display:flex;gap:20px 28px;flex-wrap:wrap;align-items:flex-start}
+.pcard-wrap{flex:0 1 360px;min-width:0}
+.pcard{background:var(--card);padding:10px;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.25)}
+.pc-inner{background:var(--surface);border-radius:6px;overflow:hidden}
+.pc-top{position:relative;height:170px;display:flex;flex-direction:column;justify-content:flex-end;padding:14px 16px;color:#fff;background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 58px,var(--yard) 58px 60px),repeating-linear-gradient(90deg,var(--turf) 0 60px,var(--turf-2) 60px 120px)}
+.pc-slot{position:absolute;top:12px;left:12px;font:400 .72rem var(--label);letter-spacing:.12em;text-transform:uppercase;background:rgba(0,0,0,.35);padding:3px 8px}
+.pc-pos{position:absolute;top:6px;right:12px;font:900 4.6rem/1 var(--display);opacity:.9}
+.pc-first{font:400 .8rem var(--label);letter-spacing:.12em;text-transform:uppercase}
+#app .pc-last{font:900 2.5rem/.95 var(--display);text-transform:uppercase;margin:0;color:#fff}
+.pc-board{border:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.pc-board dd{font-size:2rem}
+.pc-bio{display:grid;grid-template-columns:auto 1fr;gap:0 14px;margin:0;padding:6px 16px 10px}
+.pc-bio dt,.pc-bio dd{margin:0;padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+.pc-bio dt{color:var(--muted)}
+.pc-bio dd{font-weight:600}
+.pc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pc-acts button{min-height:44px}
+.pc-main{flex:1 1 380px;min-width:0}
+.pc-tabs{display:flex;gap:4px;border-bottom:3px solid var(--turf);flex-wrap:wrap}
+.pc-tabs button{border:0;border-radius:4px 4px 0 0;background:transparent;font:800 1.1rem var(--display);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px;min-height:46px}
+.pc-tabs [aria-selected=true]{background:var(--turf);color:var(--band-fg)}
+.pc-body h3{background:none;color:var(--link);padding:16px 0 4px}
+.pc-body p{margin:0 0 6px}
+.pc-body>.wide{margin-top:16px}
+ul.history{margin-top:12px}
+.club-head{display:flex;align-items:center;gap:16px;padding:16px 20px;border-radius:6px;background:var(--c1);color:#fff;border-bottom:6px solid var(--c2);margin-bottom:14px}
+.club-head small{color:#fff;opacity:.9;font:400 .78rem var(--label);letter-spacing:.12em;text-transform:uppercase}
+#app .club-head h2{margin:0;color:#fff;font-size:clamp(2rem,6vw,3rem)}
+.chip.big{width:56px;height:56px;border:8px solid var(--c2);background:var(--board)}
+.club-facts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
+.club-facts div{background:var(--surface);border-top:4px solid var(--turf);border-radius:0 0 6px 6px;padding:10px 14px;min-width:140px}
+.club-facts dt{color:var(--muted);font-size:.82rem}
+.club-facts dd{margin:0;font-weight:700}
+.crumbs .pick{display:flex;align-items:center;gap:8px;color:var(--muted)}
+li .rec{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:.9rem}
+.typed{font-family:'Courier Prime','Courier New',monospace}
+.marker{font-family:'Permanent Marker','Comic Sans MS',cursive;font-weight:400}
+.dviews{display:inline-flex;background:var(--rule-soft);border-radius:6px;padding:3px;gap:2px;margin:6px 0 14px;flex-wrap:wrap}
+.dviews button{border:0;background:transparent;font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:40px}
+.dviews [aria-pressed=true]{background:var(--turf);color:var(--band-fg)}
+.cork{display:flex;gap:14px;align-items:flex-start;border:14px solid #6b4a2b;border-radius:4px;padding:14px;box-shadow:inset 0 0 0 2px #4d341e,inset 0 6px 18px rgba(0,0,0,.35);
+  background-color:#c49866;background-image:radial-gradient(rgba(90,55,25,.45) 1px,transparent 1.5px),radial-gradient(rgba(255,235,200,.35) 1px,transparent 1.5px),radial-gradient(rgba(70,40,15,.3) 1.5px,transparent 2px);
+  background-size:7px 7px,11px 11px,17px 17px;background-position:0 0,3px 5px,8px 2px;color:#17201b}
+.cb-grid{flex:1;min-width:0;overflow-x:auto}
+.cb-row{display:grid;grid-template-columns:84px repeat(7,minmax(128px,1fr));gap:8px;padding:10px 0;border-top:2px dashed rgba(60,35,15,.35)}
+.cb-row.cb-heads{border-top:0;padding-top:0;align-items:end}
+.cb-head{justify-self:center;background:rgba(255,252,235,.85);padding:2px 10px;font:400 .95rem 'Permanent Marker',cursive;transform:rotate(-1.5deg);box-shadow:0 1px 2px rgba(0,0,0,.25);white-space:nowrap}
+.cb-tier{align-self:start;background:#f2e6c9;padding:8px 6px;text-align:center;transform:rotate(-3deg);box-shadow:0 2px 3px rgba(0,0,0,.3);font:400 .95rem/1.1 'Permanent Marker',cursive}
+.cb-tier.t-r1{color:#b3202a}.cb-tier.t-d2{color:#1e5b37}.cb-tier.t-d3{color:#33403a}
+.cb-cell{display:flex;flex-direction:column;gap:12px;align-items:center;min-width:0}
+.icard{position:relative;display:block;width:100%;max-width:150px;text-align:left;padding:10px 9px 7px;border:0;border-top:4px solid var(--g);border-radius:0;color:#17201b;
+  background-color:#fffdf5;background-image:repeating-linear-gradient(transparent 0 17px,#dbe6f0 17px 18px);box-shadow:0 3px 5px rgba(0,0,0,.35);overflow:visible;font:inherit}
+.cb-cell .icard:nth-child(4n+1){transform:rotate(-2deg)}.cb-cell .icard:nth-child(4n+2){transform:rotate(1.5deg)}.cb-cell .icard:nth-child(4n+3){transform:rotate(-.8deg)}.cb-cell .icard:nth-child(4n){transform:rotate(2deg)}
+.icard:hover,.icard:focus-visible{transform:rotate(0) scale(1.04);z-index:2}
+.g-qb{--g:#1d3f8a}.g-skill{--g:#2f6fb3}.g-ol{--g:#5b6974}.g-dl{--g:#b3202a}.g-lb{--g:#b4520f}.g-db{--g:#6a3d9a}.g-st{--g:#3d5245}
+.pin{position:absolute;top:-8px;left:50%;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f4f4f0,#9a9a92);box-shadow:0 2px 2px rgba(0,0,0,.45);z-index:2}
+.pin.on{background:radial-gradient(circle at 35% 35%,#ff6b5e,#a51d14)}
+.ic-top{display:flex;justify-content:space-between;align-items:baseline;gap:4px}
+.ic-meta{font:700 .76rem 'Courier Prime',monospace;color:#33403a}
+.ic-grade{font:400 1.35rem/1 'Permanent Marker',cursive;color:#b3202a}
+.ic-name{display:block;font:700 .92rem/1.15 'Courier Prime',monospace}
+.ic-col{display:block;font:400 .76rem 'Courier Prime',monospace;color:#4f5a52;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ic-foot{display:flex;justify-content:space-between;align-items:center;margin-top:3px;font:400 .72rem 'Courier Prime',monospace;color:#4f5a52}
+.ic-dots{color:#1e5b37;letter-spacing:1px}
+.ic-trend{font:400 .9rem 'Permanent Marker',cursive}.ic-trend.up,.clip .up{color:#1e5b37}.ic-trend.down,.clip .down{color:#b3202a}
+.ic-inj{position:absolute;right:6px;top:30px;border:2px solid #b3202a;color:#b3202a;font:700 .68rem 'Courier Prime',monospace;padding:0 3px;transform:rotate(-12deg)}
+.icard.taken{opacity:.62;filter:grayscale(.5)}
+.icard.taken::after{content:'';position:absolute;left:6px;right:6px;top:50%;height:3px;background:#17201b;transform:rotate(-8deg);opacity:.75}
+.ic-sticker{position:absolute;right:-8px;bottom:-8px;width:50px;height:50px;border-radius:50%;background:#17201b;color:#ffd45a;display:flex;align-items:center;justify-content:center;text-align:center;font:800 .78rem/1 var(--display);transform:rotate(10deg);box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:3}
+.cb-more{border:0;background:rgba(255,252,235,.85);font:400 .85rem 'Permanent Marker',cursive;padding:2px 10px;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.cb-notes{width:230px;flex:none;display:flex;flex-direction:column;gap:16px}
+.sticky{position:relative;padding:12px 14px 14px;box-shadow:0 4px 8px rgba(0,0,0,.3);color:#17201b}
+.sticky.yellow{background:#fff27a;transform:rotate(1.5deg)}.sticky.pink{background:#ffd0dc;transform:rotate(-2deg)}.sticky.paper{background:#fffdf3;transform:rotate(-1deg)}
+.sticky .marker{font-size:1rem}.sticky .big{font:900 2.2rem/1 var(--display);text-transform:uppercase}
+.sticky p{margin:4px 0 8px;font:400 .82rem 'Courier Prime',monospace}
+.sticky button{display:block;width:100%;margin-top:6px;min-height:42px;border:1px solid #17201b;background:transparent;color:#17201b;font:800 .95rem var(--display);letter-spacing:.06em;text-transform:uppercase}
+.sticky button.dark{background:#17201b;color:#fff}
+.sticky label{display:flex;flex-direction:column;gap:4px;font-size:.8rem}.sticky select{font:400 .8rem 'Courier Prime',monospace;background:#fffef0;color:#17201b}
+.sticky ul.typed li{display:block;padding:2px 0;border:0;font-size:.8rem}
+.key p{line-height:1.6}
+.clipping{background:#fbf8ee;padding:12px;transform:rotate(1deg);box-shadow:0 3px 6px rgba(0,0,0,.3);font-family:Georgia,'Times New Roman',serif;color:#17201b}
+.clipping .masthead{font:700 .7rem Georgia,serif;letter-spacing:.12em;text-transform:uppercase;border-bottom:2px solid #17201b;padding-bottom:3px;margin:4px 0 6px}
+.clipping p{margin:0 0 6px;font-size:.82rem;line-height:1.35}
+.clipping button{border:0;background:none;padding:0;color:#1e5b37;text-decoration:underline;font:700 .8rem Georgia,serif}
+.clipboard{background:#8a5a2f;border-radius:14px;padding:30px 14px 14px;box-shadow:0 8px 18px rgba(0,0,0,.3);position:relative}
+.clipboard::before{content:'';position:absolute;top:-12px;left:50%;width:180px;margin-left:-90px;height:34px;border-radius:8px 8px 14px 14px;background:linear-gradient(#e9eaeb,#a7abaf 60%,#d9dbdd);box-shadow:0 3px 4px rgba(0,0,0,.4)}
+.sheet{background:#fffdf6;color:#17201b;padding:14px 16px 10px}
+.sheet-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+#app .sheet h2.marker{margin:0;font:400 1.6rem 'Permanent Marker',cursive;text-transform:none}
+.chips{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0 8px}
+.chips button{border:2px solid #17201b;border-radius:999px;background:transparent;color:#17201b;font:700 .85rem 'Courier Prime',monospace;padding:4px 11px;min-height:36px}
+.chips button span{font-weight:400;opacity:.75}
+.chips [aria-pressed=true]{background:#17201b;color:#fff}
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.filters label{display:flex;gap:6px;align-items:center;font-size:.9rem}
+.filters input{font:400 .9rem 'Courier Prime',monospace;padding:6px 8px;min-height:36px;box-sizing:border-box;border:1px solid #9ea79f;border-radius:3px;background:#fff;color:#17201b;width:190px}
+.filters button{font:400 .88rem 'Courier Prime',monospace;border:1px solid #9ea79f;border-radius:3px;background:#fff;color:#17201b;padding:5px 10px;min-height:36px}
+.filters [aria-pressed=true]{background:#fff27a}
+table.clip{background:transparent;font:400 .9rem 'Courier Prime',monospace;color:#17201b;border-top:2px solid #17201b}
+table.clip th{border-bottom:1px solid #9ea79f;padding:4px 6px;white-space:nowrap}
+table.clip th button{border:0;background:none;padding:2px 0;font:700 .78rem 'Courier Prime',monospace;text-transform:uppercase;letter-spacing:.04em;color:#33403a}
+table.clip th[aria-sort=ascending] button,table.clip th[aria-sort=descending] button{color:#b3202a}
+table.clip td{border-bottom:1px solid #dbe6f0;padding:5px 6px;vertical-align:middle}
+table.clip td .pin{position:static;display:inline-block;margin:0 6px 0 0;width:11px;height:11px;vertical-align:-1px}
+table.clip .plink{font:700 .95rem 'Courier Prime',monospace;color:#17201b}
+table.clip small{font-size:.76rem;color:#4f5a52}
+table.clip td.marker{font-size:1.15rem;color:#b3202a}
+table.clip .dots{color:#1e5b37;letter-spacing:1px}
+table.clip .trend{font-family:'Permanent Marker',cursive}
+table.clip tr.taken{opacity:.55}
+table.clip .calls button{font:700 .8rem 'Courier Prime',monospace;min-height:32px}
+.pos{display:inline-block;min-width:30px;text-align:center;padding:1px 5px;border-radius:3px;color:#fff;font-weight:700;font-size:.78rem;background:var(--g)}
+.sr{position:absolute;left:-9999px}
+.empty{text-align:center;padding:20px;color:#4f5a52}
+.pmodal{position:fixed;inset:0;z-index:10;background:rgba(20,14,8,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.icard-big{position:relative;width:min(560px,100%);max-height:calc(100vh - 32px);overflow-y:auto;color:#17201b;padding:18px 24px 20px;transform:rotate(-.6deg);box-shadow:0 16px 40px rgba(0,0,0,.45);
+  background-color:#fffdf5;background-image:linear-gradient(transparent 46px,#e7a1a1 46px,#e7a1a1 48px,transparent 48px),repeating-linear-gradient(transparent 0 25px,#cfe0ef 25px 26px)}
+.icard-big .pin{width:20px;height:20px;margin-left:-10px;top:-10px}
+.ib-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;min-height:30px}
+.ib-top .typed{font-weight:700;font-size:.88rem}
+.ib-top .ic-grade{font-size:2.2rem}
+#app .icard-big h2{margin:12px 0 4px;font:700 1.7rem/1.1 'Courier Prime',monospace;text-transform:none}
+.icard-big p{margin:0 0 6px;line-height:26px}
+.icard-big .pen{font:400 1.02rem/26px 'Permanent Marker',cursive;color:#1d3f8a}
+.icard-big ul.notes li{display:block;padding:0;border:0;line-height:26px;font-size:.88rem}
+.icard-big .controls{margin:10px 0 0}
+@media (max-width:700px){.cork{flex-direction:column;align-items:stretch;border-width:8px;padding:10px}.cb-grid{width:100%}.cb-notes{width:100%;flex-direction:row;flex-wrap:wrap}.cb-notes>*{flex:1 1 200px}
+  .cb-row{grid-template-columns:64px repeat(7,140px)}}
+@media (max-width:700px){.pcard-wrap{flex-basis:100%}}
+.desk>aside li strong{font-size:.9rem;margin-right:6px}
 #app{padding:25px 0}
-#app>small{letter-spacing:.11em;font-weight:700}
+#app>small{font:400 .82rem var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--link)}
 #app h2{margin:5px 0 14px}
 #app p{max-width:75ch}
 .controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:var(--muted)}
@@ -63,9 +254,10 @@ strong{font-size:1.05rem}
 .club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}
 table{width:100%;border-collapse:collapse;background:var(--surface);font-size:.9rem;font-variant-numeric:tabular-nums}
 th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
+thead th{font:800 .9rem var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--rule-strong)}
 .units{display:flex;flex-wrap:wrap;gap:12px}
-.units>div{background:var(--surface);padding:12px 18px;border-top:3px solid var(--accent);min-width:115px}
-.units b{display:block;font:700 1.5rem var(--display)}
+.units>div{background:var(--surface);padding:12px 18px;border-top:4px solid var(--turf);border-radius:0 0 6px 6px;min-width:115px}
+.units b{display:block;font:900 1.8rem/1.05 var(--display)}
 .units>div{max-width:100%}
 .compare{min-width:340px}
 @media (max-width:560px){.compare{font-size:.82rem}.compare tbody th{width:5.6rem}.compare th,.compare td{padding:6px 5px}}
@@ -81,9 +273,7 @@ th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
 .ledger .sum th{border-bottom:2px solid var(--rule-strong)}
 fieldset.exclude{border:1px solid var(--rule);border-radius:6px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 16px;padding:10px 12px;color:var(--muted)}
 .clock{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.clock small{letter-spacing:.08em;text-transform:uppercase;font-weight:700}
-#jump{display:flex;gap:8px;flex-wrap:wrap}
-#jump:empty{display:none}
+.clock small{font:400 .78rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--band-fg)}
 figure.map{margin:0 0 16px}
 #marketMap{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:760/590}
 figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
@@ -110,23 +300,25 @@ footer{border-top:1px solid var(--rule);padding-top:16px;font-size:.85rem}
 @keyframes livePulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.bug .live{animation:none}}
 .bugteam{display:flex;align-items:center;gap:8px;background:var(--team);border-bottom:4px solid var(--team2);padding:6px 10px;min-width:9.5rem;flex:1 1 9.5rem;text-shadow:0 1px 2px #000a}
-.bugteam .abbr{font-weight:700;letter-spacing:.06em}
-.bugteam b{font:700 1.6rem system-ui,sans-serif;margin-left:auto}
+.bugteam .abbr{font:800 1.15rem var(--display);letter-spacing:.08em}
+.bugteam b{font:800 1.9rem/1 var(--display);margin-left:auto;letter-spacing:.04em}
 .bugteam .to{display:flex;gap:3px}
 .bugteam .to i{width:9px;height:4px;background:#fff4;border-radius:1px}
 .bugteam .to i.on{background:#ffd45a}
 .bugteam .poss{color:#ffd45a;font-size:.8rem}
 .bugclock,.bugdown{display:flex;align-items:center;padding:6px 12px;font-weight:700;white-space:nowrap}
-.bugdown{background:#ffd45a;color:#11181a;min-width:5.5rem;justify-content:center}
+.bugdown{background:#ffd45a;color:#11181a;min-width:5.5rem;justify-content:center;font:800 1.15rem var(--display);letter-spacing:.04em}
 .bugdown:empty{display:none}
+.bugclock{background:var(--board-cell);color:var(--amber);font:800 1.25rem var(--display);letter-spacing:.06em}
+.bug{border:3px solid var(--board-edge);background:var(--board)}
 svg.field{display:block;width:100%;height:auto;border-radius:6px;max-width:1240px}
 svg.field.vertical{height:min(64vh,900px);width:auto;max-width:100%;margin:0 auto}
 .field .yd10{stroke:#ffffffc0;stroke-width:3}.field .yd5{stroke:#ffffff60;stroke-width:2}
-.field .num{fill:#ffffffd0;font:700 30px system-ui,sans-serif;text-anchor:middle;dominant-baseline:middle}
+.field .num{fill:#ffffffd0;font:800 34px var(--display);text-anchor:middle;dominant-baseline:middle}
 .field.vertical .num{font-size:26px}
-.field .ez{fill:#fff;font:700 52px system-ui,sans-serif;dominant-baseline:middle;text-anchor:middle;dominant-baseline:middle;letter-spacing:.2em;paint-order:stroke;stroke:#0006;stroke-width:4}
+.field .ez{fill:#fff;font:900 60px var(--display);dominant-baseline:middle;text-anchor:middle;dominant-baseline:middle;letter-spacing:.2em;paint-order:stroke;stroke:#0006;stroke-width:4}
 .field .los{stroke:#3d8bff;stroke-width:5}.field .ltg{stroke:#ffd45a;stroke-width:5}
-.field .bar{fill:#fff;font:700 24px system-ui,sans-serif;dominant-baseline:middle;paint-order:stroke;stroke:#000b;stroke-width:5}
+.field .bar{fill:#fff;font:800 26px var(--display);dominant-baseline:middle;paint-order:stroke;stroke:#000b;stroke-width:5}
 .field .inc{fill:none;stroke-width:4}
 .field .ball{fill:#8a4b22;stroke:#fff;stroke-width:2}
 .nowplay{font-size:1.15rem;min-height:3.4em;margin:12px 0 0}
@@ -137,10 +329,34 @@ ol.pbp{list-style:none;padding:0;margin:0;max-height:28rem;overflow-y:auto;backg
 ol.pbp li{display:block;padding:8px 12px}
 ol.pbp li.note{color:var(--muted);font-style:italic}
 .boxscore{max-width:520px}
-#watchLive{font-weight:700;padding:14px 20px}
+#watchLive{font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;min-height:48px;background:var(--flag);color:var(--flag-fg);border:0}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+.navrow{display:flex;align-items:flex-end;gap:12px;border-bottom:3px solid var(--turf)}
+.navrow #tabs{border-bottom:0;flex:1;min-width:0}
+.navrow .find{padding-bottom:6px}
+.navrow .find input{background:var(--surface);color:var(--fg);border:1px solid var(--control-border)}
+#tabs .ico,#tabs .lbl{display:none}
+#tabs .ico{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:700px){
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+  .navrow{border:0;display:block}
+  .navrow .find{padding:12px 0 0}
+  #tabs{position:fixed;left:0;right:0;bottom:0;z-index:8;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;padding:4px 4px calc(6px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--rule-strong);box-shadow:0 -4px 14px rgba(0,0,0,.12);overflow:visible}
+  #tabs button{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;min-height:56px;border-radius:6px;font:700 .72rem var(--body);letter-spacing:.02em;text-transform:none;color:var(--muted)}
+  #tabs [aria-current=page]{background:transparent;color:var(--link);box-shadow:none}
+  #tabs .ico,#tabs .lbl{display:block}
+  #tabs .full{display:none}
+  #tabs .badge{position:absolute;top:2px;left:calc(50% + 6px);margin:0;min-width:18px;padding:0 5px;font-size:.68rem}
+  .menu{position:fixed;left:0;right:0;bottom:0;top:auto;max-width:none;width:auto;border-radius:14px 14px 0 0;padding:14px 12px calc(16px + env(safe-area-inset-bottom,0px));z-index:11;max-height:75vh;overflow-y:auto;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+  .find .menu{position:absolute;left:0;right:0;bottom:auto;top:calc(100% + 6px);border-radius:8px;padding:8px}
+  #confirmPane{align-items:flex-end;padding:0}
+  #confirmPane>div{border-radius:14px 14px 0 0;max-height:85vh;padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))}
+  .pmodal{align-items:flex-end;padding:0}
+  header:has(.menu:not([hidden])){z-index:12}
+}
+@media (max-width:560px){.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box}.scoreboard div{padding:3px 2px}.scoreboard dt{font-size:.55rem;letter-spacing:.08em}.scoreboard dd{font-size:1.2rem}header .clock{margin-left:0;width:100%;align-items:stretch}.advance{justify-content:flex-start}#advance{flex:1 1 100%}.pc-board{grid-template-columns:repeat(3,minmax(0,1fr))}.pc-board dd{font-size:1.8rem}.find,.find input{width:100%}}
 </style>
-<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><div class="navrow"><nav id="tabs" aria-label="Sections"></nav><div class="find"><input id="findPlayer" type="search" placeholder="Find any player" aria-label="Find any player, any club" autocomplete="off"><div id="findResults" class="menu" hidden></div></div></div><nav id="subtabs" hidden></nav><div id="app"></div><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -522,6 +738,21 @@ const byName=new Map(clubs.map(t=>[teamName(t.id),t.id]));
 // All text that reaches innerHTML goes through esc(). Colors go through color().
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const color=v=>/^#[0-9a-f]{6}$/i.test(v)?v:'#888888';
+// A club color dark enough to carry white text (4.5:1), darkened toward black in steps when it is too pale.
+const luminance=hex=>{const ch=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.03928?c/12.92:((c+.055)/1.055)**2.4);return .2126*ch[0]+.7152*ch[1]+.0722*ch[2];};
+const contrast=(a,b)=>{const [x,y]=[luminance(a),luminance(b)].sort((p,q)=>q-p);return (x+.05)/(y+.05);};
+function inkable(hex){
+  let c=color(hex).toLowerCase();
+  for(let k=0;k<12&&contrast(c,'#ffffff')<4.5;k++)c='#'+[1,3,5].map(i=>Math.round(parseInt(c.slice(i,i+2),16)*.88).toString(16).padStart(2,'0')).join('');
+  return c;
+}
+// The owner's club colors as CSS variables; the league's turf green before a club is chosen.
+function setTeamColors(S){
+  const t=S?.club&&byId.get(S.club),root=document.documentElement.style;
+  const vars=t?{'--team':inkable(t.primary),'--team-fg':'#ffffff','--team2':color(t.secondary)}:{'--team':'#1e5b37','--team-fg':'#ffffff','--team2':'#f7d117'};
+  for(const [k,v] of Object.entries(vars))root.setProperty?.(k,v);
+  return vars;
+}
 const isInt=(v,min=-Infinity,max=Infinity)=>Number.isInteger(v)&&v>=min&&v<=max;
 const $=sel=>document.querySelector(sel);
 const sentence=m=>/[.!?]$/.test(m)?m:m+'.';
@@ -529,45 +760,7 @@ const sentence=m=>/[.!?]$/.test(m)?m:m+'.';
 // ---------------------------------------------------------------------------
 // Club directory pane
 // ---------------------------------------------------------------------------
-const filter=$('#conf');
-function renderDirectory(){
-  const directory=$('#directory');
-  directory.replaceChildren();
-  for(const conference of ['Charter','Union']){
-    if(filter.value!=='All'&&filter.value!==conference)continue;
-    const heading=document.createElement('h2');
-    heading.textContent=conference+' Conference';
-    const grid=document.createElement('div');
-    grid.className='grid';
-    directory.append(heading,grid);
-    for(const division of divisions){
-      const card=document.createElement('article');
-      const title=document.createElement('h3');
-      title.textContent=division;
-      const list=document.createElement('ul');
-      for(const team of clubs.filter(t=>t.conference===conference&&t.division===division)){
-        const row=document.createElement('li');
-        const chip=document.createElement('span');
-        chip.className='chip';
-        chip.style.backgroundColor=color(team.primary);
-        chip.style.borderColor=color(team.secondary);
-        const label=document.createElement('button');label.className='club';label.dataset.id=team.id;
-        const market=document.createElement('small');
-        market.textContent=team.market;
-        const name=document.createElement('strong');
-        name.textContent=team.nickname;
-        label.append(market,name);
-        row.append(chip,label);
-        list.append(row);
-      }
-      card.append(title,list);
-      grid.append(card);
-    }
-  }
-}
-filter.addEventListener('change',renderDirectory);
 $('#save').onclick=()=>offerFile('continental-gridiron-league.json',JSON.stringify(league,null,2));
-renderDirectory();
 
 // ---------------------------------------------------------------------------
 // Seeded randomness. The generator state lives in the save, so the same save
@@ -1783,7 +1976,7 @@ function relocationPanel(S){
     const V=S.league.meeting;
     html+='<p>'+esc('Filed after '+weekLabel(A.filedWeek)+': move the club to the '+A.siteName+' in '+A.destination.name+'. The owners vote after '+weekLabel(V.week)+', and it takes '+VOTE_THRESHOLD+' of 32. '+
       money(A.costs.total)+' is set aside ('+money(A.paid.owner)+' of your cash, '+money(A.paid.debt)+' borrowed) and comes back if the vote fails. The '+money(A.costs.filing)+' filing cost does not.')+'</p>'+
-      '<p>'+esc('Everyone knows: '+A.from.market+' fans and the press are watching. Call owners on the League tab before the vote.')+'</p>'+
+      '<p>'+esc('Everyone knows: '+A.from.market+' fans and the press are watching. Call owners in the League office before the vote.')+'</p>'+
       '<button id="withdrawRelocation">Withdraw the application</button>';
     return html;
   }
@@ -1883,7 +2076,6 @@ function applyIdentity(S){
   groups.splice(0,groups.length,...buildGroups());
   byAbbr.clear();byName.clear();
   for(const t of clubs){byAbbr.set(t.abbr,t);byName.set(teamName(t.id),t.id);}
-  renderDirectory();
 }
 
 const pendingApplication=S=>{const A=S.stadium.application;return A&&(A.status==='pending'||A.status==='approved')?A:null;};
@@ -2870,9 +3062,11 @@ function dealLabel(S,M){
   if(!M.holder)return 'Up now';
   return M.renewal<=cur(S).number?'Up for renewal':'Through season '+(M.renewal-1);
 }
-function leagueView(){
+// The League office: broadcast rights, the owners and their votes, and the news, each its own page.
+function leagueView(){return marketsView()+ownersView()+newsView();}
+function marketsView(){
   const S=save,L=S.league,s=cur();
-  let html=heading('LEAGUE','Broadcast markets')+
+  let html=heading('LEAGUE OFFICE','Broadcast rights')+
     '<figure class="map"><canvas id="marketMap" role="img" aria-label="Map of broadcast markets. Each market city’s area is filled with the color of the club that holds its broadcast rights."></canvas>'+
     '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed rings markets up for renewal':'')+'.</figcaption></figure>';
   html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Deal</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
@@ -2880,7 +3074,7 @@ function leagueView(){
     return '<tr><td>'+esc(m.name)+'<small>'+esc('Metro '+m.metro+'M · potential '+m.potential)+'</small></td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(dealLabel(S,M)+(M.holder?' · $'+M.fee+'M a year':''))+'</td><td>'+esc(fans)+'</td></tr>';
   }).join('')+'</tbody></table></div>';
   if(L.rules.firstRefusal)html+='<p>'+esc('First refusal is league policy: at renewal a holder keeps its market by matching the winning offer, if that offer is no more than a quarter above its own.')+'</p>';
-  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>'+headlines(S);
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>';
   const open=openContests(S),decided=L.contests.filter(C=>C.status==='decided'&&C.season===s.number);
   if(open.length){
     const pick=open.find(C=>C.marketId===leagueUi.market)??open.find(C=>C.holder===S.club)??open.find(C=>C.bid)??
@@ -2916,7 +3110,12 @@ function leagueView(){
   const mineHeld=OPEN_MARKETS.filter(m=>L.markets[m.id].holder===S.club);
   if(mineHeld.length&&s.completed<s.weeks.length)html+='<h2>Your markets</h2><ul>'+mineHeld.map(m=>{const M=L.markets[m.id];
     return '<li><strong>'+esc(m.name)+'</strong> '+esc(Math.round(M.fans[S.club]??0)+'% of fans · $'+M.fee+'M a year · '+dealLabel(S,M).toLowerCase()+'. This week: '+coverageText(S,m.id,s.completed))+'</li>';}).join('')+'</ul>';
-  const V=L.meeting;
+  return html;
+}
+function ownersView(){
+  const S=save,L=S.league,V=L.meeting;
+  let html=heading('LEAGUE OFFICE','Owners and votes');
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>';
   if(V){
     const sponsor=L.owners[V.sponsor],name=KNOWN_MARKETS.get(V.marketId).name,reloc=V.kind==='relocation',A=S.stadium.application;
     if(reloc)html+='<h2>League meeting</h2><p>'+esc('You have asked the owners to let your club move from '+A.from.market+' to '+name+'. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
@@ -2935,9 +3134,17 @@ function leagueView(){
         const calls=V.status==='scheduled'&&t.id!==V.sponsor&&V.callsLeft>0?'<button data-call="'+t.id+'">Call</button><button data-promise="'+t.id+'">Promise support</button>':'';
         return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+esc(stand)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td><td class="calls">'+calls+'</td></tr>';
       }).join('')+'</tbody></table></div>';
+  }else{
+    html+='<p>No vote is scheduled. How the other owners feel about you, and what they remember:</p>'+
+      '<div class="wide"><table class="owners"><thead><tr><th>Club</th><th>Owner</th><th>Toward you</th><th>What they remember</th></tr></thead><tbody>'+
+      clubs.filter(t=>t.id!==S.club).map(t=>{
+        const o=L.owners[t.id],m=o.memory.at(-1);
+        return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
   }
-  return html+leagueTrades(S)+headlines(S);
+  return html;
 }
+function newsView(){return heading('LEAGUE OFFICE','News')+headlines(save)+leagueTrades(save);}
 function leagueTrades(S){
   const list=[...(S.league.transactions??[])].reverse().slice(0,12);
   if(!list.length)return '';
@@ -3388,7 +3595,7 @@ function jumpTo(S,target){
 }
 function jumpTargets(S){
   const t=now(S),n=cur(S).number;
-  return [[REGULAR_WEEKS+1,'Playoffs: Wild Card round'],[22,'Championship Game'],[MILESTONES.review,'February Week 1 · season review'],
+  return [[TRADE_DEADLINE,capital(weekLabel(TRADE_DEADLINE))+' · trade deadline'],[REGULAR_WEEKS+1,'Playoffs: Wild Card round'],[22,'Championship Game'],[MILESTONES.review,'February Week 1 · season review'],
     [MILESTONES.leagueYear,'March Week 2 · new league year'],[MILESTONES.draft,'April Week 4 · draft'],[MILESTONES.otas,'May Week 2 · OTAs'],
     [MILESTONES.camp,'July Week 4 · training camp'],[MILESTONES.cuts,'August Week 4 · final cuts'],[SEASON_TICKS+1,'Season '+(n+1)+' opener']]
     .filter(([tick])=>tick>t);
@@ -3399,6 +3606,66 @@ function advanceLabel(S){
   if(t<22)return 'Play the '+ROUND_NAMES[t-18]+' →';
   if(t<SEASON_TICKS)return 'Advance to '+weekLabel(t+1)+' →';
   return 'Open season '+(s.number+1)+' →';
+}
+
+// Everything waiting on the owner, from every corner of the club. The desk inbox, the nav badges and the Advance
+// button all read this list, so they cannot disagree. Each item: {id, title, detail, route, deadline, fate, actions}.
+// deadline is the tick at which it is decided without you (null: no deadline). Deadlines fire when the clock reaches
+// them; GM proposals last through the week they were made. actions are [label, data-attribute, value].
+function pendingItems(S){
+  if(!S.club)return [];
+  const t=now(S),s=cur(S),L=S.league,items=[],add=x=>items.push(x);
+  if(S.offer){const p=S.rosters[S.offer.seller]?.find(x=>x.id===S.offer.targetId);
+    add({id:'quote',title:'Your GM’s price on '+(p?p.pos+' '+p.name:'a trade target')+' ('+byId.get(S.offer.seller).abbr+')',detail:'Talks are open on the Trades page.',
+      route:'trades',deadline:t+1,fate:'The quote expires.',actions:[['Open talks','tab','trades']]});}
+  for(const P of S.staff?.proposals??[]){
+    if(P.kind==='trade'||P.kind==='offer')add({id:'p'+P.id,title:tradeSummary(S,P),detail:(P.kind==='trade'?'Your GM: ':'Your GM on it: ')+tradeRead(S,P.trade).text,
+      route:'trades',deadline:P.week+1,fate:P.kind==='trade'?'The chance passes.':'Their offer expires.',
+      actions:[[P.kind==='trade'?'Make the trade':'Accept','approve',P.id],[P.kind==='trade'?'Pass':'Decline','reject',P.id]]});
+    else add({id:'p'+P.id,title:(P.kind==='fa'?'Sign free agent ':'Re-sign ')+P.pos+' '+P.name,
+      detail:'Age '+P.age+', rating '+P.rating+' · '+P.terms.years+' yrs, '+m1(termsHit(P.terms))+' a year'+(P.terms.bonus?', '+m1(P.terms.bonus)+' bonus':''),
+      route:'contracts',deadline:P.kind==='fa'?P.week+1:null,fate:'The proposal lapses.',actions:[['Approve','approve',P.id],['Decline','reject',P.id]]});
+  }
+  const N=S.finance.naming;
+  if(N.status==='awaiting')add({id:'naming',title:'Naming-rights offer from '+N.offer.company,detail:'Your negotiator has terms for you to sign or turn down.',
+    route:'finances',deadline:N.expiresWeek,fate:'The offer lapses.',actions:[['Review the deal','tab','finances']]});
+  const tracked=new Set(S.stadium.knowledge.map(f=>f.siteId)),filed=pendingApplication(S)?.siteId;
+  for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed)
+    add({id:'site-'+x.id,title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),detail:'A stadium site you have looked into. The offer is open until it expires.',
+      route:'stadium',deadline:x.expiresWeek,fate:'The site offer expires.',actions:[['Stadium page','tab','stadium']]});
+  for(const C of L.contests)if(C.status==='open'&&(C.holder===S.club||C.bid))
+    add({id:'rights-'+C.marketId,title:'Broadcast rights in '+openMarket(C.marketId).name,detail:C.bid?'Your offer is in: $'+C.bid.annual+'M a year for '+C.bid.years+' years.':'You hold these rights and have not made an offer to keep them.',
+      route:'markets',deadline:C.deadlineWeek,fate:C.bid?'The station decides on your $'+C.bid.annual+'M offer.':'The station decides, and you have made no offer for rights you hold.',actions:[[C.bid?'Revise offer':'Make an offer','tab','markets']]});
+  const V=L.meeting;
+  if(V?.status==='scheduled')add({id:'vote',title:V.kind==='relocation'?'League vote on your relocation':'League vote on first refusal',
+    detail:V.callsLeft>0?V.callsLeft+' call'+(V.callsLeft===1?'':'s')+' left before the meeting.':'No calls left before the meeting.',
+    route:'owners',deadline:V.week,fate:'The owners vote.',actions:[[V.callsLeft>0?'Lobby owners':'See where they stand','tab','owners']]});
+  const gameNext=s.completed<s.weeks.length||(t>=REGULAR_WEEKS&&t<22&&!!s.postseason&&playoffStatus(S,S.club).alive);
+  if(S.staff?.directives?.rosterMoves==='owner')rosterAlerts(S).forEach((a,k)=>add({id:'roster-'+k,title:a,detail:'You handle roster moves yourself.',
+    route:'depth',deadline:gameNext?t+1:null,fate:'Kickoff with the roster as it stands.',actions:[['Fix it','tab','depth']]}));
+  const C=S.staff?.clubs?.[S.club];
+  for(const role of ['hc','gm'])if(C?.[role]?.interim)add({id:'job-'+role,title:(role==='hc'?'Head coach':'General manager')+' job open',
+    detail:'An interim is filling in. Interview candidates and hire.',route:'staff',deadline:null,fate:'',actions:[['Search','tab','staff']]});
+  const D=S.draft;
+  if(D.status==='live'&&D.order[D.pick]?.owner===S.club)add({id:'draft',title:'You are on the clock',detail:'Pick '+D.order[D.pick].overall+', round '+D.order[D.pick].round+'.',
+    route:'draft',deadline:null,fate:'',actions:[['Draft room','tab','draft']]});
+  return items;
+}
+// What is decided before the clock reaches horizon (now+1 for one advance).
+const dueBy=(S,horizon)=>pendingItems(S).filter(x=>x.deadline!=null&&x.deadline<=horizon);
+const urgency=(S,x)=>x.deadline==null?'later':x.deadline<=now(S)+1?'expire':x.deadline<=now(S)+4?'soon':'later';
+const URGENCY=[['expire','Decided when you advance'],['soon','Due in the next few weeks'],['later','No deadline yet']];
+function itemHtml(S,x,{where=true}={}){
+  const u=urgency(S,x),sec=sectionOf(x.route),page=sec?.views.find(([id])=>id===x.route)?.[1];
+  const due=x.deadline==null?'':u==='expire'?'This week':'After '+weekLabel(x.deadline);
+  return '<li class="item '+u+'"><div class="what">'+(due?'<span class="when">'+esc(due)+'</span>':'')+
+    (where&&sec?'<button class="where" data-tab="'+esc(x.route)+'">'+esc(sec.label+(sec.views.length>1?' › '+page:''))+'</button>':'')+
+    '<strong>'+esc(x.title)+'</strong><small>'+esc(x.detail)+'</small></div><div class="acts">'+
+    x.actions.map(([label,attr,val],k)=>'<button class="'+(k?'':'primary')+'" data-'+attr+'="'+esc(val)+'">'+esc(label)+'</button>').join('')+'</div></li>';
+}
+function inboxHtml(S,list){
+  return URGENCY.map(([u,label])=>{const xs=list.filter(x=>urgency(S,x)===u);
+    return xs.length?'<h3 class="group">'+esc(label+' · '+xs.length)+'</h3><ul class="inbox">'+xs.map(x=>itemHtml(S,x)).join('')+'</ul>':'';}).join('');
 }
 
 // Words for calendar events.
@@ -3422,51 +3689,138 @@ function calendarEventText(S,e){
   return '';
 }
 
-// ---- Draft view ----------------------------------------------------------------
-function draftView(){
-  const S=save,D=S.draft,watch=new Set(S.scouting?.watch??[]);
-  const lvl=p=>S.scouting?.levels?.[p.id]??0,dots=p=>'●'.repeat(lvl(p))+'○'.repeat(3-lvl(p));
+// ---- Draft room ----------------------------------------------------------------
+// Three views of one class: the cork board (tiers by where your GM's grades rank each prospect, columns by
+// position group), the clipboard (every prospect, sortable and filterable), and the college wire.
+const DRAFT_GROUPS=[['qb','QB',['QB']],['skill','RB · WR · TE',['RB','WR','TE']],['ol','OL',['OT','OG','C','G','OL']],['dl','DL',['DE','DT','DL']],
+  ['lb','LB',['LB','OLB','ILB']],['db','DB',['CB','S','FS','SS','DB']],['st','K · P',['K','P','LS']]];
+const draftGroupOf=pos=>DRAFT_GROUPS.find(([,,list])=>list.includes(pos))?.[0]??'st';
+const DRAFT_TIERS=[['r1','1st round',32,99],['d2','Day 2',96,4],['d3','Day 3',224,3]];
+const DRAFT_SORTS=[['rank','#'],['name','Prospect'],['pos','Pos.'],['year','Yr'],['grade','Your grade'],['cons','Consensus'],['gap','Gap'],['scouted','Scouted'],['trend','Trend'],['health','Health']];
+const draftUi={profile:null,allWire:false,view:'board',group:'All',sort:'grade',dir:-1,q:'',watchOnly:false,unscouted:false,hideInjured:false,showTaken:false};
+// Everything the three views need about the class, computed once per draw.
+function draftBook(S){
+  const D=S.draft,watch=new Set(S.scouting?.watch??[]),lvl=p=>S.scouting?.levels?.[p.id]??0;
   const grade=p=>S.club?perceivedGrade(S,S.club,p):p.grade;
-  const trend=p=>{const d=p.grade-(p.startGrade??p.grade);return d>=3?'↑'+d:d<=-3?'↓'+(-d):'–';};
-  const name=p=>(watch.has(p.id)?'★ ':'')+p.name;
-  const actions=p=>(D.status==='scouting'&&S.club&&lvl(p)<3?'<button data-scoutp="'+esc(p.id)+'"'+(S.scouting.points<1?' disabled':'')+'>Scout</button>':'')+
-    (S.club?'<button data-watch="'+esc(p.id)+'">'+(watch.has(p.id)?'Unwatch':'Watch')+'</button>':'')+'<button data-profile="'+esc(p.id)+'">Profile</button>';
-  const table=(list,extra)=>'<div class="wide"><table class="board"><thead><tr><th>#</th><th>Prospect</th><th>Pos.</th><th>College</th><th>Yr</th><th>Consensus</th><th>Your grade</th><th>Scouted</th><th>Trend</th><th></th></tr></thead><tbody>'+
-    list.map(p=>'<tr><td>'+(D.prospects.indexOf(p)+1)+'</td><td>'+esc(name(p))+(p.injured?'<small>Injured this season</small>':'')+'</td><td>'+esc(p.pos)+'</td><td>'+esc(p.college)+'</td><td>'+esc(p.year??'')+'</td><td>'+p.grade+'</td><td>'+grade(p)+'</td><td>'+dots(p)+'</td><td>'+trend(p)+'</td><td class="calls">'+(extra?extra(p):'')+actions(p)+'</td></tr>').join('')+'</tbody></table></div>';
-  let html=heading('DRAFT AND SCOUTING','Class of season '+D.season);
-  const prof=draftUi.profile&&[...D.prospects,...(D.nextClass??[])].find(p=>p.id===draftUi.profile);
-  if(prof)html+='<div class="confirm negotiation"><div><strong>'+esc(prof.pos+' '+prof.name+', '+prof.college+' ('+TIER_NAMES[collegeTier(prof.college)]+'; '+(prof.year??'')+', age '+prof.age+')')+'</strong><small>'+esc('Consensus grade '+prof.grade+(D.combineDone||prof.athletic&&D.status!=='scouting'?' · Combine athleticism '+prof.athletic:''))+'</small></div>'+
-    '<ul class="commitments">'+(prof.notes.length?prof.notes.map(n=>'<li>'+esc(shortLabel(n.week)+': '+n.text)+'</li>').join(''):'<li>No headlines yet.</li>')+'</ul>'+
-    (S.club?'<p>'+esc(scoutingReport(S,prof).join(' '))+'</p>':'')+'<div class="controls"><button id="closeProfile">Close</button></div></div>';
-  const mineOwned=S.club?S.picks.filter(p=>p.owner===S.club).sort((a,b)=>a.round-b.round):[];
-  if(D.status==='scouting'){
-    const scouted=Object.values(S.scouting?.levels??{}).filter(Boolean).length;
-    if(S.club)html+='<div class="units"><div><small>Scouting points</small><b>'+S.scouting.points+'</b>this week, '+pointsPerWeek(S)+' a week</div>'+
-      '<div><small>Prospects scouted</small><b>'+scouted+'</b>'+watch.size+' on your watch list</div>'+
-      '<div><small>Projected first pick</small><b>#'+projectedSlot(S)+'</b>on today’s standings</div>'+
-      '<div><small>Your picks</small><b>'+mineOwned.length+'</b>'+esc(mineOwned.slice(0,3).map(pickLabel).join(', ')+(mineOwned.length>3?'…':''))+'</div></div>';
-    html+='<p>'+esc('The draft is '+weekLabel(MILESTONES.draft)+'. The consensus grade moves with the college wire; your GM grade starts from the truth, pulled toward the hype and blurred by his scouting. Each scouting visit cuts through both: the first sharpens the grade, the second reveals work ethic and durability, the third tells you whether he is overrated.')+'</p>'+
-      (S.club?'<div class="controls"><label>Scouting assignments <select id="scoutAssign">'+option('gm','The GM spends what I leave',S.scouting.assign!=='owner')+option('owner','I assign them all',S.scouting.assign==='owner')+'</select></label></div>':'');
-    const weeks=[...D.wire].reverse().filter(w=>w.items.length).slice(0,draftUi.allWire?40:3);
-    html+='<h2>College wire</h2>'+(weeks.length?weeks.map(w=>'<h3 class="wirehead">'+esc(capital(weekLabel(w.week)))+'</h3><ul>'+w.items.map(it=>'<li>'+(it.kind==='game'?'<b>'+esc(it.text)+'</b>':(it.pid&&watch.has(it.pid))||(it.pid2&&watch.has(it.pid2))?'<strong>★ '+esc(it.text)+'</strong>':esc(it.text))+[it.pid,it.pid2].filter(Boolean).map(id=>' <button data-profile="'+esc(id)+'">Profile</button>').join('')+'</li>').join('')+'</ul>').join('')+
-      (D.wire.length>3?'<div class="controls"><button id="toggleWire">'+(draftUi.allWire?'Show the latest weeks':'Show every week')+'</button></div>':''):'<p>The college season starts with Week 1. The wire follows the class all fall.</p>');
-    const games=(D.slate??[]).filter(g=>!g.winner&&g.week>=now(S)).sort((a,b)=>a.week-b.week).slice(0,6);
-    if(games.length)html+='<h2>Big games ahead</h2><ul>'+games.map(g=>'<li>'+esc(capital(weekLabel(g.week))+': '+g.home+' vs. '+g.away+(g.name?', '+g.name:''))+'</li>').join('')+'</ul>';
-    const top=D.prospects.slice(0,40),extraWatch=D.prospects.filter(p=>watch.has(p.id)&&!top.includes(p));
-    html+='<h2>Big board</h2>'+table(top)+(extraWatch.length?'<h2>Also on your watch list</h2>'+table(extraWatch):'');
-    if(D.nextClass?.length)html+='<p>'+esc(D.nextClass.length+' juniors went back to school and will be in next year’s class.')+'</p>';
-    return html;
-  }
+  const taken=new Map(D.picks.map(x=>[x.prospectId,x]));
+  const ranked=[...D.prospects].sort((a,b)=>grade(b)-grade(a)||b.grade-a.grade);
+  const rank=new Map(ranked.map((p,i)=>[p.id,i]));
+  return {D,watch,lvl,grade,taken,ranked,rank,
+    dots:p=>'●'.repeat(lvl(p))+'○'.repeat(3-lvl(p)),
+    trend:p=>p.grade-(p.startGrade??p.grade)};
+}
+function trendText(d){return d>=3?'↑'+d:d<=-3?'↓'+(-d):'–';}
+function indexCard(S,B,p){
+  const t=B.taken.get(p.id),w=B.watch.has(p.id),d=B.trend(p);
+  const label=p.pos+' '+p.name+', '+p.college+', your grade '+B.grade(p)+(w?', on your watch list':'')+(t?', taken by '+byId.get(t.club).abbr+' at '+t.overall:'');
+  return '<button class="icard g-'+draftGroupOf(p.pos)+(t?' taken':'')+'" data-profile="'+esc(p.id)+'" aria-label="'+esc(label)+'">'+
+    '<span class="pin'+(w?' on':'')+'" aria-hidden="true"></span>'+
+    '<span class="ic-top"><span class="ic-meta">'+esc(p.pos+' · '+(p.year??''))+'</span><span class="ic-grade">'+B.grade(p)+'</span></span>'+
+    '<span class="ic-name">'+esc(p.name)+'</span><span class="ic-col">'+esc(p.college)+'</span>'+
+    '<span class="ic-foot"><span>cons '+p.grade+'</span><span class="ic-dots">'+B.dots(p)+'</span><span class="ic-trend'+(d>=3?' up':d<=-3?' down':'')+'">'+trendText(d)+'</span></span>'+
+    (p.injured?'<span class="ic-inj">INJ</span>':'')+(t?'<span class="ic-sticker">'+esc(byId.get(t.club).abbr)+'<br>#'+t.overall+'</span>':'')+'</button>';
+}
+function corkBoard(S,B){
+  const cols=DRAFT_GROUPS.map(([id,label])=>'<div class="cb-head">'+esc(label)+'</div>').join('');
+  let from=0;
+  const tiers=DRAFT_TIERS.map(([id,label,upTo,perCol])=>{
+    const inTier=B.ranked.slice(from,upTo);from=upTo;
+    return '<div class="cb-row"><div class="cb-tier t-'+id+'">'+esc(label)+'</div>'+DRAFT_GROUPS.map(([g])=>{
+      const here=inTier.filter(p=>draftGroupOf(p.pos)===g),shown=here.filter((p,i)=>i<perCol||B.watch.has(p.id));
+      return '<div class="cb-cell">'+shown.map(p=>indexCard(S,B,p)).join('')+(here.length>shown.length?'<button class="cb-more" data-dgroup="'+g+'">+'+(here.length-shown.length)+' more</button>':'')+'</div>';
+    }).join('')+'</div>';
+  }).join('');
+  return '<div class="cork"><div class="cb-grid"><div class="cb-row cb-heads"><div></div>'+cols+'</div>'+tiers+'</div>'+boardNotes(S,B)+'</div>';
+}
+function boardNotes(S,B){
+  const D=B.D;let html='<aside class="cb-notes">';
   if(D.status==='live'){
-    const slot=D.order[D.pick],mine=slot.owner===S.club,avail=draftAvailable(D);
-    html+='<p><b>'+esc('On the clock: pick '+slot.overall+' (round '+slot.round+'), '+teamName(slot.owner)+(slot.owner!==slot.origin?' via '+byId.get(slot.origin).market:''))+'</b></p>';
-    if(mine){
-      const gm=bestFor(S,S.club,avail);
-      html+='<p>'+esc('Your pick. The GM would take '+gm.pos+' '+gm.name+' of '+gm.college+'.')+'</p><div class="controls"><button id="gmPick">Let the GM pick</button><button id="gmFinish">Let the GM run the rest</button></div>'+
-        table([...avail.slice(0,60)].sort((a,b)=>Number(watch.has(b.id))-Number(watch.has(a.id))||grade(b)-grade(a)).slice(0,25),p=>'<button data-draft="'+esc(p.id)+'">Draft</button>');
-    }else html+='<div class="controls"><button id="simToMine">'+(D.order.slice(D.pick).some(x=>x.owner===S.club)?'Sim to our next pick':'Sim to the end')+'</button><button id="gmFinish">Let the GM run the rest</button></div>';
-    const recent=[...D.picks].reverse().slice(0,10);
-    if(recent.length)html+='<h2>Latest picks</h2><ul>'+recent.map(x=>'<li><strong>#'+x.overall+'</strong> '+esc(byId.get(x.club).abbr+' · '+x.pos+' '+x.name+', '+x.college)+(watch.has(x.prospectId)?' ★':'')+'</li>').join('')+'</ul>';
+    const slot=D.order[D.pick],mine=slot.owner===S.club;
+    const gm=mine?bestFor(S,S.club,draftAvailable(D)):null;
+    html+='<div class="sticky yellow"><div class="marker">On the clock</div><div class="big">'+esc('Pick '+slot.overall+' · '+byId.get(slot.owner).abbr)+'</div>'+
+      '<p>'+esc('Round '+slot.round+', '+teamName(slot.owner)+(slot.owner!==slot.origin?' via '+byId.get(slot.origin).market:'')+'.')+'</p>'+
+      (mine?'<p>'+esc('Your pick. The GM would take '+gm.pos+' '+gm.name+' of '+gm.college+'.')+'</p><button id="gmPick" class="dark">Let the GM pick</button>':
+        '<button id="simToMine" class="dark">'+(D.order.slice(D.pick).some(x=>x.owner===S.club)?'Sim to our next pick':'Sim to the end')+'</button>')+
+      '<button id="gmFinish">Let the GM run the rest</button></div>';
+    const recent=[...D.picks].reverse().slice(0,6);
+    if(recent.length)html+='<div class="sticky paper"><div class="marker">Latest picks</div><ul class="typed">'+recent.map(x=>'<li>'+esc('#'+x.overall+' '+byId.get(x.club).abbr+' · '+x.pos+' '+x.name)+(B.watch.has(x.prospectId)?' ★':'')+'</li>').join('')+'</ul></div>';
+  }else if(S.club){
+    html+='<div class="sticky yellow"><div class="marker">Scouting this week</div><div class="big">'+S.scouting.points+' pts</div><p>'+esc(pointsPerWeek(S)+' a week · '+Object.values(S.scouting?.levels??{}).filter(Boolean).length+' scouted · '+B.watch.size+' pinned')+'</p>'+
+      '<label class="typed">Assignments <select id="scoutAssign">'+option('gm','The GM spends what I leave',S.scouting.assign!=='owner')+option('owner','I assign them all',S.scouting.assign==='owner')+'</select></label></div>'+
+      '<div class="sticky pink"><div class="marker">Projected pick</div><div class="big">#'+projectedSlot(S)+'</div><p>on today’s standings</p></div>';
+    const w=[...D.wire].reverse().find(x=>x.items.length);
+    const games=(D.slate??[]).filter(g=>!g.winner&&g.week>=now(S)).sort((a,b)=>a.week-b.week).slice(0,6);
+    html+='<div class="clipping"><div class="masthead">The College wire'+(w?' · '+esc(shortLabel(w.week)):'')+'</div>'+
+      (w?w.items.slice(0,3).map(it=>'<p>'+esc(it.text)+'</p>').join(''):'<p>The college season starts with Week 1.</p>')+
+      (games.length?'<div class="masthead">Big games ahead</div>'+games.map(g=>'<p>'+esc(shortLabel(g.week)+': '+g.home+' vs. '+g.away+(g.name?', '+g.name:''))+'</p>').join(''):'')+
+      '<button data-dview="wire">The whole wire</button></div>';
+  }
+  return html+'<div class="sticky paper key"><div class="marker">Key</div><p class="typed">Red pin: watch list<br>Marker: your GM’s grade<br>●●○: scouting visits<br>Stripe: position group</p></div></aside>';
+}
+function clipboard(S,B){
+  const D=B.D,u=draftUi,q=u.q.trim().toLowerCase();
+  const val=(p,k)=>({rank:B.rank.get(p.id),name:p.name,pos:p.pos,year:p.year??'',grade:B.grade(p),cons:p.grade,gap:B.grade(p)-p.grade,scouted:B.lvl(p),trend:B.trend(p),health:p.injured?1:0})[k];
+  const base=D.prospects.filter(p=>(!q||p.name.toLowerCase().includes(q)||p.college.toLowerCase().includes(q))&&(!u.watchOnly||B.watch.has(p.id))&&
+    (!u.unscouted||!B.lvl(p))&&(!u.hideInjured||!p.injured)&&(u.showTaken||!B.taken.has(p.id)));
+  const list=base.filter(p=>u.group==='All'||draftGroupOf(p.pos)===u.group).sort((a,b)=>{const x=val(a,u.sort),y=val(b,u.sort);
+    return (typeof x==='string'?u.dir*x.localeCompare(y):u.dir*(x-y))||B.rank.get(a.id)-B.rank.get(b.id);});
+  const shown=list.slice(0,150),live=D.status==='live',mine=live&&D.order[D.pick]?.owner===S.club;
+  const chips=[['All','All'],...DRAFT_GROUPS.map(([g,label])=>[g,label])].map(([g,label])=>{const n=base.filter(p=>g==='All'||draftGroupOf(p.pos)===g).length;
+    return '<button data-dgroup="'+g+'" aria-pressed="'+(u.group===g)+'">'+esc(label)+' <span>'+n+'</span></button>';}).join('');
+  const toggles=[['watchOnly','Watch list only'],['unscouted','Not scouted yet'],['hideInjured','Hide injured'],...(live?[['showTaken','Show players taken']]:[])]
+    .map(([k,label])=>'<button data-dtoggle="'+k+'" aria-pressed="'+!!u[k]+'">'+(u[k]?'☑ ':'☐ ')+esc(label)+'</button>').join('');
+  const head=DRAFT_SORTS.map(([k,label])=>{const on=u.sort===k;
+    return '<th aria-sort="'+(on?(u.dir<0?'descending':'ascending'):'none')+'"><button data-dsort="'+k+'">'+esc(label)+(on?(u.dir<0?' ▼':' ▲'):'')+'</button></th>';}).join('');
+  const row=p=>{const t=B.taken.get(p.id),g=B.grade(p),gap=g-p.grade,d=B.trend(p),w=B.watch.has(p.id);
+    return '<tr'+(t?' class="taken"':'')+'><td><span class="pin'+(w?' on':'')+'" aria-hidden="true"></span>'+(B.rank.get(p.id)+1)+'</td>'+
+      '<td><button class="plink" data-profile="'+esc(p.id)+'">'+esc(p.name)+'</button><small>'+esc(p.college+' · '+TIER_NAMES[collegeTier(p.college)]+(t?' · taken #'+t.overall+' by '+byId.get(t.club).abbr:''))+'</small></td>'+
+      '<td><span class="pos g-'+draftGroupOf(p.pos)+'">'+esc(p.pos)+'</span></td><td>'+esc(p.year??'')+'</td><td class="marker">'+g+'</td><td>'+p.grade+'</td>'+
+      '<td class="gap'+(gap>=3?' up':gap<=-3?' down':'')+'">'+(gap>0?'+':'')+gap+'</td><td class="dots">'+B.dots(p)+'</td>'+
+      '<td class="trend'+(d>=3?' up':d<=-3?' down':'')+'">'+trendText(d)+'</td><td>'+(p.injured?'Injured':'')+'</td>'+
+      '<td class="calls">'+(mine&&!t?'<button class="primary" data-draft="'+esc(p.id)+'">Draft</button>':'')+
+      (D.status==='scouting'&&S.club&&B.lvl(p)<3?'<button data-scoutp="'+esc(p.id)+'"'+(S.scouting.points<1?' disabled':'')+'>Scout</button>':'')+
+      (S.club?'<button data-watch="'+esc(p.id)+'">'+(w?'Unpin':'Pin')+'</button>':'')+'</td></tr>';};
+  return '<div class="clipboard"><div class="sheet"><div class="sheet-head"><h2 class="marker">Incoming class</h2><small class="typed">'+
+    esc(list.length+' of '+D.prospects.length+' prospects'+(list.length>shown.length?', first '+shown.length+' shown':''))+'</small></div>'+
+    '<div class="chips" role="group" aria-label="Position group">'+chips+'</div>'+
+    '<div class="filters"><label class="typed">Find <input id="draftFind" type="search" value="'+esc(u.q)+'" placeholder="name or college" autocomplete="off"></label>'+toggles+'</div>'+
+    '<div class="wide"><table class="clip"><thead><tr>'+head+'<th><span class="sr">Actions</span></th></tr></thead><tbody>'+shown.map(row).join('')+'</tbody></table></div>'+
+    (list.length?'':'<p class="marker empty">Nobody on the sheet matches. Loosen a filter.</p>')+'</div></div>';
+}
+function wireView(S,B){
+  const D=B.D,weeks=[...D.wire].reverse().filter(w=>w.items.length).slice(0,draftUi.allWire?40:3);
+  let html='<h2>College wire</h2>'+(weeks.length?weeks.map(w=>'<h3 class="wirehead">'+esc(capital(weekLabel(w.week)))+'</h3><ul>'+w.items.map(it=>'<li>'+(it.kind==='game'?'<b>'+esc(it.text)+'</b>':(it.pid&&B.watch.has(it.pid))||(it.pid2&&B.watch.has(it.pid2))?'<strong>★ '+esc(it.text)+'</strong>':esc(it.text))+[it.pid,it.pid2].filter(Boolean).map(id=>' <button data-profile="'+esc(id)+'">Profile</button>').join('')+'</li>').join('')+'</ul>').join('')+
+    (D.wire.length>3?'<div class="controls"><button id="toggleWire">'+(draftUi.allWire?'Show the latest weeks':'Show every week')+'</button></div>':''):'<p>The college season starts with Week 1. The wire follows the class all fall.</p>');
+  const games=(D.slate??[]).filter(g=>!g.winner&&g.week>=now(S)).sort((a,b)=>a.week-b.week).slice(0,6);
+  if(games.length)html+='<h2>Big games ahead</h2><ul>'+games.map(g=>'<li>'+esc(capital(weekLabel(g.week))+': '+g.home+' vs. '+g.away+(g.name?', '+g.name:''))+'</li>').join('')+'</ul>';
+  return html;
+}
+function profileCard(S,B,prof){
+  const D=B.D,t=B.taken.get(prof.id),w=B.watch.has(prof.id),live=D.status==='live',mine=live&&D.order[D.pick]?.owner===S.club;
+  return '<div class="pmodal" id="profilePane"><div class="icard-big" role="dialog" aria-modal="true" aria-labelledby="profName">'+
+    '<span class="pin'+(w?' on':'')+'" aria-hidden="true"></span>'+
+    '<div class="ib-top"><span class="typed">'+esc(prof.pos+' · '+prof.college+' ('+TIER_NAMES[collegeTier(prof.college)]+') · '+(prof.year??'')+' · age '+prof.age)+'</span>'+
+    (B.D.prospects.includes(prof)?'<span class="ic-grade">'+B.grade(prof)+'</span>':'')+'</div>'+
+    '<h2 id="profName" class="typed">'+esc(prof.name)+'</h2>'+
+    '<p class="typed">'+esc('Consensus grade '+prof.grade+(D.combineDone||prof.athletic&&D.status!=='scouting'?' · Combine athleticism '+prof.athletic:'')+' · scouted '+B.dots(prof)+(t?' · taken #'+t.overall+' by '+teamName(t.club):''))+'</p>'+
+    (S.club?'<p class="pen">'+esc(scoutingReport(S,prof).join(' '))+'</p>':'')+
+    '<ul class="typed notes">'+(prof.notes.length?prof.notes.map(n=>'<li>'+esc(shortLabel(n.week)+': '+n.text)+'</li>').join(''):'<li>No headlines yet.</li>')+'</ul>'+
+    '<div class="controls">'+(mine&&!t&&B.D.prospects.includes(prof)?'<button class="primary" data-draft="'+esc(prof.id)+'">Draft him</button>':'')+
+    (D.status==='scouting'&&S.club&&B.lvl(prof)<3?'<button class="primary" data-scoutp="'+esc(prof.id)+'"'+(S.scouting.points<1?' disabled':'')+'>Scout · 1 pt</button>':'')+
+    (S.club?'<button data-watch="'+esc(prof.id)+'">'+(w?'Take off the watch list':'Pin to the watch list')+'</button>':'')+
+    '<button id="closeProfile">Back to the board</button></div></div></div>';
+}
+function draftView(){
+  const S=save,D=S.draft;
+  let html=heading('DRAFT AND SCOUTING','Class of season '+D.season);
+  if(D.status==='scouting'||D.status==='live'){
+    const B=draftBook(S),v=draftUi.view;
+    const prof=draftUi.profile&&[...D.prospects,...(D.nextClass??[])].find(p=>p.id===draftUi.profile);
+    if(D.status==='scouting')html+='<p>'+esc('The draft is '+weekLabel(MILESTONES.draft)+'. The consensus grade moves with the college wire; your GM grade starts from the truth, pulled toward the hype and blurred by his scouting. Each scouting visit cuts through both: the first sharpens the grade, the second reveals work ethic and durability, the third tells you whether he is overrated.')+'</p>';
+    html+='<div class="dviews" role="group" aria-label="Draft views">'+[['board','Big board'],['list','Clipboard'],['wire','College wire']].map(([id,label])=>'<button data-dview="'+id+'" aria-pressed="'+(v===id)+'">'+label+'</button>').join('')+'</div>';
+    html+=v==='list'?clipboard(S,B):v==='wire'?wireView(S,B):corkBoard(S,B);
+    if(D.nextClass?.length)html+='<p>'+esc(D.nextClass.length+' juniors went back to school and will be in next year’s class.')+'</p>';
+    if(prof)html+=profileCard(S,B,prof);
     return html;
   }
   const last=S.draftHistory.at(-1);
@@ -3478,7 +3832,6 @@ function draftView(){
   }
   return html;
 }
-const draftUi={profile:null,allWire:false};
 
 
 // ---------------------------------------------------------------------------
@@ -4025,16 +4378,16 @@ function contractsView(){
       const actions='<button data-negotiate="extend:'+esc(p.id)+'">Negotiate</button><button data-extend="'+esc(p.id)+'">Extend at ask</button>'+
         (p.contract.option?'<button data-option="'+esc(p.id)+'" title="'+m1(optionAmount(S,p))+' next season">Pick up option</button>':'')+
         (tagged?'<button data-untag="1">Remove tag</button>':tagWindow(S)&&!tag?'<button data-tag="'+esc(p.id)+'" title="'+m1(tagAmount(S,p.pos))+' for one year">Franchise tag</button>':'');
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
   html+='<h2>Cap sheet</h2><div class="wide"><table class="capsheet"><thead><tr><th>Player</th><th>Rating</th><th>Cap hit</th><th>Salary</th><th>Years</th><th>Gtd</th><th>Dead if cut</th><th></th></tr></thead><tbody>'+
     [...roster].sort((a,b)=>capHit(b)-capHit(a)).map(p=>{const rs=restructureSavings(S,p);
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Age '+p.age+({rookie:' · rookie deal',tag:' · franchise tag'}[p.contract.kind]??'')+(p.contract.nextSalary?' · option year '+m1(p.contract.nextSalary):'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+(p.contract.gYears??0)+'</td><td>'+m1(deadIfCut(p,S))+'</td><td class="calls">'+
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>Age '+p.age+({rookie:' · rookie deal',tag:' · franchise tag'}[p.contract.kind]??'')+(p.contract.nextSalary?' · option year '+m1(p.contract.nextSalary):'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+(p.contract.gYears??0)+'</td><td>'+m1(deadIfCut(p,S))+'</td><td class="calls">'+
         (rs?'<button data-restructure="'+esc(p.id)+'" title="Clears '+m1(rs.savings)+' this year">Restructure</button>':'')+'<button data-release="'+esc(p.id)+'">Release</button></td></tr>';}).join('')+'</tbody></table></div>';
   const pool=[...S.fa.pool].sort((a,b)=>b.rating-a.rating).slice(0,30);
   html+='<h2>Free agents</h2>'+(pool.length?'<p>'+esc('Players weigh every offer the week it arrives: money, guarantees, years, and how good your team is, depending on what they care about. Early in free agency they hold out for their ask; later they settle.'+(S.cap.gmHandles?' The GM also signs free agents to fill holes; switch to “I decide” to run it yourself.':''))+'</p>'+
     '<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Asking</th><th>Cap hit</th><th></th></tr></thead><tbody>'+
     pool.map(p=>{const o=S.fa.offers[p.id];
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
         (o?'<small>'+esc('Offer in: '+o.years+' yrs, '+m1(termsHit(o))+'/yr')+'</small><button data-withdraw="'+esc(p.id)+'">Withdraw</button>':'<button data-negotiate="fa:'+esc(p.id)+'">Negotiate</button><button data-offer="'+esc(p.id)+'">Offer asking terms</button>')+'</td></tr>';}).join('')+'</tbody></table></div>':
     '<p>'+esc('Free agency opens at the new league year, '+weekLabel(MILESTONES.leagueYear)+', when expired contracts hit the market.')+'</p>');
   return html;
@@ -4616,7 +4969,7 @@ function depthView(){
   const hc=S.staff.clubs[id].hc,trust=hc.trust??70,actives=new Set(activesFor(S,id).map(p=>p.id)),roster=S.rosters[id];
   const u=personnel(roster.filter(p=>!p.ir),lineupCoach(S,id)),ir=roster.filter(p=>p.ir),ps=practiceOf(S,id);
   const coachName=hc.interim?'The interim coach':'Coach '+hc.name;
-  let html=heading('DEPTH CHART AND GAME DAY',teamName(id))+'<div class="units">'+
+  let html=heading('DEPTH CHART AND GAME DAY',teamName(id))+medicalHtml(S)+'<div class="units">'+
     '<div><small>Active roster</small><b>'+rosterCount(S,id)+'/53</b>'+ir.length+' on injured reserve</div>'+
     '<div><small>Game day</small><b>'+actives.size+'/'+ACTIVE_LIMIT+'</b>dress this week</div>'+
     '<div><small>Practice squad</small><b>'+ps.length+'/'+PRACTICE_LIMIT+'</b>'+m1(ps.reduce((a,p)=>a+capHit(p),0))+' on the cap</div>'+
@@ -4632,7 +4985,7 @@ function depthView(){
   const row=(p,idx,n,len)=>{
     const status=(p.out?'Out · '+p.out+' wk':!actives.has(p.id)?'Inactive':idx<n?'Starter':'Backup')+(p.drafted?.season===cur(S).number-1||p.drafted?.season===cur(S).number?' · rookie, '+p.drafted.college:'');
     const changed=idx<n&&!p.out&&!coachStarters.has(p.id);
-    return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+esc(p.name)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
+    return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+plink(p)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
       (idx>0?'<button data-depth="'+esc(p.id)+':-1" aria-label="Move up">↑</button>':'')+(idx<len-1?'<button data-depth="'+esc(p.id)+':1" aria-label="Move down">↓</button>':'')+
       (p.out?'':'<button data-active="'+esc(p.id)+'">'+(actives.has(p.id)?'Make inactive':'Activate')+'</button>')+
       (p.out>=IR_MIN_WEEKS?'<button data-ir="'+esc(p.id)+'">Injured reserve</button>':'')+'</td></tr>';
@@ -4642,10 +4995,10 @@ function depthView(){
     return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rtg</th><th></th></tr></thead><tbody>'+
       section.flatMap(([pos,,n])=>u.chart[pos].map((p,idx,arr)=>row(p,idx,n,arr.length))).join('')+'</tbody></table></section>';
   }).join('')+'</div>';
-  html+='<h2>Injured reserve</h2>'+(ir.length?'<ul>'+ir.map(p=>'<li><div><strong>'+esc(p.pos+' '+p.name)+'</strong><small>'+esc((p.out?'Out '+p.out+' more wk':'Healthy')+' · on IR since '+weekLabel(p.ir.since))+'</small></div>'+
+  html+='<h2>Injured reserve</h2>'+(ir.length?'<ul>'+ir.map(p=>'<li><div><strong>'+plink(p,p.pos+' '+p.name)+'</strong><small>'+esc((p.out?'Out '+p.out+' more wk':'Healthy')+' · on IR since '+weekLabel(p.ir.since))+'</small></div>'+
       (canReturn(S,id,p)?'<button data-unir="'+esc(p.id)+'">Activate</button>':'')+'</li>').join('')+'</ul>':'<p>Nobody is on injured reserve.</p>');
   html+='<h2>Practice squad</h2>'+(ps.length?'<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Potential</th><th></th></tr></thead><tbody>'+
-      [...ps].sort((a,b)=>b.rating-a.rating).map(p=>'<tr><td>'+esc(p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+(p.potential??p.rating)+'</td><td class="calls"><button data-promote="'+esc(p.id)+'">Promote</button><button data-psrelease="'+esc(p.id)+'">Release</button></td></tr>').join('')+'</tbody></table></div>':'<p>The practice squad is empty.</p>')+
+      [...ps].sort((a,b)=>b.rating-a.rating).map(p=>'<tr><td>'+plink(p,p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+(p.potential??p.rating)+'</td><td class="calls"><button data-promote="'+esc(p.id)+'">Promote</button><button data-psrelease="'+esc(p.id)+'">Release</button></td></tr>').join('')+'</tbody></table></div>':'<p>The practice squad is empty.</p>')+
     (ps.length<PRACTICE_LIMIT?'<div class="controls"><button id="fillPractice">Fill the practice squad</button></div>':'');
   return html;
 }
@@ -5905,38 +6258,13 @@ function comingDue(S){
   const site=open[0];
   return '<div><small>Coming due</small>'+esc(marketById(S,site.marketId).name+' '+site.name.toLowerCase()+' offer expires after '+weekLabel(site.expiresWeek))+'</div>';
 }
-function leagueCard(S){
-  const open=openContests(S),V=S.league.meeting;
-  if(open.length){
-    const mine=open.filter(C=>C.bid).length,held=open.filter(C=>C.holder===S.club&&!C.bid).length;
-    return '<div><small>Broadcast rights</small>'+esc(open.length+' market'+(open.length===1?'':'s')+' up for renewal'+(held?', '+held+' of yours without an offer':mine?', '+mine+' with your offer':'')+'; the station decides after '+weekLabel(Math.min(...open.map(C=>C.deadlineWeek))))+' <button data-tab="League">Bid</button></div>';
-  }
-  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="League">Lobby</button></div>';
-  const n=S.league.news.at(-1);
-  return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
-}
-function depthCard(S){
-  const alerts=S.staff.directives.rosterMoves==='owner'?rosterAlerts(S):[];
-  if(alerts.length)return '<div><small>Roster</small>'+esc(alerts[0])+' <button data-tab="Depth chart">Fix it</button></div>';
+function gameDayCard(S){
   const out=inactivesFor(S,S.club);
   return '<div><small>Game day</small>'+(out.length?esc(out.length+' inactive: '+out.slice(0,3).map(p=>p.pos+' '+p.name.split(' ')[1]).join(', ')+(out.length>3?'…':'')):'Everyone healthy dresses')+'</div>';
 }
-function staffCard(S){
-  const C=S.staff.clubs[S.club],n=S.staff.proposals.length;
-  if(n)return '<div><small>Needs your answer</small>'+n+' proposal'+(n===1?'':'s')+' and offer'+(n===1?'':'s')+' <button data-tab="Staff">Review</button></div>';
-  const open=['hc','gm'].filter(role=>C[role].interim);
-  if(open.length)return '<div><small>Staff</small>'+esc(open.map(role=>(role==='hc'?'Head coach':'GM')+' job open').join(', '))+' <button data-tab="Staff">Search</button></div>';
-  return '<div><small>Head coach</small>'+esc(C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
-}
-function capCard(S){
-  const room=capRoom(S,S.club);
-  return '<div><small>Cap room</small>'+(room<0?'Over by '+m1(-room):m1(room))+' <button data-tab="Contracts">Cap sheet</button></div>';
-}
-function moneyCard(S){
-  if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="Finances">Review</button></div>';
-  const season=S.finance.ledger.filter(x=>x.season===cur(S).number);
-  if(!season.length)return '';
-  return '<div><small>Operating result</small>'+m1(round2(season.reduce((a,x)=>a+x.result,0)))+' this season <button data-tab="Finances">Books</button></div>';
+function headCoachCard(S){
+  const C=S.staff.clubs[S.club];
+  return '<div><small>Head coach</small>'+esc(C.hc.interim?'Interim · job open':C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
 }
 // What comes next once the regular season is over.
 function calendarCard(S){
@@ -5948,7 +6276,7 @@ function calendarCard(S){
     return '<div><small>Playoffs</small>'+esc(st.alive?'Seed #'+(st.seed+1)+' · '+capital(ROUND_NAMES[s.postseason.rounds.length])+' next':st.finish)+'</div>';
   }
   const next=jumpTargets(S)[0];
-  return '<div><small>Next on the calendar</small>'+esc(next?next[1]:'Season '+(s.number+1))+(S.draft.status==='live'?' <button data-tab="Draft">Draft room</button>':'')+'</div>';
+  return '<div><small>Next on the calendar</small>'+esc(next?next[1]:'Season '+(s.number+1))+(S.draft.status==='live'?' <button data-tab="draft">Draft room</button>':'')+'</div>';
 }
 function tradeSummary(S,P){
   const T=P.trade,picks=T.picks.map(pickLabel).join(' and ');
@@ -5966,14 +6294,23 @@ function ownershipDesk(){
     const {g,w}=entry,home=g.home===id;
     return esc('Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(g.score?' · '+resultText(g,id):''));
   };
-  const week=s.completed+1,injuries=S.rosters[id].filter(p=>p.out);
+  const week=s.completed+1;
   const playoffGames=(s.postseason?.rounds??[]).flatMap(round=>round.games.filter(g=>g.home===id||g.away===id).map(g=>({g,name:round.name})));
   const lastPlayoff=playoffGames.at(-1);
   const last=lastPlayoff?esc(lastPlayoff.name+' · '+(lastPlayoff.g.home===id||lastPlayoff.g.neutral?'vs. ':'at ')+teamName(lastPlayoff.g.home===id?lastPlayoff.g.away:lastPlayoff.g.home)+' · '+resultText(lastPlayoff.g,id)):fixture(games.filter(x=>x.g.score).pop());
   const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+(broadcastGame?.season===s.number?' <button id="watchLast">Watch the broadcast</button>':'')+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
-    depthCard(S)+staffCard(S)+comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
-  const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
+    gameDayCard(S)+headCoachCard(S)+comingDue(S)+'</div>';
+  const items=pendingItems(S),n=items.length;
+  const reports=[...S.events].reverse().slice(0,30).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no reports yet.</li>';
+  return heading('OWNER’S DESK',n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
+    '<div class="desk"><section><h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+'</section>'+
+    '<aside><h2>Around your club</h2><ul>'+reports+'</ul><div class="controls"><button data-tab="news">League news</button><button data-tab="standings">Standings</button></div></aside></div>';
+}
+// The GM's trade desk: proposals in play, asking for a price, and the picks you hold.
+function tradesView(){
+  const S=save,id=S.club;
+  if(!id)return heading('TRADES','Choose a club first')+'<p>Take ownership on the Owner desk to talk trades.</p>';
   let gm;
   if(S.offer)gm=negotiationView(S);
   else if(!tradeWindow(S))gm='<p>'+esc('The trade deadline has passed. Trades reopen at the new league year, '+weekLabel(MILESTONES.leagueYear)+'.')+'</p>';
@@ -5982,12 +6319,14 @@ function ownershipDesk(){
     gm='<div class="controls"><label>Position <select id="scout">'+positions.map(([pos])=>option(pos,pos,pos===scoutPos)).join('')+'</select></label>'+
       '<label>Trade target <select id="target">'+candidates.map(({p,t})=>option(t.id+'/'+p.id,p.name+' · '+t.abbr+' · '+p.rating,false)).join('')+'</select></label><button id="quote">Ask for a price</button></div>';
   }
-  const reports=[...S.events].reverse().slice(0,40).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no pending reports.</li>';
-  const talk=S.staff.proposals.filter(P=>P.kind==='trade'||P.kind==='offer');
-  const talkHtml=talk.length?'<h2>Trade talk</h2><ul>'+talk.map(P=>'<li><div><strong>'+esc(tradeSummary(S,P))+'</strong><small>'+esc((P.kind==='trade'?'Your GM: ':'Your GM on it: ')+tradeRead(S,P.trade).text)+'</small></div><button data-approve="'+P.id+'">'+(P.kind==='trade'?'Make the trade':'Accept')+'</button><button data-reject="'+P.id+'">'+(P.kind==='trade'?'Pass':'Decline')+'</button></li>').join('')+'</ul>':'';
-  return heading('OWNER’S DESK',teamName(id))+schedule+talkHtml+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+
-    '<small>Available draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', '))+'</small>'+
-    '<h2>Staff messages</h2><ul>'+reports+'</ul>';
+  const talk=pendingItems(S).filter(x=>x.route==='trades'&&x.id!=='quote');
+  return heading('FOOTBALL','Trades')+(talk.length?'<h2>Trade talk</h2><ul class="inbox">'+talk.map(x=>itemHtml(S,x,{where:false})).join('')+'</ul>':'')+
+    '<h2>GM’s trade desk</h2>'+gm+
+    '<p><small>Your draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', ')||'none')+'</small></p>'+leagueTrades(S);
+}
+function medicalHtml(S){
+  const injuries=S.rosters[S.club].filter(p=>p.out);
+  return '<h2>Medical report</h2><ul>'+(injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+plink(p)+' · '+(p.ir?'injured reserve · ':'')+'out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>')+'</ul>';
 }
 function scoreboard(){
   const s=cur(),P=s.postseason;
@@ -6002,16 +6341,19 @@ function scoreboard(){
     '<div class="games">'+games.map(g=>'<article>'+[g.away,g.home].map((id,i)=>'<div class="line">'+club(id)+'<strong>'+(g.score?g.score[1-i]:(i?'HOME':'AWAY'))+'</strong></div>').join('')+(g.ot?'<div class="line"><small>Final · overtime</small></div>':'')+'</article>').join('')+'</div>'+
     (bye.length?'<p>On bye · '+esc(bye.map(t=>teamName(t.id)).join(', '))+'</p>':'');
 }
-function standingsView(){
-  return heading('DIVISION RACES','Standings')+'<p>Ranked by win percentage, head-to-head among tied clubs when all have met, division record, then point differential. Alphabetical order breaks remaining ties.</p><div class="tables">'+
+function standingsView(){return standingsTable()+leadersView(save);}
+function standingsTable(){
+  return heading('DIVISION RACES','Standings')+('<p>Ranked by win percentage, head-to-head among tied clubs when all have met, division record, then point differential. Alphabetical order breaks remaining ties.</p><div class="tables">'+
     standings(save).map((rows,i)=>'<section><h3>'+esc(groups[i][0].conference+' '+groups[i][0].division)+'</h3><table><thead><tr><th>Club</th><th>W–L–T</th><th>Div.</th><th>+/−</th></tr></thead><tbody>'+
-      rows.map(r=>'<tr><td>'+club(r.id)+'</td><td>'+[r.w,r.l,r.t].join('–')+'</td><td>'+[r.dw,r.dl,r.dt].join('–')+'</td><td>'+(r.pf-r.pa)+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
+      rows.map(r=>'<tr><td>'+club(r.id)+'</td><td>'+[r.w,r.l,r.t].join('–')+'</td><td>'+[r.dw,r.dl,r.dt].join('–')+'</td><td>'+(r.pf-r.pa)+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>');
 }
 function scheduleView(){
   const t=byId.get(selected),rating=personnel(save.rosters[selected]);
   return heading(t.conference+' '+t.division,teamName(selected))+
-    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="Rosters">View roster</button></div>'+
-    '<div class="wide"><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span></div>'+scheduleBody(selected);
+}
+function scheduleBody(selected){
+  return '<div class="wide"><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
       const g=games.find(g=>[g.home,g.away].includes(selected));
       if(!g)return '<tr><td>'+(i+1)+'</td><td></td><td>Bye</td><td>—</td></tr>';
       const home=g.home===selected;
@@ -6019,18 +6361,47 @@ function scheduleView(){
     }).join('')+'</tbody></table></div>';
 }
 function rosterView(){
-  const team=byId.get(selected),units=personnel(save.rosters[selected]);
-  const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
+  const team=byId.get(selected);
   return heading(team.conference+' '+team.division,teamName(selected))+
-    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+rosterCount(save,selected)+' players · '+practiceOf(save,selected).length+' on the practice squad · cap room '+m1(capRoom(save,selected))+'</span></div>'+
-    '<div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div>'+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>'+rosterCount(save,selected)+' players · '+practiceOf(save,selected).length+' on the practice squad · cap room '+m1(capRoom(save,selected))+'</span></div>'+rosterBody(selected);
+}
+function rosterBody(selected){
+  const units=personnel(save.rosters[selected]);
+  const metrics=[['Pass offense',units.passing],['Run offense',units.rushing],['Pass rush',units.pressure],['Coverage',units.coverage],['Run defense',units.runDefense]];
+  return '<div class="units">'+metrics.map(([label,n])=>'<div><small>'+label+'</small><b>'+Math.round(n)+'</b></div>').join('')+'</div>'+
     '<p>An uncovered starting spot uses an emergency rating of '+EMERGENCY_RATING+'. Starters lead each position group. The first reserve also contributes at running back, receiver, defensive end, defensive tackle, linebacker and cornerback.</p>'+
     '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
       const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
       return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th></tr></thead><tbody>'+
-        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+esc(seasonText(save,p)?' · '+seasonText(save,p):'')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
-    }).join('')+'</div>'+leadersView(save);
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+plink(p)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+esc(seasonText(save,p)?' · '+seasonText(save,p):'')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
+    }).join('')+'</div>';
 }
+// ---- Clubs ----------------------------------------------------------------------
+// Every club has one page: who runs it, how it is doing, its schedule and its roster. Club names anywhere link here.
+let clubTab='schedule',clubsConf='All';
+function clubsView(){
+  const table=standings(save).flat(),rec=id=>{const r=table.find(x=>x.id===id);return [r.w,r.l,r.t].join('–');};
+  return heading('AROUND THE LEAGUE','Clubs')+
+    '<div class="dviews" role="group" aria-label="Conference">'+['All','Charter','Union'].map(c=>'<button data-conf="'+c+'" aria-pressed="'+(clubsConf===c)+'">'+(c==='All'?'Both conferences':c)+'</button>').join('')+'</div>'+
+    ['Charter','Union'].filter(c=>clubsConf==='All'||clubsConf===c).map(conference=>'<h2>'+esc(conference+' Conference')+'</h2><div class="grid">'+
+      divisions.map(division=>'<article><h3>'+esc(division)+'</h3><ul>'+clubs.filter(t=>t.conference===conference&&t.division===division).map(t=>
+        '<li><span class="chip" style="background-color:'+color(t.primary)+';border-color:'+color(t.secondary)+'"></span><button class="club" data-id="'+esc(t.id)+'"><small>'+esc(t.market)+'</small><strong>'+esc(t.nickname)+'</strong></button>'+
+        '<span class="rec">'+esc(rec(t.id))+(t.id===save.club?' · yours':'')+'</span></li>').join('')+'</ul></article>').join('')+'</div>').join('');
+}
+function clubView(){
+  const S=save,id=byId.has(selected)?selected:clubs[0].id,t=byId.get(id),mine=id===S.club;
+  const group=standings(S).find(g=>g.some(r=>r.id===id)),place=group.findIndex(r=>r.id===id),r=group[place];
+  const o=S.league.owners[id],hc=S.staff?.clubs?.[id]?.hc,rating=personnel(S.rosters[id]);
+  const facts=[['Record',[r.w,r.l,r.t].join('–')+' · #'+(place+1)+' '+t.division],['Owner',mine?'You':o?o.name+' ('+o.style+')':'—'],
+    ...(!mine&&o&&S.club?[['Toward you',relationLabel(o.relation)]]:[]),['Head coach',hc?(hc.interim?'Interim':hc.name+' · '+hc.record.w+'–'+hc.record.l):'—'],
+    ['Offense · defense',rating.offense+' · '+rating.defense],['Cap room',m1(capRoom(S,id))],['Roster',rosterCount(S,id)+' players · '+practiceOf(S,id).length+' practice squad']];
+  return '<div class="crumbs"><button data-tab="clubs">All clubs</button><label class="pick">Club '+clubSelect('team',id)+'</label></div>'+
+    '<div class="club-head" style="--c1:'+esc(inkable(t.primary))+';--c2:'+esc(color(t.secondary))+'"><span class="chip big" aria-hidden="true"></span><div><small>'+esc(t.conference+' · '+t.division+' · '+t.market)+'</small><h2>'+esc(t.nickname)+'</h2></div></div>'+
+    '<dl class="club-facts">'+facts.map(([a,b])=>'<div><dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd></div>').join('')+'</dl>'+
+    '<div role="tablist" class="pc-tabs" aria-label="Club pages">'+[['schedule','Schedule'],['roster','Roster']].map(([k,label])=>'<button role="tab" data-ctab="'+k+'" aria-selected="'+(clubTab===k)+'">'+label+'</button>').join('')+'</div>'+
+    '<div class="pc-body">'+(clubTab==='roster'?rosterBody(id):scheduleBody(id))+'</div>';
+}
+
 // League leaders for the season under way, or the last one before the first game.
 function leadersView(S){
   const s=cur(S),season=s.completed||s.number===1?s.number:s.number-1;
@@ -6038,7 +6409,7 @@ function leadersView(S){
   const lists=cats.map(([k,label])=>[label,statLeaders(S,season,k)]).filter(([,rows])=>rows.length);
   if(!lists.length)return '';
   return '<h2>'+esc('League leaders · Season '+season)+'</h2><div class="tables">'+lists.map(([label,rows])=>'<section><h3>'+esc(label)+'</h3><table><tbody>'+
-    rows.map(({p,club,v})=>'<tr><td>'+esc(p.name)+'<small>'+esc(p.pos+' · '+byId.get(club).abbr+' · '+p.rating)+'</small></td><td>'+esc(v.toLocaleString('en-US'))+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
+    rows.map(({p,club,v})=>'<tr><td>'+plink(p)+'<small>'+esc(p.pos+' · '+byId.get(club).abbr+' · '+p.rating)+'</small></td><td>'+esc(v.toLocaleString('en-US'))+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
 }
 // ---------------------------------------------------------------------------
 // The broadcast: the owner's game, presented live from its play log.
@@ -6065,12 +6436,12 @@ function canWatch(S){
   if(seed<0||(P&&!playoffStatus(S,id)?.alive))return false;
   return !(seed===0&&!(P?.rounds.length));
 }
-function startBroadcast(){bc.i=0;bc.playing=true;tab='Game';}
+function startBroadcast(){bc.i=0;bc.playing=true;tab='game';}
 function stopBroadcastTimer(){if(bc.timer){clearTimeout(bc.timer);bc.timer=null;}}
 function scheduleBroadcast(){
   stopBroadcastTimer();
   const B=broadcastGame;
-  if(!B||!bc.playing||tab!=='Game')return;
+  if(!B||!bc.playing||tab!=='game')return;
   if(bc.i>=B.plays.length){bc.playing=false;drawBroadcast();return;}
   const p=B.plays[bc.i-1];
   let wait=bc.i===0?600:BC_PACE[p.kind]??1200;
@@ -6192,33 +6563,220 @@ function broadcastInner(){
 }
 function broadcastView(){
   const B=broadcastGame;
-  if(!B)return heading('GAME DAY','No game on')+'<p>Your club has not played since the page opened.</p><button data-tab="Owner desk">Back to the desk</button>';
+  if(!B)return heading('GAME DAY','No game on')+'<p>Your club has not played since the page opened.</p><button data-tab="desk">Back to the desk</button>';
   const away=teamName(B.away),home=teamName(B.home);
   return heading(B.label.toUpperCase(),away+(B.neutral?' vs. ':' at ')+home)+'<div id="broadcast">'+broadcastInner()+'</div>';
 }
 function drawBroadcast(){const el=$('#broadcast');if(el&&broadcastGame)el.innerHTML=broadcastInner();}
-const TABS=['Owner desk','Depth chart','Staff','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+// ---- Player card -------------------------------------------------------------
+// Every player name is a link to his card: who he is, his contract, his numbers and his history with you.
+const plink=(p,label=p.name)=>'<button class="plink" data-player="'+esc(p.id)+'">'+esc(label)+'</button>';
+function findPlayer(S,id){
+  for(const [club,list] of Object.entries(S.rosters)){const p=list.find(x=>x.id===id);if(p)return {p,club,where:'roster'};}
+  for(const [club,list] of Object.entries(S.practice??{})){const p=list.find(x=>x.id===id);if(p)return {p,club,where:'practice'};}
+  const p=S.fa?.pool?.find(x=>x.id===id);
+  return p?{p,club:null,where:'fa'}:null;
+}
+function allPlayers(S){
+  return [...Object.entries(S.rosters).flatMap(([club,list])=>list.map(p=>({p,club}))),
+    ...Object.entries(S.practice??{}).flatMap(([club,list])=>list.map(p=>({p,club}))),
+    ...(S.fa?.pool??[]).map(p=>({p,club:null}))];
+}
+// Name search for the top bar: your own players first, then by rating.
+function findPlayers(S,q,limit=8){
+  q=String(q??'').trim().toLowerCase();if(q.length<2)return [];
+  return allPlayers(S).filter(({p})=>p.name.toLowerCase().includes(q))
+    .sort((a,b)=>Number(b.club===S.club)-Number(a.club===S.club)||b.p.rating-a.p.rating).slice(0,limit);
+}
+const PCARD_TABS=[['overview','Overview'],['contract','Contract'],['stats','Stats'],['history','History']];
+function depthSlot(S,club,p){
+  if(p.ir)return null;
+  const u=personnel(S.rosters[club].filter(x=>!x.ir),lineupCoach(S,club)),i=u.chart[p.pos]?.indexOf(p)??-1,n=positions.find(([pos])=>pos===p.pos)?.[2]??1;
+  return i<0?null:{label:p.pos+(i+1),starter:i<n,mates:u.chart[p.pos].filter(x=>x!==p)};
+}
+function playerView(){
+  const S=save,f=cardPlayer&&findPlayer(S,cardPlayer);
+  if(!f)return heading('PLAYER','No longer in the league')+'<p>He has retired, or his record is gone.</p><button data-tab="desk">Back to the desk</button>';
+  const {p,club,where}=f,mine=!!S.club&&club===S.club,t=club&&byId.get(club),c=p.contract;
+  const slot=where==='roster'?depthSlot(S,club,p):null;
+  const status=where==='fa'?'Free agent':where==='practice'?'Practice squad':p.ir?'Injured reserve'+(p.out?' · out '+p.out+' wk':''):p.out?'Out · '+p.out+' wk':'Healthy · active';
+  const drafted=p.drafted?'Season '+p.drafted.season+', round '+p.drafted.round+', pick '+p.drafted.overall:p.undrafted?'Undrafted, season '+p.undrafted.season:'Before the league’s records';
+  const college=p.drafted?.college??p.undrafted?.college??p.college??'Not on record';
+  const bio=[['Club',t?teamName(club):'Free agent'],['College',college],['Drafted',drafted],
+    ['Contract',where==='fa'?'Asking '+p.ask.years+' yrs · '+m1(termsHit(p.ask))+' a year':m1(capHit(p))+' cap hit · '+c.yearsLeft+' yr'+(c.yearsLeft===1?'':'s')+' left'],['Status',status]];
+  const acts=[];
+  if(mine&&where==='roster'){
+    if(c.yearsLeft===1&&c.kind!=='tag')acts.push('<button class="primary" data-negotiate="extend:'+esc(p.id)+'">Negotiate an extension</button>');
+    const rs=restructureSavings(S,p);if(rs)acts.push('<button data-restructure="'+esc(p.id)+'" title="Clears '+m1(rs.savings)+' this year">Restructure</button>');
+    acts.push('<button data-release="'+esc(p.id)+'">Release</button>');
+  }else if(where==='fa'&&S.club)acts.push('<button class="primary" data-negotiate="fa:'+esc(p.id)+'">Negotiate</button>');
+  else if(club&&S.club&&!mine&&where==='roster'&&tradeWindow(S)&&!S.offer&&!p.out)acts.push('<button class="primary" data-pquote="'+esc(club+'/'+p.id)+'">Ask your GM for a price</button>');
+  const roster=club?(where==='practice'?S.practice[club]:S.rosters[club]):[];
+  const order=[...roster].sort((a,b)=>positions.findIndex(([x])=>x===a.pos)-positions.findIndex(([x])=>x===b.pos)||b.rating-a.rating);
+  const k=order.indexOf(p),prev=k>0?order[k-1]:null,next=k>=0?order[k+1]:null;
+  const back=club?(mine?'<button data-tab="depth">Depth chart</button>':'<button data-roster="'+esc(club)+'">'+esc(t.abbr+' roster')+'</button>'):'<button data-tab="contracts">Free agents</button>';
+  let body='';
+  if(cardTab==='overview'){
+    const pot=p.potential??p.rating;
+    const note=statNote(S,p).trim();
+    const read=[note,mine?'He wants '+PRIORITY_LABEL[priorityFor(p)]+' in his next deal.':'',
+      where!=='fa'&&!note?'Around the league he is priced like a '+Math.round(perceivedRating(S,p))+'.':'',
+      p.age<=24&&pot>p.rating+4?'Young and still climbing toward a '+pot+'.':p.age>=31?'Past 30: expect the rating to slip.':''].filter(Boolean);
+    body='<h3>Your GM’s read</h3><p>'+esc(read.join(' ')||'Nothing out of the ordinary.')+'</p>'+
+      '<h3>This season</h3><p>'+esc(seasonText(S,p)||'No stats yet.')+'</p>'+
+      (slot?'<h3>'+esc('Also at '+p.pos)+'</h3><p>'+(slot.mates.length?slot.mates.map(x=>plink(x,x.name+' · '+x.rating)).join(', '):'Nobody else.')+'</p>':'');
+  }else if(cardTab==='contract'){
+    if(where==='fa')body='<p>'+esc('He is asking '+p.ask.years+' years at '+m1(p.ask.salary)+' a year'+(p.ask.bonus?' with a '+m1(p.ask.bonus)+' bonus':'')+'.')+'</p>';
+    else{
+      const rows=[['Kind of deal',{rookie:'Rookie deal',tag:'Franchise tag',minimum:'Minimum deal'}[c.kind]??'Veteran deal'],['Salary this year',m1(c.salary)],
+        ['Signing bonus on the cap',m1(c.prorated??0)+' a year'],['Cap hit',m1(capHit(p))],['Years left',String(c.yearsLeft)],
+        ['Guaranteed years left',String(c.gYears??0)],['Dead money if cut',m1(deadIfCut(p,S))]];
+      if(c.option)rows.push(['Team option','Can be picked up for another year']);
+      if(mine&&c.yearsLeft===1&&c.kind!=='tag'){const e=extensionTerms(S,p);rows.push(['His extension ask',e.years+' yrs · '+m1(termsHit(e))+' a year'+(e.bonus?' · '+m1(e.bonus)+' bonus':'')]);}
+      const rs=mine?restructureSavings(S,p):null;if(rs)rows.push(['Restructure','Clears '+m1(rs.savings)+' this year']);
+      body='<div class="wide"><table class="compare"><tbody>'+rows.map(([a,b])=>'<tr><th>'+esc(a)+'</th><td>'+esc(b)+'</td></tr>').join('')+'</tbody></table></div>';
+    }
+  }else if(cardTab==='stats'){
+    const lines=[...(p.stats??[])].reverse().filter(L=>L.gp);
+    body=lines.length?'<div class="wide"><table><thead><tr><th>Season</th><th>Club</th><th>Line</th></tr></thead><tbody>'+
+      lines.map(L=>'<tr><td>'+L.season+'</td><td>'+esc(byId.get(L.club)?.abbr??'—')+'</td><td>'+esc(statText(p,L))+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<p><small>The league keeps the last '+STAT_SEASONS+' seasons.</small></p>':'<p>No games played in the seasons on record.</p>';
+  }else{
+    const mentions=[...S.events].reverse().filter(e=>{const d=describeEvent(e);return typeof d==='string'&&d.includes(p.name);}).slice(0,20);
+    body='<ul class="history">'+mentions.map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')+
+      '<li><strong>'+esc(p.drafted||p.undrafted?'Entered the league':'Before the records')+'</strong> '+esc(drafted+(college!=='Not on record'?', out of '+college:'')+'.')+'</li></ul>';
+  }
+  const first=p.name.split(' ').slice(0,-1).join(' '),last=p.name.split(' ').at(-1);
+  return '<div class="crumbs">'+back+(prev?'<button data-player="'+esc(prev.id)+'">‹ '+esc(prev.pos+' '+prev.name)+'</button>':'')+
+      (next?'<button data-player="'+esc(next.id)+'">'+esc(next.pos+' '+next.name)+' ›</button>':'')+'</div>'+
+'<div class="pcard-page"><div class="pcard-wrap"><div class="pcard" style="--card:'+esc(t?inkable(t.primary):'#1e5b37')+'"><div class="pc-inner">'+
+    '<div class="pc-top"><span class="pc-slot">'+esc(slot?slot.label+(slot.starter?' · starter':' · backup'):where==='practice'?'Practice squad':where==='fa'?'Free agent':p.pos)+'</span>'+
+    '<span class="pc-pos" aria-hidden="true">'+esc(p.pos)+'</span><span class="pc-first">'+esc(first)+'</span><h2 class="pc-last">'+esc(last)+'</h2></div>'+
+    '<dl class="scoreboard pc-board"><div><dt>Rating</dt><dd>'+p.rating+'</dd></div><div><dt>Potential</dt><dd>'+(p.potential??p.rating)+'</dd></div><div><dt>Age</dt><dd>'+p.age+'</dd></div></dl>'+
+    '<dl class="pc-bio">'+bio.map(([a,b])=>'<dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd>').join('')+'</dl></div></div>'+
+    (acts.length?'<div class="pc-acts">'+acts.join('')+'</div>':'')+'</div>'+
+    '<section class="pc-main"><div role="tablist" class="pc-tabs" aria-label="Player details">'+
+    PCARD_TABS.map(([id,label])=>'<button role="tab" data-ptab="'+id+'" aria-selected="'+(id===cardTab)+'">'+label+'</button>').join('')+'</div>'+
+    '<div class="pc-body">'+body+'</div></section></div>';
+}
+
+// Navigation: five sections, each with its own pages. A page's route is its id; the address bar shows section/page
+// (#football/depth) so back, forward and refresh work. The game broadcast is a page with no tab of its own.
+const SECTIONS=[
+  {id:'desk',label:'Desk',views:[['desk','Owner desk']]},
+  {id:'football',label:'Football',views:[['depth','Depth chart'],['trades','Trades'],['contracts','Contracts'],['draft','Draft'],['staff','Staff']]},
+  {id:'business',label:'Business',views:[['finances','Finances'],['stadium','Stadium']]},
+  {id:'office',label:'League office',short:'Office',views:[['owners','Owners & votes'],['markets','Broadcast rights'],['news','News']]},
+  {id:'around',label:'Around the league',short:'League',views:[['scoreboard','Scoreboard'],['standings','Standings'],['clubs','Clubs']],more:['club']}
+];
+const SECTION_ICONS={desk:'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',football:'M5 18C3 14 7 5 15 4c3-.4 5 1 4.4 4C18 14 11 19 7 19c-1 0-1.6-.4-2-1zM9.5 14.5l5-5M10 11l3 3M12 9l3 3',
+  business:'M3 6h18v12H3zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',office:'M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18',around:'M4 20V10M10 20V4M16 20v-7M21 20H3'};
+const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
+  finances:()=>financesView(),stadium:()=>stadiumView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
+  scoreboard:()=>scoreboard(),standings:()=>standingsView(),clubs:()=>clubsView(),club:()=>clubView(),game:()=>broadcastView(),player:()=>playerView()};
+const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route)||x.more?.includes(route))??null;
+// Tab names from builds before sections, still found in page snapshots and old links.
+const LEGACY_TABS={'Owner desk':'desk','Depth chart':'depth',Staff:'staff',Stadium:'stadium',Finances:'finances',Contracts:'contracts',League:'markets',Draft:'draft',
+  Scoreboard:'scoreboard',Standings:'standings','Team schedule':'club',Rosters:'club','Club directory':'clubs',Game:'game',schedule:'club',rosters:'club'};
+const routeOf=v=>typeof v!=='string'?null:Object.hasOwn(VIEWS,v)?v:Object.hasOwn(LEGACY_TABS,v)?LEGACY_TABS[v]:null;
+const hashOf=(route,pid=cardPlayer)=>{if(route==='player')return '#player/'+encodeURIComponent(pid??'');if(route==='club')return '#club/'+encodeURIComponent(selected??'');const sec=sectionOf(route);return '#'+(!sec||sec.id===route?route:sec.id+'/'+route);};
+const routeFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');if(parts[0]==='player')return parts.length===2&&parts[1]?'player':null;
+  if(parts[0]==='club')return parts.length===2&&byId.has(safeDecode(parts[1]))?'club':null;
+  const r=routeOf(parts.at(-1));return r&&r!=='player'&&r!=='club'&&(parts.length===1||sectionOf(r)?.id===parts[0])?r:null;};
+const safeDecode=v=>{try{return decodeURIComponent(v??'');}catch{return '';}};
+const clubFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');return parts[0]==='club'&&byId.has(safeDecode(parts[1]))?safeDecode(parts[1]):null;};
+const playerFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');try{return parts[0]==='player'?decodeURIComponent(parts[1]??''):null;}catch{return null;}};
+let cardPlayer=null,cardTab='overview';
+function showPlayer(id){if(cardPlayer!==id)cardTab='overview';cardPlayer=id;navigate('player');window.scrollTo?.(0,0);}
+const lastPage={};
+// Badges count what is waiting on each page and section; the Desk counts everything.
+function navHtml(route,items=[]){
+  const here=sectionOf(route),byPage={};
+  for(const x of items)byPage[x.route]=(byPage[x.route]??0)+1;
+  const badge=(n,what)=>n?'<span class="badge" aria-label="'+n+' waiting'+(what?' in '+esc(what):'')+'">'+n+'</span>':'';
+  const top=SECTIONS.map(x=>{const n=x.id==='desk'?items.length:x.views.reduce((a,[id])=>a+(byPage[id]??0),0);
+    return '<button data-section="'+x.id+'"'+(x===here?' aria-current="page"':'')+'><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="'+SECTION_ICONS[x.id]+'"/></svg><span class="lbl">'+esc(x.short??x.label)+'</span><span class="full">'+esc(x.label)+'</span>'+badge(n,x.label)+'</button>';}).join('');
+  const sub=here&&here.views.length>1?here.views.map(([id,label])=>'<button data-tab="'+id+'"'+(id===route?' aria-current="page"':'')+'>'+esc(label)+badge(byPage[id]??0,label)+'</button>').join(''):'';
+  return {top,sub,label:here?.label??''};
+}
+// Go to a page. Clicks add a history entry; the hashchange that follows finds the page already open.
+function navigate(route){
+  route=routeOf(route);if(!route)return;
+  tab=route;
+  const sec=sectionOf(route);if(sec)lastPage[sec.id]=route;
+  try{if(window.location&&window.location.hash!==hashOf(route))window.location.hash=hashOf(route);}catch{}
+  draw();
+}
+function syncHash(){try{const h=hashOf(tab);if(window.location&&window.location.hash!==h)window.history?.replaceState?.(null,'',h);}catch{}}
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
+// The top bar: club, scoreboard, clock, Advance with what comes due, the Jump ahead and settings menus, and the confirm.
+const ui={jumpOpen:false,settingsOpen:false,confirm:null};
+function scoreboardCells(S){
+  const id=S.club,s=cur(S),t=s.tick;
+  const r=standings(S).flat().find(x=>x.id===id);
+  const week=t<=0?'PRE':t<=REGULAR_WEEKS?String(s.completed).padStart(2,'0'):t<=22?'PO':'OFF';
+  return [['Record',r.w+'-'+r.l+(r.t?'-'+r.t:'')],['Week',week],['Cap room',m1(capRoom(S,id))],['Cash',m1(S.finance.ownerCash)]];
+}
+function confirmHtml(S,c){
+  const jump=c.kind==='jump',horizon=jump?Math.min(c.target,SEASON_TICKS+1):now(S)+1,items=dueBy(S,horizon);
+  const label=jump?jumpTargets(S).find(([t])=>t===c.target)?.[1]??'':'';
+  const title=jump?'Jump to '+label+'?':'Before you '+advanceLabel(S).replace(/ →$/,'').toLowerCase();
+  const lead=jump?(items.length?'On the way, these are decided without you:':'Nothing you have open comes due on the way.')+' New offers and proposals that arrive while you jump go unanswered unless your staff handles them.'
+    :'These are decided when the clock moves:';
+  return '<div role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">'+esc(title)+'</h2><p>'+esc(lead)+'</p>'+
+    (items.length?'<ul>'+items.map(x=>'<li><strong>'+esc(x.title)+'</strong><small>'+esc(x.fate)+'</small></li>').join('')+'</ul>':'')+
+    '<div class="controls"><button id="confirmBack">Review first</button><button id="confirmGo" class="primary">'+esc(jump?'Jump ahead':'Advance anyway')+'</button></div></div>';
+}
+function drawHeader(){
+  const S=save,s=cur(),t=S.club&&byId.get(S.club);
+  $('#brandSmall').textContent=t?t.market:'Continental Gridiron League';
+  $('#brandName').textContent=t?t.nickname:'Season desk';
+  const chip=$('#clubChip');chip.hidden=!t;
+  if(t){chip.style.backgroundColor=color(t.primary);chip.style.borderColor=color(t.secondary);}
+  const board=$('#scoreboard');board.hidden=!t;
+  board.innerHTML=t?scoreboardCells(S).map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join(''):'';
+  $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
+  const due=t?dueBy(S,now(S)+1).length:0,next=$('#advance');
+  next.disabled=!t;
+  next.innerHTML=!t?'Choose a club':esc(advanceLabel(S))+(due?'<span class="due">'+due+' due</span>':'');
+  next.setAttribute?.('aria-label',!t?'Choose a club':advanceLabel(S).replace(/ →$/,'')+(due?', '+due+' item'+(due===1?'':'s')+' come due':''));
+  const targets=t?jumpTargets(S):[],jo=$('#jumpOpen');
+  jo.hidden=!targets.length;if(!targets.length)ui.jumpOpen=false;
+  jo.setAttribute?.('aria-expanded',String(ui.jumpOpen));
+  const jm=$('#jumpMenu');jm.hidden=!ui.jumpOpen;
+  jm.innerHTML=ui.jumpOpen?'<div class="head">Jump ahead to</div>'+targets.map(([tick,label])=>'<button data-jump="'+tick+'">'+esc(label)+'</button>').join('')+
+    '<p class="note">You see what comes due on the way before anything runs.</p>':'';
+  $('#settingsOpen').setAttribute?.('aria-expanded',String(ui.settingsOpen));
+  $('#settingsMenu').hidden=!ui.settingsOpen;
+  const pane=$('#confirmPane');
+  if(ui.confirm&&!t)ui.confirm=null;
+  pane.hidden=!ui.confirm;pane.innerHTML=ui.confirm?confirmHtml(S,ui.confirm):'';
+}
+// Day game, night game, or whatever the device prefers. Kept per browser.
+function applyTheme(v){
+  const root=document.documentElement;
+  if(v==='day')root.dataset.theme='light';else if(v==='night')root.dataset.theme='dark';else delete root.dataset.theme;
+  try{localStorage.setItem('cgl.theme',v);}catch{}
+}
 function draw(){
   const s=cur();
-  $('#tabs').innerHTML=TABS.map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
+  setTeamColors(save);
+  const nav=navHtml(tab,pendingItems(save));
+  $('#tabs').innerHTML=nav.top;
+  const subtabs=$('#subtabs');subtabs.innerHTML=nav.sub;subtabs.hidden=!nav.sub;subtabs.setAttribute?.('aria-label',nav.label);
+  syncHash();
+  try{$('#subtabs [aria-current=page]')?.scrollIntoView?.({block:'nearest',inline:'nearest'});}catch{}
   drawStatus();
   const prompt=$('#importPrompt');
   prompt.hidden=!pendingImport;
   prompt.innerHTML=pendingImport?'<span>'+esc('Replace your current season ('+describeSave(save)+') with the one you loaded ('+describeSave(pendingImport)+')?')+'</span><button id="importYes">Replace season</button><button id="importNo">Keep current season</button>':'';
   const live=$('#watchLive');
   live.hidden=!canWatch(save);
-  if(tab!=='Game')stopBroadcastTimer();
-  const next=$('#advance');
-  next.disabled=!save.club;
-  next.textContent=!save.club?'Choose a club':advanceLabel(save);
-  const targets=save.club?jumpTargets(save):[];
-  $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
-  $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
-  $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='Depth chart'?depthView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():tab==='Game'?broadcastView():'';
-  if(tab==='Game')scheduleBroadcast();
-  if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
+  if(tab!=='game')stopBroadcastTimer();
+  drawHeader();
+  app.innerHTML=(VIEWS[tab]??VIEWS.desk)();
+  if(tab==='game')scheduleBroadcast();
+  if(tab==='markets'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
 // ---------------------------------------------------------------------------
@@ -6230,16 +6788,30 @@ persist();
 let scoutPos='DE';
 let viewed,tab,selected,pendingImport=null;
 const latestView=()=>{const s=cur(),n=s.postseason?.rounds.length??0;return n?REGULAR_WEEKS+n:Math.max(1,s.completed);};
-function resetView(){viewed=latestView();tab='Owner desk';selected=save.club??clubs[0].id;}
+function resetView(){viewed=latestView();tab='desk';selected=save.club??clubs[0].id;}
 resetView();
 const app=$('#app');
 
+function doAdvance(){advance(save);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();}
+function doJump(target){jumpTo(save,target);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();window.scrollTo(0,0);}
 document.addEventListener('click',e=>{
+  if((ui.jumpOpen||ui.settingsOpen)&&!e.target.closest?.('.menu,#jumpOpen,#settingsOpen')){ui.jumpOpen=ui.settingsOpen=false;draw();}
+  if(!e.target.closest?.('.find')){const r=$('#findResults');if(r&&!r.hidden)r.hidden=true;}
+  if(ui.confirm&&e.target.id==='confirmPane'){ui.confirm=null;draw();}
+  if(draftUi.profile&&e.target.id==='profilePane'){draftUi.profile=null;draw();}
   const b=e.target.closest?.('button');if(!b)return;
-  if(b.dataset.tab){tab=b.dataset.tab;draw();}
-  if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
+  if(b.dataset.player){const r=$('#findResults');r.hidden=true;r.innerHTML='';$('#findPlayer').value='';showPlayer(b.dataset.player);return;}
+  if(b.dataset.ptab){cardTab=b.dataset.ptab;draw();}
+  if(b.dataset.roster&&byId.has(b.dataset.roster)){selected=b.dataset.roster;clubTab='roster';navigate('club');}
+  if(b.dataset.pquote){const [club,pid]=b.dataset.pquote.split('/');tradeQuote(save,club,pid);if(save.offer)tab='trades';commit();}
+  if(tab==='player'&&(b.dataset.negotiate||b.dataset.release))setTimeout(()=>navigate('contracts'));
+  if(b.dataset.section){const sec=SECTIONS.find(x=>x.id===b.dataset.section);if(sec)navigate(lastPage[sec.id]??sec.views[0][0]);}
+  if(b.dataset.tab)navigate(b.dataset.tab);
+  if(b.dataset.id&&byId.has(b.dataset.id)){selected=b.dataset.id;clubTab='schedule';navigate('club');window.scrollTo(0,0);}
+  if(b.dataset.ctab){clubTab=b.dataset.ctab;draw();}
+  if(b.dataset.conf){clubsConf=b.dataset.conf;draw();}
   if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
-  if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
+  if(b.dataset.scout){scoutPos=b.dataset.scout;navigate('trades');$('#scout')?.focus?.();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
   if(b.id==='accept'||b.id==='decline'){resolveOffer(save,b.id==='accept');commit();}
@@ -6277,7 +6849,7 @@ document.addEventListener('click',e=>{
   if(b.id==='importNo'){pendingImport=null;draw();}
   if(b.id==='watchLive'&&save.club&&canWatch(save)){
     const before=broadcastGame;advance(save);viewed=latestView();
-    if(broadcastGame!==before)startBroadcast();else tab='Owner desk';
+    if(broadcastGame!==before)startBroadcast();else tab='desk';
     commit();window.scrollTo(0,0);
   }
   if(b.id==='watchLast'&&broadcastGame){startBroadcast();draw();window.scrollTo(0,0);}
@@ -6286,17 +6858,26 @@ document.addEventListener('click',e=>{
   if(b.id==='bcNext'&&broadcastGame){bc.i=Math.min(broadcastGame.plays.length,bc.i+1);drawBroadcast();}
   if(b.id==='bcEnd'&&broadcastGame){bc.i=broadcastGame.plays.length;bc.playing=false;stopBroadcastTimer();drawBroadcast();}
   if(b.dataset.bcspeed){bc.speed=Number(b.dataset.bcspeed);drawBroadcast();scheduleBroadcast();}
-  if(b.id==='bcBack'){tab='Owner desk';draw();}
-  if(b.id==='advance'&&save.club){advance(save);viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();}
-  if(b.id==='jumpGo'&&save.club){jumpTo(save,Number($('#jumpTarget').value));viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();window.scrollTo(0,0);}
+  if(b.id==='bcBack')navigate('desk');
+  if(b.id==='advance'&&save.club){if(dueBy(save,now()+1).length){ui.confirm={kind:'advance'};draw();$('#confirmGo')?.focus?.();}else doAdvance();}
+  if(b.id==='confirmGo'&&ui.confirm){const c=ui.confirm;ui.confirm=null;if(c.kind==='jump')doJump(c.target);else doAdvance();}
+  if(b.id==='confirmBack'){ui.confirm=null;navigate('desk');}
+  if(b.closest?.('#settingsMenu')&&ui.settingsOpen){ui.settingsOpen=false;draw();}
+  if(b.id==='jumpOpen'){ui.jumpOpen=!ui.jumpOpen;ui.settingsOpen=false;draw();}
+  if(b.id==='settingsOpen'){ui.settingsOpen=!ui.settingsOpen;ui.jumpOpen=false;draw();}
+  if(b.dataset.jump&&save.club){ui.jumpOpen=false;ui.confirm={kind:'jump',target:Number(b.dataset.jump)};draw();$('#confirmGo')?.focus?.();}
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
   if(b.id==='gmPick'&&save.draft.order[save.draft.pick]?.owner===save.club){aiPick(save);commit();}
   if(b.id==='simToMine'){simToMyPick(save);commit();}
   if(b.dataset.scoutp){scoutProspect(save,b.dataset.scoutp);commit();}
   if(b.dataset.watch){toggleWatch(save,b.dataset.watch);commit();}
-  if(b.dataset.profile){draftUi.profile=b.dataset.profile;if(tab!=='Draft')tab='Draft';draw();window.scrollTo?.(0,0);}
+  if(b.dataset.profile){draftUi.profile=b.dataset.profile;if(tab!=='draft')navigate('draft');else draw();window.scrollTo?.(0,0);}
   if(b.id==='closeProfile'){draftUi.profile=null;draw();}
   if(b.id==='toggleWire'){draftUi.allWire=!draftUi.allWire;draw();}
+  if(b.dataset.dview){draftUi.view=b.dataset.dview;draw();}
+  if(b.dataset.dgroup){draftUi.group=b.dataset.dgroup;draftUi.view='list';draw();}
+  if(b.dataset.dsort){const k=b.dataset.dsort;if(draftUi.sort===k)draftUi.dir=-draftUi.dir;else{draftUi.sort=k;draftUi.dir=['rank','name','pos','year'].includes(k)?1:-1;}draw();}
+  if(b.dataset.dtoggle&&b.dataset.dtoggle in draftUi){draftUi[b.dataset.dtoggle]=!draftUi[b.dataset.dtoggle];draw();}
   const contractNotice={capShort:'That does not fit under the cap. Clear room first.',ownerShort:'You do not have that much cash on hand.',unavailable:'That move is no longer available.',invalid:'Those terms are not valid.'};
   if(b.dataset.extend){const res=extendPlayer(save,b.dataset.extend,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
   if(b.dataset.restructure){const res=restructure(save,b.dataset.restructure,contractsUi.funding);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
@@ -6386,7 +6967,7 @@ app.onchange=e=>{
   if(e.target.id==='claimTeam'||e.target.id==='target')return;
   if(e.target.id==='scout')scoutPos=e.target.value;
   if(e.target.id==='week')viewed=Number(e.target.value);
-  if(e.target.id==='team')selected=e.target.value;
+  if(e.target.id==='team'&&byId.has(e.target.value)){selected=e.target.value;if(tab==='club'){navigate('club');return;}}
   draw();
 };
 const filePicker=$('#seasonFile');
@@ -6407,7 +6988,7 @@ $('#copy').onclick=()=>offerFile('cgl-season-'+cur().number+'-'+shortLabel(cur()
 // Keep the open tab and selections when a new version of the page arrives.
 function start(data){
   if(data&&typeof data==='object'){
-    if(TABS.includes(data.tab))tab=data.tab;
+    if(routeOf(data.tab))tab=routeOf(data.tab);
     if(isInt(data.viewed,1,22))viewed=data.viewed;
     if(byId.has(data.selected))selected=data.selected;
     if(positionNames.has(data.scoutPos))scoutPos=data.scoutPos;
@@ -6416,10 +6997,34 @@ function start(data){
       for(const k of Object.keys(stadiumUi.plan))if(typeof data.stadiumUi.plan?.[k]==='string')stadiumUi.plan[k]=data.stadiumUi.plan[k];
     }
   }
+  const hr=routeFromHash(window.location?.hash);if(hr==='player')cardPlayer=playerFromHash(window.location.hash);if(hr==='club')selected=clubFromHash(window.location.hash);
+  if(typeof data?.cardPlayer==='string'&&!hr)cardPlayer=data.cardPlayer;
+  if(['board','list','wire'].includes(data?.draftView))draftUi.view=data.draftView;
+  tab=hr??(tab==='player'&&!cardPlayer?'desk':tab);
   draw();
 }
+document.addEventListener('input',e=>{
+  if(e.target.id==='draftFind'){draftUi.q=e.target.value;draw();const el=$('#draftFind');if(el){el.focus();const n=el.value.length;el.setSelectionRange?.(n,n);}return;}
+  if(e.target.id!=='findPlayer')return;
+  const res=$('#findResults'),q=e.target.value.trim(),hits=findPlayers(save,q);
+  res.hidden=!q;
+  res.innerHTML=hits.length?hits.map(({p,club})=>'<button data-player="'+esc(p.id)+'">'+esc(p.pos+' '+p.name)+'<small>'+esc((club?byId.get(club).abbr:'Free agent')+' · '+p.rating+' · age '+p.age)+'</small></button>').join(''):'<p class="note">'+(q.length<2?'Keep typing…':'Nobody by that name.')+'</p>';
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||!(ui.jumpOpen||ui.settingsOpen||ui.confirm||draftUi.profile))return;
+  if(ui.jumpOpen||ui.settingsOpen||ui.confirm){ui.jumpOpen=ui.settingsOpen=false;ui.confirm=null;}else draftUi.profile=null;
+  draw();
+});
+{let v='system';try{v=localStorage.getItem('cgl.theme')??'system';}catch{}
+ if(!['system','day','night'].includes(v))v='system';applyTheme(v);const pick=$('#themePick');pick.value=v;pick.onchange=()=>applyTheme(pick.value);}
+window.addEventListener?.('hashchange',()=>{
+  const h=window.location.hash,r=routeFromHash(h);
+  if(r==='player'){const id=playerFromHash(h);if(tab!=='player'||id!==cardPlayer){cardPlayer=id;navigate('player');}}
+  else if(r==='club'){const id=clubFromHash(h);if(tab!=='club'||id!==selected){selected=id;navigate('club');}}
+  else if(r&&r!==tab)navigate(r);
+});
 const hot=window.claude?.hot;
-try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}
+try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi,cardPlayer,draftView:draftUi.view}));}catch{}
 // Draw once we know where the season lives (immediately when there is no IndexedDB).
 function begin(data){
   if(storeReady)return start(data);

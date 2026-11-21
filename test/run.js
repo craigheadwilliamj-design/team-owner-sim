@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'draftBook', 'corkBoard', 'clipboard', 'draftGroupOf', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2586,6 +2586,43 @@ test('player card: every player has a card on every tab, other clubs get a trade
   assert.equal(api.playerFromHash('#player/' + encodeURIComponent(mine.id)), mine.id);
   assert.equal(api.routeFromHash('#player'), null);
   assert(api.depthView().includes('data-player="' + mine.id + '"') || S.rosters['club-06'].some(p => api.depthView().includes('data-player="' + p.id + '"')), 'depth chart names link to cards');
+});
+
+test('draft room: cork board tiers, a sortable and filterable clipboard, and taken players marked on draft day', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 3; i++) api.advance(S);
+  const D = S.draft;
+  D.prospects[0].name = 'Bad <img src=x onerror=alert(1)>';
+  api.draftUi.view = 'board';
+  let html = api.draftView();
+  assert(html.includes('class="cork"') && html.includes('1st round') && html.includes('Day 2'));
+  assert(!html.includes('<img src=x'), 'prospect names are escaped on the board');
+  const B = api.draftBook(S);
+  const top = B.ranked.slice(0, 32);
+  for (const p of top) assert(html.includes('data-profile="' + p.id + '"'), 'every first-round grade is on the board');
+  api.draftUi.view = 'list'; api.draftUi.group = 'qb'; api.draftUi.sort = 'grade'; api.draftUi.dir = -1;
+  html = api.draftView();
+  const ids = [...html.matchAll(/class="plink" data-profile="([^"]+)"/g)].map(m => m[1]);
+  assert(ids.length > 0);
+  for (const id of ids) assert.equal(api.draftGroupOf(D.prospects.find(p => p.id === id).pos), 'qb', 'only quarterbacks with the QB chip');
+  const grades = ids.map(id => B.grade(D.prospects.find(p => p.id === id)));
+  assert.deepEqual(grades, [...grades].sort((a, b) => b - a), 'sorted by your grade, high to low');
+  api.draftUi.group = 'All'; api.draftUi.q = D.prospects[5].name;
+  assert(api.draftView().includes('data-profile="' + D.prospects[5].id + '"'));
+  api.draftUi.q = ''; api.draftUi.watchOnly = true;
+  assert.match(api.draftView(), /0 of \d+ prospects|Nobody on the sheet/);
+  api.draftUi.watchOnly = false;
+  api.jumpTo(S, 34);
+  api.simToMyPick(S);
+  api.draftUi.view = 'board';
+  html = api.draftView();
+  assert.match(html, /On the clock/);
+  const taken = S.draft.picks[0];
+  if (taken) assert(html.includes('#' + taken.overall), 'a taken prospect carries his pick sticker');
+  api.draftUi.view = 'list';
+  assert(api.draftView().includes('data-draft='), 'your pick can be made from the clipboard');
+  Object.assign(api.draftUi, { view: 'board', group: 'All', q: '' });
 });
 
 let failed = 0;

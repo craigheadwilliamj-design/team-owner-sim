@@ -2531,8 +2531,8 @@ test('Jump ahead offers the nearest milestone first, and the confirm names what 
 test('one list of pending items drives the desk inbox, the nav badges and the Advance count', () => {
   const { api } = load();
   const S = api.save; S.club = 'club-06';
-  S.finance.naming = { status: 'awaiting', expiresWeek: 3, offer: { company: 'Ohio Valley <b>Bank</b>' } };
   for (let i = 0; i < 6 && !S.staff.proposals.some(P => P.kind === 'trade' || P.kind === 'offer'); i++) api.playWeek(S);
+  S.finance.naming = { status: 'awaiting', expiresWeek: api.now(S) + 2, offer: { company: 'Ohio Valley <b>Bank</b>' } };
   const items = api.pendingItems(S);
   assert(items.some(x => x.route === 'finances'), 'the naming offer is waiting');
   for (const x of items) {
@@ -2543,9 +2543,9 @@ test('one list of pending items drives the desk inbox, the nav badges and the Ad
   assert(desk.includes(items.length + (items.length === 1 ? ' thing needs' : ' things need')));
   assert(!desk.includes('<b>Bank'), 'item text is escaped');
   const nav = api.navHtml('desk', items);
-  assert.match(nav.top, new RegExp('data-section="desk"[^>]*>Desk<span class="badge"[^>]*>' + items.length + '<'));
+  assert.match(nav.top, new RegExp('data-section="desk".*?<span class="full">Desk</span><span class="badge"[^>]*>' + items.length + '<'));
   const biz = items.filter(x => x.route === 'finances' || x.route === 'stadium').length;
-  assert.match(nav.top, new RegExp('Business<span class="badge"[^>]*>' + biz + '<'));
+  assert.match(nav.top, new RegExp('<span class="full">Business</span>' + (biz ? '<span class="badge"[^>]*>' + biz + '<' : '</button>')));
   const expiring = items.filter(x => api.urgency(S, x) === 'expire').map(x => x.id).sort();
   assert.deepEqual(api.dueBy(S, api.now(S) + 1).map(x => x.id).sort(), expiring, 'Advance counts exactly the items decided this week');
   const talk = S.staff.proposals.find(P => P.kind === 'trade' || P.kind === 'offer');

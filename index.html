@@ -106,6 +106,39 @@ li.item .acts button{min-height:44px}
 .desk>aside{flex:1 1 300px;min-width:0}
 .desk>aside ul{background:var(--surface);border:1px solid var(--rule);border-radius:6px;max-height:34rem;overflow-y:auto}
 .desk>aside li{display:block;padding:10px 12px}
+.plink{border:0;background:none;padding:0;color:var(--link);font:inherit;font-weight:600;text-align:left;text-decoration:underline;text-decoration-color:var(--rule-strong);text-underline-offset:2px}
+.plink:hover{text-decoration-color:currentColor}
+.find{position:relative}
+.find input{font:inherit;width:220px;max-width:100%;min-height:44px;box-sizing:border-box;padding:8px 12px;border:0;border-radius:4px;background:#ffffff;color:#17201b}
+.find .menu{left:0;right:auto}
+.find .menu button small{display:block}
+.crumbs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.pcard-page{display:flex;gap:20px 28px;flex-wrap:wrap;align-items:flex-start}
+.pcard-wrap{flex:0 1 360px;min-width:0}
+.pcard{background:var(--card);padding:10px;border-radius:12px;box-shadow:0 8px 18px rgba(0,0,0,.25)}
+.pc-inner{background:var(--surface);border-radius:6px;overflow:hidden}
+.pc-top{position:relative;height:170px;display:flex;flex-direction:column;justify-content:flex-end;padding:14px 16px;color:#fff;background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 58px,var(--yard) 58px 60px),repeating-linear-gradient(90deg,var(--turf) 0 60px,var(--turf-2) 60px 120px)}
+.pc-slot{position:absolute;top:12px;left:12px;font:400 .72rem var(--label);letter-spacing:.12em;text-transform:uppercase;background:rgba(0,0,0,.35);padding:3px 8px}
+.pc-pos{position:absolute;top:6px;right:12px;font:900 4.6rem/1 var(--display);opacity:.9}
+.pc-first{font:400 .8rem var(--label);letter-spacing:.12em;text-transform:uppercase}
+#app .pc-last{font:900 2.5rem/.95 var(--display);text-transform:uppercase;margin:0;color:#fff}
+.pc-board{border:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.pc-board dd{font-size:2rem}
+.pc-bio{display:grid;grid-template-columns:auto 1fr;gap:0 14px;margin:0;padding:6px 16px 10px}
+.pc-bio dt,.pc-bio dd{margin:0;padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+.pc-bio dt{color:var(--muted)}
+.pc-bio dd{font-weight:600}
+.pc-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pc-acts button{min-height:44px}
+.pc-main{flex:1 1 380px;min-width:0}
+.pc-tabs{display:flex;gap:4px;border-bottom:3px solid var(--turf);flex-wrap:wrap}
+.pc-tabs button{border:0;border-radius:4px 4px 0 0;background:transparent;font:800 1.1rem var(--display);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px;min-height:46px}
+.pc-tabs [aria-selected=true]{background:var(--turf);color:var(--band-fg)}
+.pc-body h3{background:none;color:var(--link);padding:16px 0 4px}
+.pc-body p{margin:0 0 6px}
+.pc-body>.wide{margin-top:16px}
+ul.history{margin-top:12px}
+@media (max-width:700px){.pcard-wrap{flex-basis:100%}}
 .desk>aside li strong{font-size:.9rem;margin-right:6px}
 #app{padding:25px 0}
 #app>small{font:400 .82rem var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--link)}
@@ -199,11 +232,11 @@ ol.pbp li.note{color:var(--muted);font-style:italic}
 .boxscore{max-width:520px}
 #watchLive{font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:48px;background:var(--flag);color:var(--flag-fg);border:0}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
-@media (max-width:560px){.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box}.scoreboard div{padding:3px 2px}.scoreboard dt{font-size:.55rem;letter-spacing:.08em}.scoreboard dd{font-size:1.2rem}header .clock{margin-left:0;width:100%;align-items:stretch}.advance{justify-content:flex-start}#advance{flex:1 1 100%}}
+@media (max-width:560px){.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box}.scoreboard div{padding:3px 2px}.scoreboard dt{font-size:.55rem;letter-spacing:.08em}.scoreboard dd{font-size:1.2rem}header .clock{margin-left:0;width:100%;align-items:stretch}.advance{justify-content:flex-start}#advance{flex:1 1 100%}.pc-board{grid-template-columns:repeat(3,minmax(0,1fr))}.pc-board dd{font-size:1.8rem}.find,.find input{width:100%}}
 </style>
 </head>
 <body>
-<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><nav id="tabs" aria-label="Sections"></nav><nav id="subtabs" hidden></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="find"><input id="findPlayer" type="search" placeholder="Find any player" aria-label="Find any player, any club" autocomplete="off"><div id="findResults" class="menu" hidden></div></div><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><nav id="tabs" aria-label="Sections"></nav><nav id="subtabs" hidden></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -4178,16 +4211,16 @@ function contractsView(){
       const actions='<button data-negotiate="extend:'+esc(p.id)+'">Negotiate</button><button data-extend="'+esc(p.id)+'">Extend at ask</button>'+
         (p.contract.option?'<button data-option="'+esc(p.id)+'" title="'+m1(optionAmount(S,p))+' next season">Pick up option</button>':'')+
         (tagged?'<button data-untag="1">Remove tag</button>':tagWindow(S)&&!tag?'<button data-tag="'+esc(p.id)+'" title="'+m1(tagAmount(S,p.pos))+' for one year">Franchise tag</button>':'');
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>'+(tagged?'Franchise tag · '+m1(tag.amount):gm)+' · wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+esc(t.years+' yrs · '+m1(termsHit(t))+'/yr'+(t.bonus?' · '+m1(t.bonus)+' bonus':''))+'</td><td class="calls">'+actions+'</td></tr>';}).join('')+'</tbody></table></div>':'<p>No contracts expire this year.</p>');
   html+='<h2>Cap sheet</h2><div class="wide"><table class="capsheet"><thead><tr><th>Player</th><th>Rating</th><th>Cap hit</th><th>Salary</th><th>Years</th><th>Gtd</th><th>Dead if cut</th><th></th></tr></thead><tbody>'+
     [...roster].sort((a,b)=>capHit(b)-capHit(a)).map(p=>{const rs=restructureSavings(S,p);
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Age '+p.age+({rookie:' · rookie deal',tag:' · franchise tag'}[p.contract.kind]??'')+(p.contract.nextSalary?' · option year '+m1(p.contract.nextSalary):'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+(p.contract.gYears??0)+'</td><td>'+m1(deadIfCut(p,S))+'</td><td class="calls">'+
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>Age '+p.age+({rookie:' · rookie deal',tag:' · franchise tag'}[p.contract.kind]??'')+(p.contract.nextSalary?' · option year '+m1(p.contract.nextSalary):'')+'</small></td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'</td><td>'+m1(p.contract.salary)+'</td><td>'+p.contract.yearsLeft+'</td><td>'+(p.contract.gYears??0)+'</td><td>'+m1(deadIfCut(p,S))+'</td><td class="calls">'+
         (rs?'<button data-restructure="'+esc(p.id)+'" title="Clears '+m1(rs.savings)+' this year">Restructure</button>':'')+'<button data-release="'+esc(p.id)+'">Release</button></td></tr>';}).join('')+'</tbody></table></div>';
   const pool=[...S.fa.pool].sort((a,b)=>b.rating-a.rating).slice(0,30);
   html+='<h2>Free agents</h2>'+(pool.length?'<p>'+esc('Players weigh every offer the week it arrives: money, guarantees, years, and how good your team is, depending on what they care about. Early in free agency they hold out for their ask; later they settle.'+(S.cap.gmHandles?' The GM also signs free agents to fill holes; switch to “I decide” to run it yourself.':''))+'</p>'+
     '<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Asking</th><th>Cap hit</th><th></th></tr></thead><tbody>'+
     pool.map(p=>{const o=S.fa.offers[p.id];
-      return '<tr><td>'+esc(p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
+      return '<tr><td>'+plink(p,p.pos+' '+p.name)+'<small>Wants '+PRIORITY_LABEL[priorityFor(p)]+esc(askNote(S,p))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+esc(p.ask.years+' yrs · '+m1(p.ask.salary)+(p.ask.bonus?' + '+m1(p.ask.bonus)+' bonus':'')+(p.ask.gYears?' · '+p.ask.gYears+' gtd':''))+'</td><td>'+m1(termsHit(p.ask))+'</td><td class="calls">'+
         (o?'<small>'+esc('Offer in: '+o.years+' yrs, '+m1(termsHit(o))+'/yr')+'</small><button data-withdraw="'+esc(p.id)+'">Withdraw</button>':'<button data-negotiate="fa:'+esc(p.id)+'">Negotiate</button><button data-offer="'+esc(p.id)+'">Offer asking terms</button>')+'</td></tr>';}).join('')+'</tbody></table></div>':
     '<p>'+esc('Free agency opens at the new league year, '+weekLabel(MILESTONES.leagueYear)+', when expired contracts hit the market.')+'</p>');
   return html;
@@ -4785,7 +4818,7 @@ function depthView(){
   const row=(p,idx,n,len)=>{
     const status=(p.out?'Out · '+p.out+' wk':!actives.has(p.id)?'Inactive':idx<n?'Starter':'Backup')+(p.drafted?.season===cur(S).number-1||p.drafted?.season===cur(S).number?' · rookie, '+p.drafted.college:'');
     const changed=idx<n&&!p.out&&!coachStarters.has(p.id);
-    return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+esc(p.name)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
+    return '<tr><td>'+esc(p.pos+(idx+1))+'</td><td>'+plink(p)+'<small>'+esc(status+(changed?' · your call':''))+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td class="calls">'+
       (idx>0?'<button data-depth="'+esc(p.id)+':-1" aria-label="Move up">↑</button>':'')+(idx<len-1?'<button data-depth="'+esc(p.id)+':1" aria-label="Move down">↓</button>':'')+
       (p.out?'':'<button data-active="'+esc(p.id)+'">'+(actives.has(p.id)?'Make inactive':'Activate')+'</button>')+
       (p.out>=IR_MIN_WEEKS?'<button data-ir="'+esc(p.id)+'">Injured reserve</button>':'')+'</td></tr>';
@@ -4795,10 +4828,10 @@ function depthView(){
     return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rtg</th><th></th></tr></thead><tbody>'+
       section.flatMap(([pos,,n])=>u.chart[pos].map((p,idx,arr)=>row(p,idx,n,arr.length))).join('')+'</tbody></table></section>';
   }).join('')+'</div>';
-  html+='<h2>Injured reserve</h2>'+(ir.length?'<ul>'+ir.map(p=>'<li><div><strong>'+esc(p.pos+' '+p.name)+'</strong><small>'+esc((p.out?'Out '+p.out+' more wk':'Healthy')+' · on IR since '+weekLabel(p.ir.since))+'</small></div>'+
+  html+='<h2>Injured reserve</h2>'+(ir.length?'<ul>'+ir.map(p=>'<li><div><strong>'+plink(p,p.pos+' '+p.name)+'</strong><small>'+esc((p.out?'Out '+p.out+' more wk':'Healthy')+' · on IR since '+weekLabel(p.ir.since))+'</small></div>'+
       (canReturn(S,id,p)?'<button data-unir="'+esc(p.id)+'">Activate</button>':'')+'</li>').join('')+'</ul>':'<p>Nobody is on injured reserve.</p>');
   html+='<h2>Practice squad</h2>'+(ps.length?'<div class="wide"><table><thead><tr><th>Player</th><th>Age</th><th>Rating</th><th>Potential</th><th></th></tr></thead><tbody>'+
-      [...ps].sort((a,b)=>b.rating-a.rating).map(p=>'<tr><td>'+esc(p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+(p.potential??p.rating)+'</td><td class="calls"><button data-promote="'+esc(p.id)+'">Promote</button><button data-psrelease="'+esc(p.id)+'">Release</button></td></tr>').join('')+'</tbody></table></div>':'<p>The practice squad is empty.</p>')+
+      [...ps].sort((a,b)=>b.rating-a.rating).map(p=>'<tr><td>'+plink(p,p.pos+' '+p.name)+'</td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+(p.potential??p.rating)+'</td><td class="calls"><button data-promote="'+esc(p.id)+'">Promote</button><button data-psrelease="'+esc(p.id)+'">Release</button></td></tr>').join('')+'</tbody></table></div>':'<p>The practice squad is empty.</p>')+
     (ps.length<PRACTICE_LIMIT?'<div class="controls"><button id="fillPractice">Fill the practice squad</button></div>':'');
   return html;
 }
@@ -6126,7 +6159,7 @@ function tradesView(){
 }
 function medicalHtml(S){
   const injuries=S.rosters[S.club].filter(p=>p.out);
-  return '<h2>Medical report</h2><ul>'+(injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · '+(p.ir?'injured reserve · ':'')+'out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>')+'</ul>';
+  return '<h2>Medical report</h2><ul>'+(injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+plink(p)+' · '+(p.ir?'injured reserve · ':'')+'out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>')+'</ul>';
 }
 function scoreboard(){
   const s=cur(),P=s.postseason;
@@ -6167,7 +6200,7 @@ function rosterView(){
     '<div class="tables">'+['Offense','Defense','Special teams'].map((side,i)=>{
       const section=[positions.slice(0,7),positions.slice(7,12),positions.slice(12)][i];
       return '<section><h3>'+side+'</h3><table><thead><tr><th>Pos.</th><th>Player</th><th>Age</th><th>Rating</th><th>Cap hit</th></tr></thead><tbody>'+
-        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+esc(p.name)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+esc(seasonText(save,p)?' · '+seasonText(save,p):'')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
+        section.flatMap(([pos,,starters])=>units.chart[pos].map((p,idx)=>'<tr><td>'+pos+(idx+1)+'</td><td>'+plink(p)+'<small>'+(p.ir?'Injured reserve':p.out?'Out · '+p.out+' wk':idx<starters?'Starter':'Reserve')+esc(seasonText(save,p)?' · '+seasonText(save,p):'')+'</small></td><td>'+p.age+'</td><td>'+p.rating+'</td><td>'+m1(capHit(p))+'<small>'+p.contract.yearsLeft+' yr</small></td></tr>')).join('')+'</tbody></table></section>';
     }).join('')+'</div>'+leadersView(save);
 }
 // League leaders for the season under way, or the last one before the first game.
@@ -6177,7 +6210,7 @@ function leadersView(S){
   const lists=cats.map(([k,label])=>[label,statLeaders(S,season,k)]).filter(([,rows])=>rows.length);
   if(!lists.length)return '';
   return '<h2>'+esc('League leaders · Season '+season)+'</h2><div class="tables">'+lists.map(([label,rows])=>'<section><h3>'+esc(label)+'</h3><table><tbody>'+
-    rows.map(({p,club,v})=>'<tr><td>'+esc(p.name)+'<small>'+esc(p.pos+' · '+byId.get(club).abbr+' · '+p.rating)+'</small></td><td>'+esc(v.toLocaleString('en-US'))+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
+    rows.map(({p,club,v})=>'<tr><td>'+plink(p)+'<small>'+esc(p.pos+' · '+byId.get(club).abbr+' · '+p.rating)+'</small></td><td>'+esc(v.toLocaleString('en-US'))+'</td></tr>').join('')+'</tbody></table></section>').join('')+'</div>';
 }
 // ---------------------------------------------------------------------------
 // The broadcast: the owner's game, presented live from its play log.
@@ -6336,6 +6369,98 @@ function broadcastView(){
   return heading(B.label.toUpperCase(),away+(B.neutral?' vs. ':' at ')+home)+'<div id="broadcast">'+broadcastInner()+'</div>';
 }
 function drawBroadcast(){const el=$('#broadcast');if(el&&broadcastGame)el.innerHTML=broadcastInner();}
+// ---- Player card -------------------------------------------------------------
+// Every player name is a link to his card: who he is, his contract, his numbers and his history with you.
+const plink=(p,label=p.name)=>'<button class="plink" data-player="'+esc(p.id)+'">'+esc(label)+'</button>';
+function findPlayer(S,id){
+  for(const [club,list] of Object.entries(S.rosters)){const p=list.find(x=>x.id===id);if(p)return {p,club,where:'roster'};}
+  for(const [club,list] of Object.entries(S.practice??{})){const p=list.find(x=>x.id===id);if(p)return {p,club,where:'practice'};}
+  const p=S.fa?.pool?.find(x=>x.id===id);
+  return p?{p,club:null,where:'fa'}:null;
+}
+function allPlayers(S){
+  return [...Object.entries(S.rosters).flatMap(([club,list])=>list.map(p=>({p,club}))),
+    ...Object.entries(S.practice??{}).flatMap(([club,list])=>list.map(p=>({p,club}))),
+    ...(S.fa?.pool??[]).map(p=>({p,club:null}))];
+}
+// Name search for the top bar: your own players first, then by rating.
+function findPlayers(S,q,limit=8){
+  q=String(q??'').trim().toLowerCase();if(q.length<2)return [];
+  return allPlayers(S).filter(({p})=>p.name.toLowerCase().includes(q))
+    .sort((a,b)=>Number(b.club===S.club)-Number(a.club===S.club)||b.p.rating-a.p.rating).slice(0,limit);
+}
+const PCARD_TABS=[['overview','Overview'],['contract','Contract'],['stats','Stats'],['history','History']];
+function depthSlot(S,club,p){
+  if(p.ir)return null;
+  const u=personnel(S.rosters[club].filter(x=>!x.ir),lineupCoach(S,club)),i=u.chart[p.pos]?.indexOf(p)??-1,n=positions.find(([pos])=>pos===p.pos)?.[2]??1;
+  return i<0?null:{label:p.pos+(i+1),starter:i<n,mates:u.chart[p.pos].filter(x=>x!==p)};
+}
+function playerView(){
+  const S=save,f=cardPlayer&&findPlayer(S,cardPlayer);
+  if(!f)return heading('PLAYER','No longer in the league')+'<p>He has retired, or his record is gone.</p><button data-tab="desk">Back to the desk</button>';
+  const {p,club,where}=f,mine=!!S.club&&club===S.club,t=club&&byId.get(club),c=p.contract;
+  const slot=where==='roster'?depthSlot(S,club,p):null;
+  const status=where==='fa'?'Free agent':where==='practice'?'Practice squad':p.ir?'Injured reserve'+(p.out?' · out '+p.out+' wk':''):p.out?'Out · '+p.out+' wk':'Healthy · active';
+  const drafted=p.drafted?'Season '+p.drafted.season+', round '+p.drafted.round+', pick '+p.drafted.overall:p.undrafted?'Undrafted, season '+p.undrafted.season:'Before the league’s records';
+  const college=p.drafted?.college??p.undrafted?.college??p.college??'Not on record';
+  const bio=[['Club',t?teamName(club):'Free agent'],['College',college],['Drafted',drafted],
+    ['Contract',where==='fa'?'Asking '+p.ask.years+' yrs · '+m1(termsHit(p.ask))+' a year':m1(capHit(p))+' cap hit · '+c.yearsLeft+' yr'+(c.yearsLeft===1?'':'s')+' left'],['Status',status]];
+  const acts=[];
+  if(mine&&where==='roster'){
+    if(c.yearsLeft===1&&c.kind!=='tag')acts.push('<button class="primary" data-negotiate="extend:'+esc(p.id)+'">Negotiate an extension</button>');
+    const rs=restructureSavings(S,p);if(rs)acts.push('<button data-restructure="'+esc(p.id)+'" title="Clears '+m1(rs.savings)+' this year">Restructure</button>');
+    acts.push('<button data-release="'+esc(p.id)+'">Release</button>');
+  }else if(where==='fa'&&S.club)acts.push('<button class="primary" data-negotiate="fa:'+esc(p.id)+'">Negotiate</button>');
+  else if(club&&S.club&&!mine&&where==='roster'&&tradeWindow(S)&&!S.offer&&!p.out)acts.push('<button class="primary" data-pquote="'+esc(club+'/'+p.id)+'">Ask your GM for a price</button>');
+  const roster=club?(where==='practice'?S.practice[club]:S.rosters[club]):[];
+  const order=[...roster].sort((a,b)=>positions.findIndex(([x])=>x===a.pos)-positions.findIndex(([x])=>x===b.pos)||b.rating-a.rating);
+  const k=order.indexOf(p),prev=k>0?order[k-1]:null,next=k>=0?order[k+1]:null;
+  const back=club?(mine?'<button data-tab="depth">Depth chart</button>':'<button data-roster="'+esc(club)+'">'+esc(t.abbr+' roster')+'</button>'):'<button data-tab="contracts">Free agents</button>';
+  let body='';
+  if(cardTab==='overview'){
+    const pot=p.potential??p.rating;
+    const note=statNote(S,p).trim();
+    const read=[note,mine?'He wants '+PRIORITY_LABEL[priorityFor(p)]+' in his next deal.':'',
+      where!=='fa'&&!note?'Around the league he is priced like a '+Math.round(perceivedRating(S,p))+'.':'',
+      p.age<=24&&pot>p.rating+4?'Young and still climbing toward a '+pot+'.':p.age>=31?'Past 30: expect the rating to slip.':''].filter(Boolean);
+    body='<h3>Your GM’s read</h3><p>'+esc(read.join(' ')||'Nothing out of the ordinary.')+'</p>'+
+      '<h3>This season</h3><p>'+esc(seasonText(S,p)||'No stats yet.')+'</p>'+
+      (slot?'<h3>'+esc('Also at '+p.pos)+'</h3><p>'+(slot.mates.length?slot.mates.map(x=>plink(x,x.name+' · '+x.rating)).join(', '):'Nobody else.')+'</p>':'');
+  }else if(cardTab==='contract'){
+    if(where==='fa')body='<p>'+esc('He is asking '+p.ask.years+' years at '+m1(p.ask.salary)+' a year'+(p.ask.bonus?' with a '+m1(p.ask.bonus)+' bonus':'')+'.')+'</p>';
+    else{
+      const rows=[['Kind of deal',{rookie:'Rookie deal',tag:'Franchise tag',minimum:'Minimum deal'}[c.kind]??'Veteran deal'],['Salary this year',m1(c.salary)],
+        ['Signing bonus on the cap',m1(c.prorated??0)+' a year'],['Cap hit',m1(capHit(p))],['Years left',String(c.yearsLeft)],
+        ['Guaranteed years left',String(c.gYears??0)],['Dead money if cut',m1(deadIfCut(p,S))]];
+      if(c.option)rows.push(['Team option','Can be picked up for another year']);
+      if(mine&&c.yearsLeft===1&&c.kind!=='tag'){const e=extensionTerms(S,p);rows.push(['His extension ask',e.years+' yrs · '+m1(termsHit(e))+' a year'+(e.bonus?' · '+m1(e.bonus)+' bonus':'')]);}
+      const rs=mine?restructureSavings(S,p):null;if(rs)rows.push(['Restructure','Clears '+m1(rs.savings)+' this year']);
+      body='<div class="wide"><table class="compare"><tbody>'+rows.map(([a,b])=>'<tr><th>'+esc(a)+'</th><td>'+esc(b)+'</td></tr>').join('')+'</tbody></table></div>';
+    }
+  }else if(cardTab==='stats'){
+    const lines=[...(p.stats??[])].reverse().filter(L=>L.gp);
+    body=lines.length?'<div class="wide"><table><thead><tr><th>Season</th><th>Club</th><th>Line</th></tr></thead><tbody>'+
+      lines.map(L=>'<tr><td>'+L.season+'</td><td>'+esc(byId.get(L.club)?.abbr??'—')+'</td><td>'+esc(statText(p,L))+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<p><small>The league keeps the last '+STAT_SEASONS+' seasons.</small></p>':'<p>No games played in the seasons on record.</p>';
+  }else{
+    const mentions=[...S.events].reverse().filter(e=>{const d=describeEvent(e);return typeof d==='string'&&d.includes(p.name);}).slice(0,20);
+    body='<ul class="history">'+mentions.map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')+
+      '<li><strong>'+esc(p.drafted||p.undrafted?'Entered the league':'Before the records')+'</strong> '+esc(drafted+(college!=='Not on record'?', out of '+college:'')+'.')+'</li></ul>';
+  }
+  const first=p.name.split(' ').slice(0,-1).join(' '),last=p.name.split(' ').at(-1);
+  return '<div class="crumbs">'+back+(prev?'<button data-player="'+esc(prev.id)+'">‹ '+esc(prev.pos+' '+prev.name)+'</button>':'')+
+      (next?'<button data-player="'+esc(next.id)+'">'+esc(next.pos+' '+next.name)+' ›</button>':'')+'</div>'+
+'<div class="pcard-page"><div class="pcard-wrap"><div class="pcard" style="--card:'+esc(t?inkable(t.primary):'#1e5b37')+'"><div class="pc-inner">'+
+    '<div class="pc-top"><span class="pc-slot">'+esc(slot?slot.label+(slot.starter?' · starter':' · backup'):where==='practice'?'Practice squad':where==='fa'?'Free agent':p.pos)+'</span>'+
+    '<span class="pc-pos" aria-hidden="true">'+esc(p.pos)+'</span><span class="pc-first">'+esc(first)+'</span><h2 class="pc-last">'+esc(last)+'</h2></div>'+
+    '<dl class="scoreboard pc-board"><div><dt>Rating</dt><dd>'+p.rating+'</dd></div><div><dt>Potential</dt><dd>'+(p.potential??p.rating)+'</dd></div><div><dt>Age</dt><dd>'+p.age+'</dd></div></dl>'+
+    '<dl class="pc-bio">'+bio.map(([a,b])=>'<dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd>').join('')+'</dl></div></div>'+
+    (acts.length?'<div class="pc-acts">'+acts.join('')+'</div>':'')+'</div>'+
+    '<section class="pc-main"><div role="tablist" class="pc-tabs" aria-label="Player details">'+
+    PCARD_TABS.map(([id,label])=>'<button role="tab" data-ptab="'+id+'" aria-selected="'+(id===cardTab)+'">'+label+'</button>').join('')+'</div>'+
+    '<div class="pc-body">'+body+'</div></section></div>';
+}
+
 // Navigation: five sections, each with its own pages. A page's route is its id; the address bar shows section/page
 // (#football/depth) so back, forward and refresh work. The game broadcast is a page with no tab of its own.
 const SECTIONS=[
@@ -6347,14 +6472,18 @@ const SECTIONS=[
 ];
 const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
   finances:()=>financesView(),stadium:()=>stadiumView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
-  scoreboard:()=>scoreboard(),standings:()=>standingsView(),schedule:()=>scheduleView(),rosters:()=>rosterView(),clubs:()=>'',game:()=>broadcastView()};
+  scoreboard:()=>scoreboard(),standings:()=>standingsView(),schedule:()=>scheduleView(),rosters:()=>rosterView(),clubs:()=>'',game:()=>broadcastView(),player:()=>playerView()};
 const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route))??null;
 // Tab names from builds before sections, still found in page snapshots and old links.
 const LEGACY_TABS={'Owner desk':'desk','Depth chart':'depth',Staff:'staff',Stadium:'stadium',Finances:'finances',Contracts:'contracts',League:'markets',Draft:'draft',
   Scoreboard:'scoreboard',Standings:'standings','Team schedule':'schedule',Rosters:'rosters','Club directory':'clubs',Game:'game'};
 const routeOf=v=>typeof v!=='string'?null:Object.hasOwn(VIEWS,v)?v:Object.hasOwn(LEGACY_TABS,v)?LEGACY_TABS[v]:null;
-const hashOf=route=>{const sec=sectionOf(route);return '#'+(!sec||sec.id===route?route:sec.id+'/'+route);};
-const routeFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');const r=routeOf(parts.at(-1));return r&&(parts.length===1||sectionOf(r)?.id===parts[0])?r:null;};
+const hashOf=(route,pid=cardPlayer)=>{if(route==='player')return '#player/'+encodeURIComponent(pid??'');const sec=sectionOf(route);return '#'+(!sec||sec.id===route?route:sec.id+'/'+route);};
+const routeFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');if(parts[0]==='player')return parts.length===2&&parts[1]?'player':null;
+  const r=routeOf(parts.at(-1));return r&&r!=='player'&&(parts.length===1||sectionOf(r)?.id===parts[0])?r:null;};
+const playerFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');try{return parts[0]==='player'?decodeURIComponent(parts[1]??''):null;}catch{return null;}};
+let cardPlayer=null,cardTab='overview';
+function showPlayer(id){if(cardPlayer!==id)cardTab='overview';cardPlayer=id;navigate('player');window.scrollTo?.(0,0);}
 const lastPage={};
 // Badges count what is waiting on each page and section; the Desk counts everything.
 function navHtml(route,items=[]){
@@ -6463,8 +6592,14 @@ function doAdvance(){advance(save);viewed=latestView();tab=save.draft.status==='
 function doJump(target){jumpTo(save,target);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();window.scrollTo(0,0);}
 document.addEventListener('click',e=>{
   if((ui.jumpOpen||ui.settingsOpen)&&!e.target.closest?.('.menu,#jumpOpen,#settingsOpen')){ui.jumpOpen=ui.settingsOpen=false;draw();}
+  if(!e.target.closest?.('.find')){const r=$('#findResults');if(r&&!r.hidden)r.hidden=true;}
   if(ui.confirm&&e.target.id==='confirmPane'){ui.confirm=null;draw();}
   const b=e.target.closest?.('button');if(!b)return;
+  if(b.dataset.player){const r=$('#findResults');r.hidden=true;r.innerHTML='';$('#findPlayer').value='';showPlayer(b.dataset.player);return;}
+  if(b.dataset.ptab){cardTab=b.dataset.ptab;draw();}
+  if(b.dataset.roster&&byId.has(b.dataset.roster)){selected=b.dataset.roster;navigate('rosters');}
+  if(b.dataset.pquote){const [club,pid]=b.dataset.pquote.split('/');tradeQuote(save,club,pid);if(save.offer)tab='trades';commit();}
+  if(tab==='player'&&(b.dataset.negotiate||b.dataset.release))setTimeout(()=>navigate('contracts'));
   if(b.dataset.section){const sec=SECTIONS.find(x=>x.id===b.dataset.section);if(sec)navigate(lastPage[sec.id]??sec.views[0][0]);}
   if(b.dataset.tab)navigate(b.dataset.tab);
   if(b.dataset.id){selected=b.dataset.id;navigate('schedule');window.scrollTo(0,0);}
@@ -6651,18 +6786,30 @@ function start(data){
       for(const k of Object.keys(stadiumUi.plan))if(typeof data.stadiumUi.plan?.[k]==='string')stadiumUi.plan[k]=data.stadiumUi.plan[k];
     }
   }
-  tab=routeFromHash(window.location?.hash)??tab;
+  const hr=routeFromHash(window.location?.hash);if(hr==='player')cardPlayer=playerFromHash(window.location.hash);
+  if(typeof data?.cardPlayer==='string'&&!hr)cardPlayer=data.cardPlayer;
+  tab=hr??(tab==='player'&&!cardPlayer?'desk':tab);
   draw();
 }
+document.addEventListener('input',e=>{
+  if(e.target.id!=='findPlayer')return;
+  const res=$('#findResults'),q=e.target.value.trim(),hits=findPlayers(save,q);
+  res.hidden=!q;
+  res.innerHTML=hits.length?hits.map(({p,club})=>'<button data-player="'+esc(p.id)+'">'+esc(p.pos+' '+p.name)+'<small>'+esc((club?byId.get(club).abbr:'Free agent')+' · '+p.rating+' · age '+p.age)+'</small></button>').join(''):'<p class="note">'+(q.length<2?'Keep typing…':'Nobody by that name.')+'</p>';
+});
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape'||!(ui.jumpOpen||ui.settingsOpen||ui.confirm))return;
   ui.jumpOpen=ui.settingsOpen=false;ui.confirm=null;draw();
 });
 {let v='system';try{v=localStorage.getItem('cgl.theme')??'system';}catch{}
  if(!['system','day','night'].includes(v))v='system';applyTheme(v);const pick=$('#themePick');pick.value=v;pick.onchange=()=>applyTheme(pick.value);}
-window.addEventListener?.('hashchange',()=>{const r=routeFromHash(window.location.hash);if(r&&r!==tab)navigate(r);});
+window.addEventListener?.('hashchange',()=>{
+  const h=window.location.hash,r=routeFromHash(h);
+  if(r==='player'){const id=playerFromHash(h);if(tab!=='player'||id!==cardPlayer){cardPlayer=id;navigate('player');}}
+  else if(r&&r!==tab)navigate(r);
+});
 const hot=window.claude?.hot;
-try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}
+try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi,cardPlayer}));}catch{}
 // Draw once we know where the season lives (immediately when there is no IndexedDB).
 function begin(data){
   if(storeReady)return start(data);

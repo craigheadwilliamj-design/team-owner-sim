@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2554,6 +2554,38 @@ test('one list of pending items drives the desk inbox, the nav badges and the Ad
   assert(api.depthView().includes('Medical report'));
   S.club = null;
   assert.deepEqual(api.pendingItems(S), []);
+});
+
+test('player card: every player has a card on every tab, other clubs get a trade button, and hostile names are escaped', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 3; i++) api.playWeek(S);
+  const mine = S.rosters['club-06'][0], theirs = S.rosters['club-01'].find(p => !p.out);
+  theirs.name = 'Evil <img src=x onerror=alert(1)> Guy';
+  assert.equal(api.findPlayer(S, mine.id).club, 'club-06');
+  assert.equal(api.findPlayer(S, 'nobody'), null);
+  for (const tab of ['overview', 'contract', 'stats', 'history']) {
+    api.setCard(mine.id, tab);
+    const html = api.playerView();
+    assert(html.includes('data-release="' + mine.id + '"'), 'your own player can be released from his card');
+    assert(html.includes('aria-selected="true">' + { overview: 'Overview', contract: 'Contract', stats: 'Stats', history: 'History' }[tab]));
+    api.setCard(theirs.id, tab);
+    const other = api.playerView();
+    assert(!other.includes('<img src=x'), 'name escaped on ' + tab);
+    assert(!other.includes('data-release'), 'no release button for another club');
+  }
+  api.setCard(theirs.id, 'overview');
+  assert(api.playerView().includes('data-pquote="club-01/' + theirs.id + '"'));
+  api.setCard('gone', 'overview');
+  assert.match(api.playerView(), /No longer in the league/);
+  const hits = api.findPlayers(S, mine.name.split(' ').at(-1));
+  assert(hits.length > 0 && hits.length <= 8);
+  assert(hits.some(h => h.p.id === mine.id));
+  assert.deepEqual(api.findPlayers(S, 'a'), [], 'one letter is not a search');
+  assert.equal(api.routeFromHash('#player/' + encodeURIComponent(mine.id)), 'player');
+  assert.equal(api.playerFromHash('#player/' + encodeURIComponent(mine.id)), mine.id);
+  assert.equal(api.routeFromHash('#player'), null);
+  assert(api.depthView().includes('data-player="' + mine.id + '"') || S.rosters['club-06'].some(p => api.depthView().includes('data-player="' + p.id + '"')), 'depth chart names link to cards');
 });
 
 let failed = 0;

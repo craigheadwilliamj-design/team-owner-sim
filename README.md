@@ -38,6 +38,10 @@ buy a franchise, hire the people who run it, and choose when to interfere.
   for a market at least twice the size with the lease nearly up, or a public
   offer that pays for most of the stadium, and only if the owners vote it
   through. You get a vote, and hear about it in your inbox.
+- Club brand: rename the club, change its abbreviation and pick new colors,
+  once a season in the offseason. A new name costs more and stings the home
+  faithful; either kind of rebrand lifts sponsorship for the first season in
+  the new look, and the colors carry through a move.
 - Club finances, naming rights, and league votes.
 - Broadcast markets on a map: rights deals renew, and fan bases shift with
   coverage.

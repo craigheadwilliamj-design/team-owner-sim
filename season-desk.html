@@ -502,7 +502,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=15;      // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=16;      // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -4842,7 +4842,56 @@ const migrations={
   12:migrateV12,
   13:migrateV13,
   14:migrateV14,
+  15:migrateV15,
 };
+// v15 -> v16: the class in progress moves to real schools too. Each prospect
+// gets a school from his talent, as a new class would, with that tier's hype;
+// his own wire items and notes follow him. Every other fictional school in the
+// save (opponents in old stories, past draft classes, players in the league)
+// takes a fixed real name.
+const LEGACY_COLLEGES={'Allegheny State':'Penn State','Bayou Tech':'LSU','Cascade':'Washington','Central Prairie':'Kansas State',
+  'Delta A&M':'Mississippi State','Eastern Ridge':'Virginia Tech','Great Lakes Tech':'Michigan State','Gulf State':'Florida State',
+  'High Plains':'Texas Tech','Iron Range':'Minnesota','Keystone Valley':'Pittsburgh','Lakeshore':'Wisconsin','Magnolia':'Ole Miss',
+  'North Woods':'North Dakota State','Ozark State':'Arkansas','Palmetto':'South Carolina','Piedmont':'NC State','Red River':'Oklahoma',
+  'Sierra Tech':'Fresno State','Tidewater':'Delaware','Twin Rivers':'Iowa','Western Plateau':'Utah'};
+// Fictional names in running text. Lookaheads keep the real Palmetto Bowl and Red River Rivalry.
+const LEGACY_TEXT=new RegExp('\\b('+Object.keys(LEGACY_COLLEGES).map(n=>n.replace(/[&]/g,'\\$&'))
+  .map(n=>n==='Palmetto'?'Palmetto(?! Bowl)':n==='Red River'?'Red River(?! Rivalry)':n).join('|')+')\\b','g');
+const realText=t=>typeof t==='string'?t.replace(LEGACY_TEXT,m=>LEGACY_COLLEGES[m]??m):t;
+const realCollege=c=>LEGACY_COLLEGES[c]??c;
+function migrateV15(old){
+  const r=rngFor(old.rng),D=old.draft;
+  if(D){
+    const fresh=[...D.prospects,...(D.nextClass??[])].filter(p=>p.college in LEGACY_COLLEGES);
+    const texts=[...(D.wire??[]).flatMap(w=>w.items),...[...D.prospects,...(D.nextClass??[])].flatMap(p=>p.notes??[])];
+    const byTalent=[...D.prospects].sort((a,b)=>(.55*b.potential+.45*b.rating)-(.55*a.potential+.45*a.rating));
+    const band=new Map(byTalent.map((p,i)=>[p.id,i<48?0:i<224?1:2]));
+    const moved=new Map();
+    for(const p of fresh){
+      const was=p.college,now=pickCollege(r,band.get(p.id)??2),hype=TIER_HYPE[collegeTier(now)];
+      p.college=now;p.grade+=hype;p.startGrade=(p.startGrade??p.grade)+hype;moved.set(p.id,now);
+      const tagOld=p.pos+' '+p.name+' ('+was+')',tagNew=p.pos+' '+p.name+' ('+now+')';
+      for(const it of texts)if(it.text?.includes(tagOld))it.text=it.text.split(tagOld).join(tagNew);
+      for(const it of (D.wire??[]).flatMap(w=>w.items))if(it.pid===p.id||it.pid2===p.id)it.text=it.text.split('to '+was+' for').join('to '+now+' for');
+      for(const n of p.notes??[])n.text=n.text.split('to '+was+' for').join('to '+now+' for');
+    }
+    for(const it of texts)it.text=realText(it.text);
+    for(const x of D.picks??[])x.college=moved.get(x.prospectId)??realCollege(x.college);
+    D.prospects.sort((a,b)=>b.grade-a.grade);
+  }
+  for(const d of old.draftHistory??[])for(const x of d.picks)x.college=realCollege(x.college);
+  const players=[...Object.values(old.rosters).flat(),...Object.values(old.practice??{}).flat(),...(old.fa?.pool??[])];
+  for(const p of players){
+    if(p.drafted)p.drafted.college=realCollege(p.drafted.college);
+    if(p.undrafted)p.undrafted.college=realCollege(p.undrafted.college);
+    for(const n of p.collegeNotes??[])n.text=realText(n.text);
+  }
+  for(const e of old.events)if(e.type==='draftDone')for(const x of e.picks){x.college=realCollege(x.college);x.seen=realText(x.seen)??x.seen;}
+  for(const n of old.league?.news??[])if(/ first overall$/.test(n.text))n.text=realText(n.text);
+  old.schemaVersion=16;
+  (old.migrations??=[]).push({from:15,to:16,at:new Date().toISOString()});
+  return old;
+}
 // v14 -> v15: real colleges in tiers, and the big games of the college season.
 // A class already in progress keeps its schools (each gets a steady tier from
 // its name) and picks up this fall's slate; games already past are skipped.

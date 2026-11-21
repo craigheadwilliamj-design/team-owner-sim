@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2489,6 +2489,43 @@ test('league office pages split the old League tab without losing anything', () 
   assert.match(api.ownersView(), /What they remember/, 'owners are listed even with no vote scheduled');
   assert.match(api.newsView(), /Headlines/);
   assert(whole.length > 0);
+});
+
+test('Advance lists exactly the offers and proposals that lapse when the clock moves', () => {
+  const { api, S } = owned(5);
+  let checked = 0;
+  for (let w = 0; w < 40 && api.cur(S).number === 1; w++) {
+    const t = api.now(S), due = api.dueBy(S, t + 1);
+    const listed = new Set(due.map(x => x.title));
+    const before = S.staff.proposals.filter(P => ['trade', 'offer', 'fa'].includes(P.kind));
+    const quote = !!S.offer;
+    if (quote) assert(due.some(x => /price on/.test(x.title)), 'an open quote is listed');
+    api.advance(S);
+    const after = new Set(S.staff.proposals.map(P => P.id));
+    for (const P of before) {
+      const title = P.kind === 'fa' ? 'Sign free agent ' + P.pos + ' ' + P.name : api.tradeSummary(S, P);
+      assert.equal(!after.has(P.id), listed.has(title), (after.has(P.id) ? 'still open but listed: ' : 'lapsed but not listed: ') + title);
+      checked++;
+    }
+    if (quote) assert.equal(S.offer, null);
+  }
+  assert(checked > 0, 'the season produced proposals to check');
+});
+
+test('Jump ahead offers the nearest milestone first, and the confirm names what comes due on the way', () => {
+  const { api, S } = owned();
+  const targets = api.jumpTargets(S);
+  assert.deepEqual(targets.map(([t]) => t), [...targets.map(([t]) => t)].sort((a, b) => a - b));
+  assert.match(targets[0][1], /trade deadline/);
+  S.finance.naming = { status: 'awaiting', expiresWeek: 6, offer: { company: 'Ohio Valley Bank' } };
+  assert(!api.dueBy(S, api.now(S) + 1).some(x => /Naming/.test(x.title)), 'not due on this advance');
+  assert(api.dueBy(S, 10).some(x => /Ohio Valley Bank/.test(x.title)), 'due on the way to week 10');
+  const html = api.confirmHtml(S, { kind: 'jump', target: targets[0][0] });
+  assert.match(html, /Ohio Valley Bank/);
+  assert.match(html, /role="dialog"/);
+  const cells = api.scoreboardCells(S);
+  assert.deepEqual(cells.map(c => c[0]), ['Record', 'Week', 'Cap room', 'Cash']);
+  assert.equal(cells[1][1], 'PRE');
 });
 
 let failed = 0;

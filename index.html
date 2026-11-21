@@ -37,15 +37,40 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);margin:0;font:16px/1.45 var(--body)}
 main{max-width:1240px;margin:0 auto;padding-block:36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 118px,var(--yard) 118px 121px),repeating-linear-gradient(90deg,var(--turf) 0 120px,var(--turf-2) 120px 240px);color:var(--band-fg);border-radius:6px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-h1{font:900 clamp(2.3rem,6vw,4.4rem)/1 var(--display);letter-spacing:.01em;text-transform:uppercase;margin:8px 0 14px;text-wrap:balance}
-header p{margin:0;color:var(--band-fg);opacity:.85}
-header p:first-child{font:400 .82rem var(--label);letter-spacing:.12em;text-transform:uppercase;opacity:1}
+header{background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 118px,var(--yard) 118px 121px),repeating-linear-gradient(90deg,var(--turf) 0 120px,var(--turf-2) 120px 240px);color:var(--band-fg);border-radius:6px;padding:16px 20px;display:flex;align-items:center;gap:16px 24px;flex-wrap:wrap;position:relative;z-index:3}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand .chip{width:40px;height:40px;border-width:6px;background:var(--board)}
+.scoreboard{display:flex;gap:3px;margin:0;background:var(--board);padding:5px;border:3px solid var(--board-edge);flex-wrap:wrap}
+.scoreboard div{padding:3px 12px;text-align:center;background-color:var(--board-cell);background-image:radial-gradient(#1f211f 1px,transparent 1px);background-size:4px 4px}
+.scoreboard dt{font:700 .62rem var(--body);letter-spacing:.16em;color:var(--board-label);text-transform:uppercase}
+.scoreboard dd{margin:0;font:800 1.75rem/1 var(--display);color:var(--amber);letter-spacing:.05em;font-variant-numeric:tabular-nums}
+header .clock{margin-left:auto;align-items:flex-end;position:relative}
+.advance{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+header button.outline{background:transparent;color:var(--band-fg);border:2px solid var(--band-fg);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;min-height:48px;padding:8px 14px}
+header button.icon{width:48px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+#advance .due{display:inline-block;margin-left:8px;background:var(--flag);color:var(--flag-fg);font:700 .75rem var(--body);letter-spacing:0;padding:2px 8px;border-radius:2px;vertical-align:2px}
+.menu{position:absolute;right:0;top:calc(100% + 8px);z-index:5;min-width:260px;max-width:min(360px,calc(100vw - 32px));background:var(--surface);color:var(--fg);border:1px solid var(--rule-strong);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.28);padding:8px;display:flex;flex-direction:column;gap:2px}
+.menu button{border:0;background:transparent;text-align:left;padding:10px;min-height:44px;border-radius:4px}
+.menu button:hover{background:var(--rule-soft)}
+.menu button small{font-weight:400}
+.menu label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;color:var(--fg)}
+.menu .note{color:var(--muted);font-size:.85rem;padding:6px 10px;margin:0}
+.menu .head{font:400 .75rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:8px 10px 4px}
+#confirmPane{position:fixed;inset:0;z-index:10;background:rgba(10,16,12,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+#confirmPane>div{background:var(--surface);color:var(--fg);border-radius:8px;max-width:540px;width:100%;max-height:calc(100vh - 32px);overflow-y:auto;padding:22px 24px;box-shadow:0 20px 48px rgba(0,0,0,.35)}
+#confirmPane h2{margin:0 0 6px}
+#confirmPane ul{border:1px solid var(--rule);border-radius:6px;margin:10px 0 16px}
+#confirmPane li{display:block;padding:9px 12px}
+#confirmPane .controls{justify-content:flex-end;margin:0}
+#confirmPane .flag{display:inline-block;background:var(--flag);color:var(--flag-fg);font:800 .8rem var(--display);letter-spacing:.08em;padding:1px 7px;border-radius:2px;margin-right:6px}
+h1{font:900 clamp(1.8rem,4.5vw,2.6rem)/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0;text-wrap:balance}
+.brand p{margin:0;font:400 .78rem var(--label);letter-spacing:.12em;text-transform:uppercase}
 nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}
 select,button{font:inherit;padding:8px 12px;background:var(--surface);color:var(--fg);border:1px solid var(--control-border);border-radius:4px;margin:0}
 button{font-weight:600}
 button{cursor:pointer}
 button:disabled{cursor:default;opacity:.6}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 h2{font:900 2rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:22px 0 12px;text-wrap:balance}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
 article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
@@ -57,7 +82,7 @@ li:last-child{border:0}
 strong{font-weight:700}
 small{display:block;color:var(--muted)}
 strong{font-size:1.05rem}
-#advance{background:#ffffff;color:#17201b;border:0;font:900 1.2rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:13px 22px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+#advance{background:#ffffff;color:#17201b;border:0;font:900 1.2rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:10px 20px;min-height:48px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
 #advance:disabled{background:#d8ddd6;color:#4f5a52;box-shadow:none;opacity:1}
 #tabs{justify-content:flex-start;gap:4px;border-bottom:3px solid var(--turf);padding:16px 0 0;flex-wrap:nowrap;overflow-x:auto}
 #tabs button{border:0;border-radius:4px 4px 0 0;background:transparent;font:800 1.15rem var(--display);letter-spacing:.07em;text-transform:uppercase;padding:10px 18px;min-height:46px;white-space:nowrap}
@@ -101,9 +126,7 @@ thead th{font:800 .9rem var(--display);letter-spacing:.06em;text-transform:upper
 .ledger .sum th{border-bottom:2px solid var(--rule-strong)}
 fieldset.exclude{border:1px solid var(--rule);border-radius:6px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 16px;padding:10px 12px;color:var(--muted)}
 .clock{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.clock small{font:400 .82rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--band-fg)}
-#jump{display:flex;gap:8px;flex-wrap:wrap}
-#jump:empty{display:none}
+.clock small{font:400 .78rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--band-fg)}
 figure.map{margin:0 0 16px}
 #marketMap{display:block;width:100%;max-width:100%;height:auto;aspect-ratio:760/590}
 figure.map figcaption{color:var(--muted);font-size:.85rem;max-width:75ch}
@@ -157,14 +180,13 @@ ol.pbp{list-style:none;padding:0;margin:0;max-height:28rem;overflow-y:auto;backg
 ol.pbp li{display:block;padding:8px 12px}
 ol.pbp li.note{color:var(--muted);font-style:italic}
 .boxscore{max-width:520px}
-#watchLive{font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:13px 18px;background:transparent;color:var(--band-fg);border:2px solid var(--band-fg)}
-header #jump select,header #jump button{min-height:44px}
-header #jump button{background:transparent;color:var(--band-fg);border:2px solid var(--band-fg);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase}
+#watchLive{font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:48px;background:var(--flag);color:var(--flag-fg);border:0}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+@media (max-width:560px){.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box}.scoreboard div{padding:3px 2px}.scoreboard dt{font-size:.55rem;letter-spacing:.08em}.scoreboard dd{font-size:1.2rem}header .clock{margin-left:0;width:100%;align-items:stretch}.advance{justify-content:flex-start}#advance{flex:1 1 100%}}
 </style>
 </head>
 <body>
-<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Sections"></nav><nav id="subtabs" hidden></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><nav id="tabs" aria-label="Sections"></nav><nav id="subtabs" hidden></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -3442,7 +3464,7 @@ function jumpTo(S,target){
 }
 function jumpTargets(S){
   const t=now(S),n=cur(S).number;
-  return [[REGULAR_WEEKS+1,'Playoffs: Wild Card round'],[22,'Championship Game'],[MILESTONES.review,'February Week 1 · season review'],
+  return [[TRADE_DEADLINE,capital(weekLabel(TRADE_DEADLINE))+' · trade deadline'],[REGULAR_WEEKS+1,'Playoffs: Wild Card round'],[22,'Championship Game'],[MILESTONES.review,'February Week 1 · season review'],
     [MILESTONES.leagueYear,'March Week 2 · new league year'],[MILESTONES.draft,'April Week 4 · draft'],[MILESTONES.otas,'May Week 2 · OTAs'],
     [MILESTONES.camp,'July Week 4 · training camp'],[MILESTONES.cuts,'August Week 4 · final cuts'],[SEASON_TICKS+1,'Season '+(n+1)+' opener']]
     .filter(([tick])=>tick>t);
@@ -3453,6 +3475,32 @@ function advanceLabel(S){
   if(t<22)return 'Play the '+ROUND_NAMES[t-18]+' →';
   if(t<SEASON_TICKS)return 'Advance to '+weekLabel(t+1)+' →';
   return 'Open season '+(s.number+1)+' →';
+}
+
+// What resolves before the clock reaches horizon (now+1 for one advance): offers that lapse unanswered,
+// deadlines that pass and votes that are held. Each item is {title, fate, route}; the Advance button counts them
+// and the confirm lists them. Deadlines fire when the tick reaches them; GM proposals last through their week.
+function dueBy(S,horizon){
+  if(!S.club)return [];
+  const t=now(S),s=cur(S),L=S.league,items=[];
+  if(S.offer){const p=S.rosters[S.offer.seller]?.find(x=>x.id===S.offer.targetId);
+    items.push({title:'Your GM’s price on '+(p?p.pos+' '+p.name:'a trade target')+' ('+byId.get(S.offer.seller).abbr+')',fate:'The quote expires.',route:'desk'});}
+  for(const P of S.staff?.proposals??[]){
+    if((P.kind==='trade'||P.kind==='offer')&&P.week<horizon)items.push({title:tradeSummary(S,P),fate:P.kind==='trade'?'The chance passes.':'Their offer expires.',route:'desk'});
+    else if(P.kind==='fa'&&P.week<horizon)items.push({title:'Sign free agent '+P.pos+' '+P.name,fate:'The proposal lapses.',route:'contracts'});
+  }
+  const N=S.finance.naming;
+  if(N.status==='awaiting'&&N.expiresWeek<=horizon)items.push({title:'Naming-rights offer from '+N.offer.company,fate:'The offer lapses.',route:'finances'});
+  const tracked=new Set(S.stadium.knowledge.map(f=>f.siteId)),filed=pendingApplication(S)?.siteId;
+  for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed&&x.expiresWeek<=horizon)
+    items.push({title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),fate:'The site offer expires.',route:'stadium'});
+  for(const C of L.contests)if(C.status==='open'&&C.deadlineWeek<=horizon&&(C.holder===S.club||C.bid))
+    items.push({title:'Broadcast rights in '+openMarket(C.marketId).name,fate:C.bid?'The station decides on your $'+C.bid.annual+'M offer.':'The station decides, and you have made no offer for rights you hold.',route:'markets'});
+  const V=L.meeting;
+  if(V?.status==='scheduled'&&V.week<=horizon)items.push({title:V.kind==='relocation'?'League vote on your relocation':'League vote on first refusal',fate:'The owners vote.',route:'owners'});
+  const gameNext=s.completed<s.weeks.length||(t>=REGULAR_WEEKS&&t<22&&!!s.postseason&&playoffStatus(S,S.club).alive);
+  if(horizon===t+1&&gameNext&&S.staff?.directives?.rosterMoves==='owner')for(const a of rosterAlerts(S))items.push({title:a,fate:'Kickoff with the roster as it stands.',route:'depth'});
+  return items;
 }
 
 // Words for calendar events.
@@ -6287,6 +6335,55 @@ function navigate(route){
 }
 function syncHash(){try{const h=hashOf(tab);if(window.location&&window.location.hash!==h)window.history?.replaceState?.(null,'',h);}catch{}}
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
+// The top bar: club, scoreboard, clock, Advance with what comes due, the Jump ahead and settings menus, and the confirm.
+const ui={jumpOpen:false,settingsOpen:false,confirm:null};
+function scoreboardCells(S){
+  const id=S.club,s=cur(S),t=s.tick;
+  const r=standings(S).flat().find(x=>x.id===id);
+  const week=t<=0?'PRE':t<=REGULAR_WEEKS?String(s.completed).padStart(2,'0'):t<=22?'PO':'OFF';
+  return [['Record',r.w+'-'+r.l+(r.t?'-'+r.t:'')],['Week',week],['Cap room',m1(capRoom(S,id))],['Cash',m1(S.finance.ownerCash)]];
+}
+function confirmHtml(S,c){
+  const jump=c.kind==='jump',horizon=jump?Math.min(c.target,SEASON_TICKS+1):now(S)+1,items=dueBy(S,horizon);
+  const label=jump?jumpTargets(S).find(([t])=>t===c.target)?.[1]??'':'';
+  const title=jump?'Jump to '+label+'?':'Before you '+advanceLabel(S).replace(/ →$/,'').toLowerCase();
+  const lead=jump?(items.length?'On the way, these are decided without you:':'Nothing you have open comes due on the way.')+' New offers and proposals that arrive while you jump go unanswered unless your staff handles them.'
+    :'These are decided when the clock moves:';
+  return '<div role="dialog" aria-modal="true" aria-labelledby="confirmTitle"><h2 id="confirmTitle">'+esc(title)+'</h2><p>'+esc(lead)+'</p>'+
+    (items.length?'<ul>'+items.map(x=>'<li><strong>'+esc(x.title)+'</strong><small>'+esc(x.fate)+'</small></li>').join('')+'</ul>':'')+
+    '<div class="controls"><button id="confirmBack">Review first</button><button id="confirmGo" class="primary">'+esc(jump?'Jump ahead':'Advance anyway')+'</button></div></div>';
+}
+function drawHeader(){
+  const S=save,s=cur(),t=S.club&&byId.get(S.club);
+  $('#brandSmall').textContent=t?t.market:'Continental Gridiron League';
+  $('#brandName').textContent=t?t.nickname:'Season desk';
+  const chip=$('#clubChip');chip.hidden=!t;
+  if(t){chip.style.backgroundColor=color(t.primary);chip.style.borderColor=color(t.secondary);}
+  const board=$('#scoreboard');board.hidden=!t;
+  board.innerHTML=t?scoreboardCells(S).map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join(''):'';
+  $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
+  const due=t?dueBy(S,now(S)+1).length:0,next=$('#advance');
+  next.disabled=!t;
+  next.innerHTML=!t?'Choose a club':esc(advanceLabel(S))+(due?'<span class="due">'+due+' due</span>':'');
+  next.setAttribute?.('aria-label',!t?'Choose a club':advanceLabel(S).replace(/ →$/,'')+(due?', '+due+' item'+(due===1?'':'s')+' come due':''));
+  const targets=t?jumpTargets(S):[],jo=$('#jumpOpen');
+  jo.hidden=!targets.length;if(!targets.length)ui.jumpOpen=false;
+  jo.setAttribute?.('aria-expanded',String(ui.jumpOpen));
+  const jm=$('#jumpMenu');jm.hidden=!ui.jumpOpen;
+  jm.innerHTML=ui.jumpOpen?'<div class="head">Jump ahead to</div>'+targets.map(([tick,label])=>'<button data-jump="'+tick+'">'+esc(label)+'</button>').join('')+
+    '<p class="note">You see what comes due on the way before anything runs.</p>':'';
+  $('#settingsOpen').setAttribute?.('aria-expanded',String(ui.settingsOpen));
+  $('#settingsMenu').hidden=!ui.settingsOpen;
+  const pane=$('#confirmPane');
+  if(ui.confirm&&!t)ui.confirm=null;
+  pane.hidden=!ui.confirm;pane.innerHTML=ui.confirm?confirmHtml(S,ui.confirm):'';
+}
+// Day game, night game, or whatever the device prefers. Kept per browser.
+function applyTheme(v){
+  const root=document.documentElement;
+  if(v==='day')root.dataset.theme='light';else if(v==='night')root.dataset.theme='dark';else delete root.dataset.theme;
+  try{localStorage.setItem('cgl.theme',v);}catch{}
+}
 function draw(){
   const s=cur();
   setTeamColors(save);
@@ -6301,12 +6398,7 @@ function draw(){
   const live=$('#watchLive');
   live.hidden=!canWatch(save);
   if(tab!=='game')stopBroadcastTimer();
-  const next=$('#advance');
-  next.disabled=!save.club;
-  next.textContent=!save.club?'Choose a club':advanceLabel(save);
-  const targets=save.club?jumpTargets(save):[];
-  $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
-  $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
+  drawHeader();
   $('#directoryPane').hidden=tab!=='clubs';
   app.innerHTML=(VIEWS[tab]??VIEWS.desk)();
   if(tab==='game')scheduleBroadcast();
@@ -6326,7 +6418,11 @@ function resetView(){viewed=latestView();tab='desk';selected=save.club??clubs[0]
 resetView();
 const app=$('#app');
 
+function doAdvance(){advance(save);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();}
+function doJump(target){jumpTo(save,target);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();window.scrollTo(0,0);}
 document.addEventListener('click',e=>{
+  if((ui.jumpOpen||ui.settingsOpen)&&!e.target.closest?.('.menu,#jumpOpen,#settingsOpen')){ui.jumpOpen=ui.settingsOpen=false;draw();}
+  if(ui.confirm&&e.target.id==='confirmPane'){ui.confirm=null;draw();}
   const b=e.target.closest?.('button');if(!b)return;
   if(b.dataset.section){const sec=SECTIONS.find(x=>x.id===b.dataset.section);if(sec)navigate(lastPage[sec.id]??sec.views[0][0]);}
   if(b.dataset.tab)navigate(b.dataset.tab);
@@ -6380,8 +6476,13 @@ document.addEventListener('click',e=>{
   if(b.id==='bcEnd'&&broadcastGame){bc.i=broadcastGame.plays.length;bc.playing=false;stopBroadcastTimer();drawBroadcast();}
   if(b.dataset.bcspeed){bc.speed=Number(b.dataset.bcspeed);drawBroadcast();scheduleBroadcast();}
   if(b.id==='bcBack')navigate('desk');
-  if(b.id==='advance'&&save.club){advance(save);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();}
-  if(b.id==='jumpGo'&&save.club){jumpTo(save,Number($('#jumpTarget').value));viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();window.scrollTo(0,0);}
+  if(b.id==='advance'&&save.club){if(dueBy(save,now()+1).length){ui.confirm={kind:'advance'};draw();$('#confirmGo')?.focus?.();}else doAdvance();}
+  if(b.id==='confirmGo'&&ui.confirm){const c=ui.confirm;ui.confirm=null;if(c.kind==='jump')doJump(c.target);else doAdvance();}
+  if(b.id==='confirmBack'){ui.confirm=null;navigate('desk');}
+  if(b.closest?.('#settingsMenu')&&ui.settingsOpen){ui.settingsOpen=false;draw();}
+  if(b.id==='jumpOpen'){ui.jumpOpen=!ui.jumpOpen;ui.settingsOpen=false;draw();}
+  if(b.id==='settingsOpen'){ui.settingsOpen=!ui.settingsOpen;ui.jumpOpen=false;draw();}
+  if(b.dataset.jump&&save.club){ui.jumpOpen=false;ui.confirm={kind:'jump',target:Number(b.dataset.jump)};draw();$('#confirmGo')?.focus?.();}
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
   if(b.id==='gmPick'&&save.draft.order[save.draft.pick]?.owner===save.club){aiPick(save);commit();}
   if(b.id==='simToMine'){simToMyPick(save);commit();}
@@ -6512,6 +6613,12 @@ function start(data){
   tab=routeFromHash(window.location?.hash)??tab;
   draw();
 }
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||!(ui.jumpOpen||ui.settingsOpen||ui.confirm))return;
+  ui.jumpOpen=ui.settingsOpen=false;ui.confirm=null;draw();
+});
+{let v='system';try{v=localStorage.getItem('cgl.theme')??'system';}catch{}
+ if(!['system','day','night'].includes(v))v='system';applyTheme(v);const pick=$('#themePick');pick.value=v;pick.onchange=()=>applyTheme(pick.value);}
 window.addEventListener?.('hashchange',()=>{const r=routeFromHash(window.location.hash);if(r&&r!==tab)navigate(r);});
 const hot=window.claude?.hot;
 try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}

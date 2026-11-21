@@ -42,6 +42,10 @@ buy a franchise, hire the people who run it, and choose when to interfere.
   once a season in the offseason. A new name costs more and stings the home
   faithful; either kind of rebrand lifts sponsorship for the first season in
   the new look, and the colors carry through a move.
+- Customize teams (in the settings menu): rename, re-abbreviate and recolor
+  any other club for free, and upload a logo for any club, yours included.
+  Logos are shrunk to 128×128 and kept in the save, so they travel with
+  Save a copy.
 - Club finances, naming rights, and league votes.
 - Broadcast markets on a map: rights deals renew, and fan bases shift with
   coverage.

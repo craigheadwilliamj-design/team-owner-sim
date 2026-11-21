@@ -144,6 +144,12 @@ ul.history{margin-top:12px}
 .brand-form input[type=color]{width:5rem;padding:4px;cursor:pointer}
 .palettes{gap:8px}.swatch{width:44px;height:44px;padding:0;border:8px solid;border-radius:50%}
 .bug.brand-bug{position:static;max-width:14rem}
+span.chip.logo{border:0;background:none;display:inline-flex}.chip.logo img,.chip[data-logo="1"] img{width:100%;height:100%;object-fit:contain;display:block}
+.chip[data-logo="1"]{border-color:transparent!important;background:transparent!important}
+.club img.badge-logo{width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:6px}.bugteam img.bug-logo{width:26px;height:26px;object-fit:contain}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;margin:8px 0 18px}.team-grid h3{grid-column:1/-1;padding:12px 0 0}
+.team-grid button{display:flex;align-items:center;gap:10px;text-align:left;min-height:44px}.team-grid button[aria-pressed=true]{outline:3px solid var(--team);outline-offset:1px}
+.team-edit{border-top:1px solid var(--rule-strong);padding-top:12px}
 .brand-history{list-style:none;padding:0}.brand-history li{display:flex;align-items:center;gap:10px;margin:6px 0}
 .chip.big{width:56px;height:56px;border:8px solid var(--c2);background:var(--board)}
 .club-facts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
@@ -366,7 +372,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 }
 @media (max-width:560px){.scoreboard{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;box-sizing:border-box}.scoreboard div{padding:3px 2px}.scoreboard dt{font-size:.55rem;letter-spacing:.08em}.scoreboard dd{font-size:1.2rem}header .clock{margin-left:0;width:100%;align-items:stretch}.advance{justify-content:flex-start}#advance{flex:1 1 100%}.pc-board{grid-template-columns:repeat(3,minmax(0,1fr))}.pc-board dd{font-size:1.8rem}.find,.find input{width:100%}}
 </style>
-<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><div class="navrow"><nav id="tabs" aria-label="Sections"></nav><div class="find"><input id="findPlayer" type="search" placeholder="Find any player" aria-label="Find any player, any club" autocomplete="off"><div id="findResults" class="menu" hidden></div></div></div><nav id="subtabs" hidden></nav><div id="app"></div><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><div class="brand"><span class="chip" id="clubChip" hidden></span><div><p id="brandSmall">Continental Gridiron League</p><h1 id="brandName">Season desk</h1></div></div><dl class="scoreboard" id="scoreboard" hidden></dl><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button><button id="watchLive" hidden>Watch live</button><button id="jumpOpen" class="outline" aria-expanded="false" aria-controls="jumpMenu" hidden>Jump ahead</button><button id="settingsOpen" class="outline icon" aria-expanded="false" aria-controls="settingsMenu" aria-label="Save and settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button><div id="jumpMenu" class="menu" hidden></div><div id="settingsMenu" class="menu" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="teamsOpen" title="Rename and recolor the other clubs, and add club logos. Free.">Customize teams</button><button id="save" hidden>Export league JSON</button><label>Theme <select id="themePick"><option value="system">Match this device</option><option value="day">Day game</option><option value="night">Night game</option></select></label></div></div></div></header><div id="confirmPane" hidden></div><div class="navrow"><nav id="tabs" aria-label="Sections"></nav><div class="find"><input id="findPlayer" type="search" placeholder="Find any player" aria-label="Find any player, any club" autocomplete="off"><div id="findResults" class="menu" hidden></div></div></div><nav id="subtabs" hidden></nav><div id="app"></div><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -728,7 +734,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=19;     // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=20;     // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -755,6 +761,18 @@ function inkable(hex){
   let c=color(hex).toLowerCase();
   for(let k=0;k<12&&contrast(c,'#ffffff')<4.5;k++)c='#'+[1,3,5].map(i=>Math.round(parseInt(c.slice(i,i+2),16)*.88).toString(16).padStart(2,'0')).join('');
   return c;
+}
+// Club logos: small images the player adds, kept in the save as data URLs.
+// Only raster images in base64 get through, so nothing in a logo can run.
+const LOGO_SIZE=128,LOGO_MAX=200000;
+const logoOk=v=>typeof v==='string'&&v.length<=LOGO_MAX&&/^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(v);
+const logoOf=(id,S=save)=>{const v=S?.logos?.[id];return logoOk(v)?v:null;};
+const logoImg=(id,cls,S=save)=>{const v=logoOf(id,S);return v?'<img class="'+esc(cls)+'" src="'+esc(v)+'" alt="">':'';};
+// A club's round chip: its logo if it has one, otherwise its colors. A big chip takes its colors from the banner around it.
+function chipHtml(id,cls='',S=save){
+  const v=logoOf(id,S),t=byId.get(id);
+  if(v)return '<span class="chip logo '+esc(cls)+'" aria-hidden="true"><img src="'+esc(v)+'" alt=""></span>';
+  return '<span class="chip '+esc(cls)+'"'+(cls==='big'?'':' style="background-color:'+color(t.primary)+';border-color:'+color(t.secondary)+'"')+' aria-hidden="true"></span>';
 }
 // The owner's club colors as CSS variables; the league's turf green before a club is chosen.
 function setTeamColors(S){
@@ -1379,7 +1397,7 @@ function newSave(seed=newSeed()){
   applyIdentity({relocations:[]}); // a new league starts from the original map
   const rng={seed,state:seed},r=rngFor(rng);
   const season=makeSeason(r,1);
-  const S={schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,relocations:[],brands:[],seasonIndex:0,seasons:[season],
+  const S={schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,relocations:[],brands:[],logos:{},seasonIndex:0,seasons:[season],
     rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0,
     world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r),league:makeLeague(r),
     draft:makeDraft(r,1),history:[],draftHistory:[]};
@@ -2363,7 +2381,7 @@ function brandBlock(S){
   if(!S.club)return 'closed';
   if(pendingApplication(S))return 'moving';
   if(s.tick>0&&s.tick<MILESTONES.review)return 'season';
-  if(S.brands.some(b=>b.club===S.club&&b.season===s.number))return 'once';
+  if(S.brands.some(b=>b.club===S.club&&b.season===s.number&&b.kind!=='custom'))return 'once';
   return null;
 }
 function brandBlockText(S,code){
@@ -2372,10 +2390,10 @@ function brandBlockText(S,code){
     once:'The club already has a new look this season. The next chance comes after next season.'}[code]??'';
 }
 // The draft checked against the league: {kind:'nickname'|'look'|null, cost, error}.
-function brandPlan(S,draft){
-  const was=brandOf(S.club),to={nickname:cleanNickname(draft.nickname),abbr:cleanAbbr(draft.abbr),
+function brandPlan(S,draft,clubId=S.club){
+  const was=brandOf(clubId),to={nickname:cleanNickname(draft.nickname),abbr:cleanAbbr(draft.abbr),
     primary:String(draft.primary??'').toLowerCase(),secondary:String(draft.secondary??'').toLowerCase()};
-  const others=clubs.filter(t=>t.id!==S.club);
+  const others=clubs.filter(t=>t.id!==clubId);
   let error=null;
   if(!/^[A-Za-z][A-Za-z .'-]{1,18}[A-Za-z]$/.test(to.nickname))error='nickname';
   else if(others.some(t=>t.nickname.toLowerCase()===to.nickname.toLowerCase()))error='nicknameTaken';
@@ -2415,7 +2433,7 @@ function rebrandClub(S,draft){
 const brandSeason=b=>b.week===0?b.season:b.season+1;
 // Sponsorship lift this season for the owner's club, from its latest rebrand.
 function brandLift(S){
-  const b=S.brands?.filter(x=>x.club===S.club).at(-1);
+  const b=S.brands?.filter(x=>x.club===S.club&&x.kind!=='custom').at(-1);
   return b&&brandSeason(b)===cur(S).number?BRAND_LIFT[b.kind]??0:0;
 }
 function brandEventText(e){
@@ -2429,10 +2447,10 @@ function brandDraft(S){
   if(brandUi.key!==key){brandUi.key=key;brandUi.draft=brandOf(S.club);brandUi.notice='';}
   return brandUi.draft;
 }
-function brandPreviewHtml(S,d){
-  const t=byId.get(S.club),c1=inkable(/^#[0-9a-f]{6}$/i.test(d.primary)?d.primary:t.primary),c2=color(d.secondary);
-  return '<div class="club-head" style="--c1:'+esc(c1)+';--c2:'+esc(c2)+'"><span class="chip big" aria-hidden="true"></span><div><small>'+esc(t.conference+' · '+t.division+' · '+t.market)+'</small><h2>'+esc(cleanNickname(d.nickname)||'—')+'</h2></div></div>'+
-    '<div class="bug brand-bug"><div class="bugteam" style="--team:'+esc(c1)+';--team2:'+esc(c2)+'"><span class="abbr">'+esc(cleanAbbr(d.abbr)||'—')+'</span><b>24</b></div></div>';
+function brandPreviewHtml(S,d,clubId=S.club){
+  const t=byId.get(clubId),c1=inkable(/^#[0-9a-f]{6}$/i.test(d.primary)?d.primary:t.primary),c2=color(d.secondary);
+  return '<div class="club-head" style="--c1:'+esc(c1)+';--c2:'+esc(c2)+'">'+chipHtml(clubId,'big',S)+'<div><small>'+esc(t.conference+' · '+t.division+' · '+t.market)+'</small><h2>'+esc(cleanNickname(d.nickname)||'—')+'</h2></div></div>'+
+    '<div class="bug brand-bug"><div class="bugteam" style="--team:'+esc(c1)+';--team2:'+esc(c2)+'">'+logoImg(clubId,'bug-logo',S)+'<span class="abbr">'+esc(cleanAbbr(d.abbr)||'—')+'</span><b>24</b></div></div>';
 }
 function brandCostHtml(S,d){
   const p=brandPlan(S,d);
@@ -2460,7 +2478,7 @@ function brandView(){
     '<div id="brandCost">'+(block?'':brandCostHtml(S,d))+'</div>'+
     (block?'':'<div class="controls"><button id="brandUnveil" class="primary">Unveil the new look</button><small>Your cash '+esc(money(S.finance.ownerCash))+'</small></div>')+
     (brandUi.notice?'<p><b>'+esc(brandUi.notice)+'</b></p>':'');
-  const past=S.brands.filter(b=>b.club===S.club);
+  const past=S.brands.filter(b=>b.club===S.club&&b.kind!=='custom');
   if(past.length)html+='<h2>Past looks</h2><ul class="brand-history">'+past.map(b=>'<li><span class="chip" style="background-color:'+esc(color(b.from.primary))+';border-color:'+esc(color(b.from.secondary))+'"></span>'+
     esc('Season '+b.season+', '+weekLabel(b.week)+': '+(b.kind==='nickname'?'the '+b.from.nickname+' ('+b.from.abbr+') became the '+b.to.nickname+' ('+b.to.abbr+')':'new colors for the '+b.to.nickname+(b.from.abbr!==b.to.abbr?', '+b.from.abbr+' to '+b.to.abbr:''))+', '+money(b.cost)+'.')+'</li>').join('')+'</ul>';
   return html;
@@ -2474,6 +2492,105 @@ function brandInput(id,value){
   const pv=$('#brandPreview'),cost=$('#brandCost');
   if(pv)pv.innerHTML=brandPreviewHtml(save,brandUi.draft);
   if(cost&&!brandBlock(save))cost.innerHTML=brandCostHtml(save,brandUi.draft);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Customize teams (Settings menu)
+//
+// Free edits to the other clubs: nickname, abbreviation and colors. They go in
+// S.brands as kind 'custom' so applyIdentity replays them in calendar order with
+// moves and rebrands. The owner's own club changes on the Brand page, for money.
+// Logos are free for every club, the owner's included, and live in S.logos.
+// ---------------------------------------------------------------------------
+function customizeClub(S,clubId,draft){
+  if(!byId.has(clubId))return 'invalid';
+  if(clubId===S.club)return 'owner';
+  const p=brandPlan(S,draft,clubId),s=cur(S);
+  if(p.error)return p.error;
+  const last=S.brands.at(-1);
+  if(last&&last.kind==='custom'&&last.club===clubId&&last.season===s.number&&last.week===s.tick)last.to=p.to; // keep one entry per club per week
+  else S.brands.push({season:s.number,week:s.tick,club:clubId,kind:'custom',cost:0,from:p.was,to:p.to});
+  applyIdentity(S);
+  return 'ok';
+}
+const isCustomized=(S,clubId)=>S.brands.some(b=>b.club===clubId&&b.kind==='custom');
+// Drops every free edit to a club. Refused if the name or abbreviation it would go back to is now another club's.
+function undoCustom(S,clubId){
+  if(!isCustomized(S,clubId))return 'unchanged';
+  const kept=S.brands;
+  S.brands=kept.filter(b=>!(b.club===clubId&&b.kind==='custom'));
+  applyIdentity(S);
+  const me=byId.get(clubId);
+  if(clubs.some(t=>t.id!==clubId&&(t.nickname.toLowerCase()===me.nickname.toLowerCase()||t.abbr===me.abbr))){S.brands=kept;applyIdentity(S);return 'clash';}
+  return 'ok';
+}
+function setLogo(S,clubId,url){
+  if(!byId.has(clubId))return 'invalid';
+  if(!logoOk(url))return 'badLogo';
+  S.logos[clubId]=url;
+  return 'ok';
+}
+function clearLogo(S,clubId){if(!S.logos[clubId])return 'unchanged';delete S.logos[clubId];return 'ok';}
+const customText=code=>({owner:'That is your club. Its name and colors change on the Brand page.',clash:'Another club now uses its old name or abbreviation, so it cannot go back.',
+  badLogo:'That image could not be used. Try a PNG, JPEG, WebP, GIF or SVG under 5 MB.',invalid:'Pick a club.'}[code]??brandErrorText(code));
+// Browser only: shrinks an image file to a LOGO_SIZE square (kept whole, centered) and returns a data URL.
+async function readLogo(file){
+  if(!file||!/^image\//.test(file.type)||file.size>5e6)return null;
+  const url=URL.createObjectURL(file);
+  try{
+    const img=new Image();img.src=url;await img.decode();
+    const c=document.createElement('canvas');c.width=c.height=LOGO_SIZE;
+    const k=Math.min(LOGO_SIZE/(img.naturalWidth||LOGO_SIZE),LOGO_SIZE/(img.naturalHeight||LOGO_SIZE)),w=(img.naturalWidth||LOGO_SIZE)*k,h=(img.naturalHeight||LOGO_SIZE)*k;
+    c.getContext('2d').drawImage(img,(LOGO_SIZE-w)/2,(LOGO_SIZE-h)/2,w,h);
+    let out=c.toDataURL('image/webp',.9);
+    if(!out.startsWith('data:image/webp'))out=c.toDataURL('image/png');
+    return logoOk(out)?out:null;
+  }catch{return null;}
+  finally{URL.revokeObjectURL(url);}
+}
+const teamsUi={club:null,draft:null,key:'',notice:''};
+function teamDraft(S){
+  if(!byId.has(teamsUi.club))teamsUi.club=clubs.find(t=>t.id!==S.club).id;
+  const key=S.saveId+'/'+teamsUi.club+'/'+S.brands.length+'/'+S.relocations.length;
+  if(teamsUi.key!==key){teamsUi.key=key;teamsUi.draft=brandOf(teamsUi.club);}
+  return teamsUi.draft;
+}
+function teamNoteHtml(S,d){
+  if(teamsUi.club===S.club)return '';
+  const p=brandPlan(S,d,teamsUi.club);
+  return p.error&&p.error!=='unchanged'?'<p><b>'+esc(brandErrorText(p.error))+'</b></p>':'';
+}
+function teamsView(){
+  const S=save,d=teamDraft(S),id=teamsUi.club,t=byId.get(id),mine=id===S.club,logo=logoOf(id,S);
+  let html=heading('SETTINGS','Customize teams')+
+    '<p>'+esc('Rename and recolor any club in the league, free, and give any club a logo. Changes are saved with this season and show everywhere: schedules, standings, broadcasts and the map. Your own club’s name and colors are an owner’s decision and change on the Brand page; its logo you can set here.')+'</p>';
+  html+='<div class="team-grid">'+groups.map(g=>'<h3 class="group">'+esc(g[0].conference+' · '+g[0].division)+'</h3>'+g.map(c=>'<button data-teamedit="'+esc(c.id)+'" aria-pressed="'+(c.id===id)+'">'+chipHtml(c.id,'',S)+
+    '<span>'+esc(teamName(c.id))+(c.id===S.club?' (yours)':'')+'</span></button>').join('')).join('')+'</div>';
+  html+='<div class="team-edit"><h2>'+esc(teamName(id))+'</h2><div id="teamPreview">'+brandPreviewHtml(S,mine?brandOf(id):d,id)+'</div>';
+  if(mine)html+='<p>'+esc('This is your club. Its name, abbreviation and colors change on the Brand page.')+' <button data-tab="brand">Open Brand</button></p>';
+  else html+='<div class="controls brand-form">'+
+    '<label>Nickname <input id="teamNickname" type="text" maxlength="20" autocomplete="off" value="'+esc(d.nickname)+'"></label>'+
+    '<label>Abbreviation <input id="teamAbbr" type="text" maxlength="3" autocomplete="off" value="'+esc(d.abbr)+'"></label>'+
+    '<label>Primary <input id="teamPrimary" type="color" value="'+esc(color(d.primary).toLowerCase())+'"></label>'+
+    '<label>Secondary <input id="teamSecondary" type="color" value="'+esc(color(d.secondary).toLowerCase())+'"></label></div>'+
+    '<div id="teamNote">'+teamNoteHtml(S,d)+'</div>'+
+    '<div class="controls"><button id="teamSave" class="primary">Save changes</button>'+(isCustomized(S,id)?'<button id="teamUndo">Back to the original</button>':'')+'</div>';
+  html+='<h3>Logo</h3><div class="controls">'+(logo?'<span class="chip logo big"><img src="'+esc(logo)+'" alt="'+esc(teamName(id)+' logo')+'"></span>':'<span>No logo yet. The club shows its colors.</span>')+
+    '<input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden>'+
+    '<button id="logoPick">'+(logo?'Replace logo':'Upload a logo')+'</button>'+(logo?'<button id="logoClear">Remove logo</button>':'')+
+    '<small>Square images look best. They are shrunk to '+LOGO_SIZE+'×'+LOGO_SIZE+'.</small></div>'+
+    (teamsUi.notice?'<p><b>'+esc(teamsUi.notice)+'</b></p>':'')+'</div>';
+  return html;
+}
+const TEAM_FIELDS={teamNickname:'nickname',teamAbbr:'abbr',teamPrimary:'primary',teamSecondary:'secondary'};
+function teamInput(id,value){
+  const k=TEAM_FIELDS[id];
+  if(!k)return false;
+  teamDraft(save)[k]=value;teamsUi.notice='';
+  const pv=$('#teamPreview'),note=$('#teamNote');
+  if(pv)pv.innerHTML=brandPreviewHtml(save,teamsUi.draft,teamsUi.club);
+  if(note)note.innerHTML=teamNoteHtml(save,teamsUi.draft);
   return true;
 }
 
@@ -5950,7 +6067,15 @@ const migrations={
   16:migrateV16,
   17:migrateV17,
   18:migrateV18,
+  19:migrateV19,
 };
+// v19 -> v20: free edits to AI clubs (kind 'custom' in S.brands) and club logos. No logos yet.
+function migrateV19(old){
+  old.logos={};
+  old.schemaVersion=20;
+  (old.migrations??=[]).push({from:19,to:20,at:new Date().toISOString()});
+  return old;
+}
 // v18 -> v19: club brands. Nobody has changed their look yet.
 function migrateV18(old){
   old.brands=[];
@@ -6278,9 +6403,10 @@ function validateSave(S){
     if(st.knowledge.some(f=>!f||!isInt(f.id,1)||!Array.isArray(f.knownBy)||f.id>=st.nextFactId))fail('A record of who knows what is invalid.');
   }
   if(!Array.isArray(S.relocations)||S.relocations.some(m=>!m||!byId.has(m.club)||!m.to||!m.destination||!isInt(m.season,2)||(m.swap&&!byId.has(m.swap.club))))fail('The relocation record is invalid.');
-  const brandOk=b=>b&&byId.has(b.club)&&isInt(b.season,1)&&isInt(b.week,0,SEASON_TICKS)&&['nickname','look'].includes(b.kind)&&Number.isFinite(b.cost)&&b.to&&
+  const brandOk=b=>b&&byId.has(b.club)&&isInt(b.season,1)&&isInt(b.week,0,SEASON_TICKS)&&['nickname','look','custom'].includes(b.kind)&&Number.isFinite(b.cost)&&b.to&&
     typeof b.to.nickname==='string'&&/^[A-Z]{2,3}$/.test(b.to.abbr)&&/^#[0-9a-f]{6}$/i.test(b.to.primary)&&/^#[0-9a-f]{6}$/i.test(b.to.secondary);
   if(!Array.isArray(S.brands)||!S.brands.every(brandOk))fail('The brand record is invalid.');
+  if(!S.logos||typeof S.logos!=='object'||Array.isArray(S.logos)||Object.entries(S.logos).some(([id,v])=>!byId.has(id)||!logoOk(v)))fail('The club logos are invalid.');
   if(typeof S.staff?.president?.name!=='string')fail('The team president is missing.');
   const F=S.finance;
   if(!F||![F.ownerCash,F.clubCash,F.debt,F.rate,F.distributionAnnual].every(Number.isFinite)||!Array.isArray(F.projects)||!Array.isArray(F.ledger)||
@@ -6578,7 +6704,7 @@ function standings(S){
 // ---------------------------------------------------------------------------
 // Views
 // ---------------------------------------------------------------------------
-const badge=id=>{const t=byId.get(id);return '<i style="background:'+color(t.primary)+';border-color:'+color(t.secondary)+'"></i>';};
+const badge=id=>{const t=byId.get(id),logo=logoImg(id,'badge-logo');return logo||'<i style="background:'+color(t.primary)+';border-color:'+color(t.secondary)+'"></i>';};
 const club=id=>'<button class="club" data-id="'+esc(id)+'">'+badge(id)+esc(teamName(id))+'</button>';
 const heading=(small,big)=>'<small>'+esc(small)+'</small><h2>'+esc(big)+'</h2>';
 const option=(value,label,selected)=>'<option value="'+esc(value)+'"'+(selected?' selected':'')+'>'+esc(label)+'</option>';
@@ -6768,7 +6894,7 @@ function clubsView(){
     '<div class="dviews" role="group" aria-label="Conference">'+['All','Charter','Union'].map(c=>'<button data-conf="'+c+'" aria-pressed="'+(clubsConf===c)+'">'+(c==='All'?'Both conferences':c)+'</button>').join('')+'</div>'+
     ['Charter','Union'].filter(c=>clubsConf==='All'||clubsConf===c).map(conference=>'<h2>'+esc(conference+' Conference')+'</h2><div class="grid">'+
       divisions.map(division=>'<article><h3>'+esc(division)+'</h3><ul>'+clubs.filter(t=>t.conference===conference&&t.division===division).map(t=>
-        '<li><span class="chip" style="background-color:'+color(t.primary)+';border-color:'+color(t.secondary)+'"></span><button class="club" data-id="'+esc(t.id)+'"><small>'+esc(t.market)+'</small><strong>'+esc(t.nickname)+'</strong></button>'+
+        '<li>'+chipHtml(t.id,'')+'<button class="club" data-id="'+esc(t.id)+'"><small>'+esc(t.market)+'</small><strong>'+esc(t.nickname)+'</strong></button>'+
         '<span class="rec">'+esc(rec(t.id))+(t.id===save.club?' · yours':'')+'</span></li>').join('')+'</ul></article>').join('')+'</div>').join('');
 }
 function clubView(){
@@ -6779,7 +6905,7 @@ function clubView(){
     ...(!mine&&o&&S.club?[['Toward you',relationLabel(o.relation)]]:[]),['Head coach',hc?(hc.interim?'Interim':hc.name+' · '+hc.record.w+'–'+hc.record.l):'—'],
     ['Offense · defense',rating.offense+' · '+rating.defense],['Cap room',m1(capRoom(S,id))],['Roster',rosterCount(S,id)+' players · '+practiceOf(S,id).length+' practice squad']];
   return '<div class="crumbs"><button data-tab="clubs">All clubs</button><label class="pick">Club '+clubSelect('team',id)+'</label></div>'+
-    '<div class="club-head" style="--c1:'+esc(inkable(t.primary))+';--c2:'+esc(color(t.secondary))+'"><span class="chip big" aria-hidden="true"></span><div><small>'+esc(t.conference+' · '+t.division+' · '+t.market)+'</small><h2>'+esc(t.nickname)+'</h2></div></div>'+
+    '<div class="club-head" style="--c1:'+esc(inkable(t.primary))+';--c2:'+esc(color(t.secondary))+'">'+chipHtml(t.id,'big')+'<div><small>'+esc(t.conference+' · '+t.division+' · '+t.market)+'</small><h2>'+esc(t.nickname)+'</h2></div></div>'+
     '<dl class="club-facts">'+facts.map(([a,b])=>'<div><dt>'+esc(a)+'</dt><dd>'+esc(b)+'</dd></div>').join('')+'</dl>'+
     '<div role="tablist" class="pc-tabs" aria-label="Club pages">'+[['schedule','Schedule'],['roster','Roster']].map(([k,label])=>'<button role="tab" data-ctab="'+k+'" aria-selected="'+(clubTab===k)+'">'+label+'</button>').join('')+'</div>'+
     '<div class="pc-body">'+(clubTab==='roster'?rosterBody(id):scheduleBody(id))+'</div>';
@@ -7055,7 +7181,7 @@ const SECTIONS=[
 const SECTION_ICONS={desk:'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',football:'M5 18C3 14 7 5 15 4c3-.4 5 1 4.4 4C18 14 11 19 7 19c-1 0-1.6-.4-2-1zM9.5 14.5l5-5M10 11l3 3M12 9l3 3',
   business:'M3 6h18v12H3zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',office:'M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18',around:'M4 20V10M10 20V4M16 20v-7M21 20H3'};
 const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
-  finances:()=>financesView(),stadium:()=>stadiumView(),brand:()=>brandView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
+  finances:()=>financesView(),stadium:()=>stadiumView(),brand:()=>brandView(),teams:()=>teamsView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
   scoreboard:()=>scoreboard(),standings:()=>standingsView(),clubs:()=>clubsView(),club:()=>clubView(),game:()=>broadcastView(),player:()=>playerView()};
 const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route)||x.more?.includes(route))??null;
 // Tab names from builds before sections, still found in page snapshots and old links.
@@ -7116,6 +7242,7 @@ function drawHeader(){
   $('#brandName').textContent=t?t.nickname:'Season desk';
   const chip=$('#clubChip');chip.hidden=!t;
   if(t){chip.style.backgroundColor=color(t.primary);chip.style.borderColor=color(t.secondary);}
+  const logo=t?logoOf(S.club,S):null;chip.innerHTML=logo?'<img src="'+esc(logo)+'" alt="">':'';chip.dataset.logo=logo?'1':'';
   const board=$('#scoreboard');board.hidden=!t;
   board.innerHTML=t?scoreboardCells(S).map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join(''):'';
   $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
@@ -7215,6 +7342,12 @@ document.addEventListener('click',e=>{
   }
   if(b.id==='withdrawRelocation'){withdrawRelocation(save);commit();}
   if(b.dataset.palette&&save.club){const [p1,p2]=b.dataset.palette.split(',');Object.assign(brandDraft(save),{primary:p1,secondary:p2});brandUi.notice='';draw();}
+  if(b.id==='teamsOpen'){navigate('teams');window.scrollTo?.(0,0);}
+  if(b.dataset.teamedit&&byId.has(b.dataset.teamedit)){teamsUi.club=b.dataset.teamedit;teamsUi.key='';teamsUi.notice='';draw();}
+  if(b.id==='teamSave'){const res=customizeClub(save,teamsUi.club,teamDraft(save));teamsUi.notice=res==='ok'?'Saved. '+teamName(teamsUi.club)+' it is.':customText(res);if(res==='ok')commit();else draw();}
+  if(b.id==='teamUndo'){const res=undoCustom(save,teamsUi.club);teamsUi.key='';teamsUi.notice=res==='ok'?'Back to '+teamName(teamsUi.club)+'.':customText(res);if(res==='ok')commit();else draw();}
+  if(b.id==='logoPick')$('#logoFile')?.click?.();
+  if(b.id==='logoClear'){clearLogo(save,teamsUi.club);teamsUi.notice='';commit();}
   if(b.id==='brandReset'&&save.club){brandUi.draft=brandOf(save.club);brandUi.notice='';draw();}
   if(b.id==='brandUnveil'&&save.club){
     const res=rebrandClub(save,brandDraft(save));
@@ -7317,8 +7450,14 @@ document.addEventListener('click',e=>{
   if(b.dataset.option){const res=exerciseOption(save,save.club,b.dataset.option);contractsUi.notice=contractNotice[res]??'';res==='ok'?commit():draw();}
   if(b.id==='gmFinish'){gmFinishDraft(save,false);commit();}
 });
-app.oninput=e=>{brandInput(e.target.id,e.target.value);};
+app.oninput=e=>{brandInput(e.target.id,e.target.value)||teamInput(e.target.id,e.target.value);};
 app.onchange=e=>{
+  if(TEAM_FIELDS[e.target.id]){if(e.target.id==='teamAbbr')e.target.value=cleanAbbr(e.target.value);teamInput(e.target.id,e.target.value);return;}
+  if(e.target.id==='logoFile'){
+    const club=teamsUi.club,file=e.target.files?.[0];e.target.value='';
+    readLogo(file).then(url=>{const res=url?setLogo(save,club,url):'badLogo';teamsUi.notice=res==='ok'?'':customText(res);if(res==='ok')commit();else draw();});
+    return;
+  }
   if(BRAND_FIELDS[e.target.id]){if(e.target.id==='brandAbbr')e.target.value=cleanAbbr(e.target.value);brandInput(e.target.id,e.target.value);return;}
   if(e.target.id==='bcLog'){bc.showLog=e.target.checked;drawBroadcast();return;}
   if(e.target.id==='tradePlayer'||e.target.id==='tradePick'){

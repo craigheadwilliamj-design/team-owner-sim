@@ -26,7 +26,8 @@ const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
 const v17Save = fs.readFileSync(path.join(FIX, 'v17-save.json'), 'utf8');
 const v18Save = fs.readFileSync(path.join(FIX, 'v18-save.json'), 'utf8');
-const NAMES = ['rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v19Save = fs.readFileSync(path.join(FIX, 'v19-save.json'), 'utf8');
+const NAMES = ['customizeClub', 'undoCustom', 'setLogo', 'clearLogo', 'logoOk', 'teamsView', 'chipHtml', 'badge', 'teamsUi:()=>teamsUi', 'rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -2847,7 +2848,7 @@ test('v18 save upgrades to v19: no club has a new look yet, nothing else changes
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.brands, []);
-  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.schemaVersion; delete y.migrations; return y; };
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.logos; delete y.schemaVersion; delete y.migrations; return y; };
   assert.deepEqual(strip(S), strip(JSON.parse(v18Save)));
   assert.deepEqual(api.validateSave(S), []);
   api.playWeek(S);
@@ -2956,6 +2957,99 @@ test('the Brand page renders under Business, escapes what the owner typed, and s
   html = api.brandView();
   assert(html.includes('O&#39;Malleys') && !html.includes("O'Malleys"));
   assert(html.includes('Past looks') && !html.includes('Unveil the new look'));
+});
+
+// ---- Customize teams --------------------------------------------------------
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('v19 save upgrades to v20: no logos yet, nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v19Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.logos, {});
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.logos; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v19Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('customize teams: AI clubs change for free, any time, and the owner club is left to the Brand page', () => {
+  const { api, S } = owned(31);
+  api.advance(S); // mid-season is fine for free edits
+  const cash = S.finance.ownerCash, mood = S.stadium.homeMood, news = S.league.news.length;
+  const bills = api.clubs.find(c => c.id === 'club-01');
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Snow Geese', abbr: 'BSG', primary: '#2a2a72', secondary: '#c9c9d1' }), 'ok');
+  assert.deepEqual([bills.market, bills.nickname, bills.abbr, bills.primary], ['Buffalo', 'Snow Geese', 'BSG', '#2a2a72']);
+  assert.equal(S.finance.ownerCash, cash); assert.equal(S.stadium.homeMood, mood); assert.equal(S.league.news.length, news);
+  assert.equal(api.customizeClub(S, 'club-06', { ...api.brandOf('club-06'), nickname: 'Freebies' }), 'owner');
+  assert.equal(api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), nickname: 'Snow Geese' }), 'nicknameTaken');
+  assert.equal(api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), abbr: 'CIN' }), 'abbrTaken');
+  // A second edit the same week replaces the first instead of piling up.
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Lake Effect' }), 'ok');
+  assert.equal(S.brands.filter(b => b.club === 'club-01').length, 1);
+  assert.equal(S.brands[0].from.nickname, 'Bulls');
+  // Free edits never use up the owner's paid rebrand, even on a club claimed later.
+  const pre = owned(32); pre.S.club = null;
+  assert.equal(pre.api.customizeClub(pre.S, 'club-06', { ...pre.api.brandOf('club-06'), nickname: 'Paddlewheels' }), 'ok');
+  pre.S.club = 'club-06';
+  assert.equal(pre.api.brandBlock(pre.S), null);
+  assert.equal(pre.api.brandLift(pre.S), 0);
+  // Saved, reloaded, replayed.
+  const again = api.upgrade(JSON.parse(JSON.stringify(S))).save;
+  assert.deepEqual(api.validateSave(again), []);
+  api.applyIdentity({ relocations: [] }); assert.equal(bills.nickname, 'Bulls');
+  api.applyIdentity(again); assert.equal(bills.nickname, 'Lake Effect');
+  api.playWeek(again);
+});
+
+test('customize teams: back to the original, unless another club took the old name', () => {
+  const { api, S } = owned(33);
+  assert.equal(api.undoCustom(S, 'club-01'), 'unchanged');
+  api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Snow Geese' });
+  api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), nickname: 'Bulls' });
+  assert.equal(api.undoCustom(S, 'club-01'), 'clash');
+  assert.equal(api.clubs.find(c => c.id === 'club-01').nickname, 'Snow Geese', 'nothing changed');
+  assert.equal(api.undoCustom(S, 'club-02'), 'ok');
+  assert.equal(api.undoCustom(S, 'club-01'), 'ok');
+  assert.deepEqual(['club-01', 'club-02'].map(id => api.clubs.find(c => c.id === id).nickname), ['Bulls', 'Barracuda']);
+  assert.deepEqual(S.brands, []);
+});
+
+test('logos: raster data URLs only, shown in chips and badges, kept in the save', () => {
+  const { api, S } = readyLive();
+  for (const bad of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:image/png;base64,"><script>', 'data:image/png;base64,' + 'A'.repeat(300000)])
+    assert.equal(api.setLogo(S, 'club-01', bad), 'badLogo');
+  assert.equal(api.setLogo(S, 'club-99', PNG), 'invalid');
+  assert.equal(api.setLogo(S, 'club-01', PNG), 'ok');
+  assert.equal(api.setLogo(S, 'club-06', PNG), 'ok', 'the owner may give their own club a logo');
+  assert(api.badge('club-01').includes('<img class="badge-logo" src="' + PNG));
+  assert(api.chipHtml('club-01', '').includes('chip logo'));
+  assert(!api.chipHtml('club-02', '').includes('<img'));
+  assert.deepEqual(api.validateSave(S), []);
+  S.logos['club-03'] = 'data:text/html;base64,AAAA';
+  assert(api.validateSave(S).some(e => e.includes('logos')));
+  delete S.logos['club-03'];
+  assert.equal(api.clearLogo(S, 'club-01'), 'ok');
+  assert(!api.badge('club-01').includes('<img'));
+});
+
+test('the Customize teams page opens from Settings and escapes what the player typed', () => {
+  const { api, S } = readyLive();
+  assert.equal(api.routeFromHash('#teams'), 'teams');
+  assert.equal(api.hashOf('teams'), '#teams');
+  const html0 = api.teamsView();
+  assert(html0.includes('Customize teams') && html0.includes('data-teamedit="club-06"') && html0.includes('id="teamNickname"'));
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: "O'Bulls" }), 'ok');
+  api.teamsUi().club = 'club-01'; api.teamsUi().key = '';
+  const html = api.teamsView();
+  assert(html.includes('O&#39;Bulls') && !html.includes("O'Bulls"));
+  assert(html.includes('Back to the original'));
+  api.teamsUi().club = 'club-06'; api.teamsUi().key = '';
+  const mine = api.teamsView();
+  assert(mine.includes('Open Brand') && !mine.includes('id="teamNickname"') && mine.includes('Upload a logo'));
+  const page = fs.readFileSync(GAME, 'utf8');
+  assert(/<div id="settingsMenu"[^]*?id="teamsOpen"/.test(page));
 });
 
 (async () => {

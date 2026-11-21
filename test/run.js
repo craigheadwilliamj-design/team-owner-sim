@@ -24,7 +24,7 @@ const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
 const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
 const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
-const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const NAMES = ['waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -2647,6 +2647,51 @@ test('club pages: one page per club with schedule and roster, a directory, and c
   assert(api.standingsView().includes('data-id="club-06"'), 'standings link to club pages');
 });
 
+
+test('TV rights on the desk: open markets are one optional item, a bid waits on the station, and the result lands on the desk', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  const C = columbusUp(api, S);
+  const open = S.league.contests.filter(c => c.status === 'open');
+  let items = api.pendingItems(S);
+  const summary = items.find(x => x.id === 'rights-open');
+  assert(summary, 'markets taking offers show up even before any bid');
+  assert(summary.title.startsWith(open.length + ' market'));
+  assert(summary.detail.includes('Columbus') && summary.detail.startsWith('Optional.'));
+  assert.equal(summary.deadline, Math.min(...open.map(c => c.deadlineWeek)));
+  assert.deepEqual(api.waitingItems(S), []);
+  assert.equal(api.submitBid(S, 'columbus', 12, 7, true), 'ok');
+  items = api.pendingItems(S);
+  assert(!items.some(x => x.id === 'rights-columbus'), 'a market you bid on is no longer a decision');
+  assert(!api.dueBy(S, C.deadlineWeek).some(x => x.id === 'rights-columbus'), 'nor does it count toward Advance');
+  const waiting = api.waitingItems(S);
+  assert.equal(waiting.length, 1);
+  assert.match(waiting[0].detail, /Your offer: \$12M a year for 7 years, and you visited the station\. Station range \$[\d.]+–[\d.]+M a year · likely rivals .*CLE/);
+  assert.deepEqual(waiting[0].actions, [['Revise offer', 'rights', 'columbus']]);
+  let desk = api.ownershipDesk();
+  assert(desk.includes('Waiting on others') && desk.includes('data-rights="columbus"'));
+  assert(!desk.includes('Just decided'));
+  while (C.status === 'open') api.advance(S);
+  const decided = api.justDecided(S);
+  assert.equal(decided.length, 1);
+  assert.equal(decided[0].marketName, 'Columbus');
+  desk = api.ownershipDesk();
+  assert(desk.includes('Just decided') && desk.includes('Broadcast rights in Columbus'));
+  assert(!desk.includes('Waiting on others'));
+  api.advance(S);
+  assert.deepEqual(api.justDecided(S), [], 'the result moves off the desk after the next advance');
+});
+
+test('a market you hold without an offer is a decision with the station range, and its button opens that market', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-07';
+  columbusUp(api, S);
+  const x = api.pendingItems(S).find(i => i.id === 'rights-columbus');
+  assert(x && x.detail.startsWith('You hold these rights'));
+  assert.match(x.detail, /Station range/);
+  assert.deepEqual(x.actions, [['Make an offer', 'rights', 'columbus']]);
+  assert(!api.pendingItems(S).find(i => i.id === 'rights-open')?.detail.includes('Columbus'), 'not double-listed as optional');
+});
 let failed = 0;
 (async () => {
 const only = process.env.ONLY; // ONLY=relocation npm test runs the tests whose names contain it

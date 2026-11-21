@@ -100,6 +100,9 @@ li.item .when{display:inline-block;margin-right:10px;background:var(--rule-soft)
 li.item.expire .when{background:var(--flag);color:var(--flag-fg)}
 li.item .where{border:0;background:none;padding:0;color:var(--link);text-decoration:underline;font:600 .85rem var(--body)}
 li.item .acts{display:flex;gap:8px;flex-wrap:wrap}
+li.item.waiting{border-style:dashed}
+li.item.done.good .when{background:var(--turf);color:var(--band-fg)}
+li.item.done.bad .when{background:var(--warn);color:var(--bg)}
 li.item .acts button{min-height:44px}
 .desk{display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start}
 .desk>section{flex:999 1 560px;min-width:0}
@@ -3641,9 +3644,19 @@ function pendingItems(S){
   for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed)
     add({id:'site-'+x.id,title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),detail:'A stadium site you have looked into. The offer is open until it expires.',
       route:'stadium',deadline:x.expiresWeek,fate:'The site offer expires.',actions:[['Stadium page','tab','stadium']]});
-  for(const C of L.contests)if(C.status==='open'&&(C.holder===S.club||C.bid))
-    add({id:'rights-'+C.marketId,title:'Broadcast rights in '+openMarket(C.marketId).name,detail:C.bid?'Your offer is in: $'+C.bid.annual+'M a year for '+C.bid.years+' years.':'You hold these rights and have not made an offer to keep them.',
-      route:'markets',deadline:C.deadlineWeek,fate:C.bid?'The station decides on your $'+C.bid.annual+'M offer.':'The station decides, and you have made no offer for rights you hold.',actions:[[C.bid?'Revise offer':'Make an offer','tab','markets']]});
+  // TV rights: a market you hold needs an offer; the rest of this season's open markets are one optional item.
+  // A market you have already bid on is waiting, not pending (see waitingItems).
+  const openRights=L.contests.filter(C=>C.status==='open');
+  for(const C of openRights)if(C.holder===S.club&&!C.bid)
+    add({id:'rights-'+C.marketId,title:'Broadcast rights in '+openMarket(C.marketId).name,detail:'You hold these rights and have not made an offer to keep them. '+rightsContext(S,C),
+      route:'markets',deadline:C.deadlineWeek,fate:'The station decides, and you have made no offer for rights you hold.',actions:[['Make an offer','rights',C.marketId]]});
+  const unbid=openRights.filter(C=>C.holder!==S.club&&!C.bid);
+  if(unbid.length){
+    const names=unbid.map(C=>openMarket(C.marketId).name),following=unbid.filter(C=>(L.markets[C.marketId].fans[S.club]??0)>=10).map(C=>openMarket(C.marketId).name);
+    add({id:'rights-open',title:unbid.length+(unbid.length===1?' market is':' markets are')+' taking TV offers',
+      detail:'Optional. '+names.join(', ')+'. '+(following.length?'You already have a following in '+following.join(', ')+'. ':'')+'Holding a market’s rights puts your games on its station every week and grows your fans there.',
+      route:'markets',deadline:Math.min(...unbid.map(C=>C.deadlineWeek)),fate:'The stations decide without an offer from you.',actions:[['See the markets','tab','markets']]});
+  }
   const V=L.meeting;
   if(V?.status==='scheduled')add({id:'vote',title:V.kind==='relocation'?'League vote on your relocation':'League vote on first refusal',
     detail:V.callsLeft>0?V.callsLeft+' call'+(V.callsLeft===1?'':'s')+' left before the meeting.':'No calls left before the meeting.',
@@ -3659,10 +3672,39 @@ function pendingItems(S){
     route:'draft',deadline:null,fate:'',actions:[['Draft room','tab','draft']]});
   return items;
 }
+// One line on a rights contest: what the station expects and who else is likely to bid.
+function rightsContext(S,C){
+  const [lo,hi]=stationRange(S,C.marketId),M=S.league.markets[C.marketId];
+  const rivals=Object.keys(M.fans).filter(id=>id!==S.club&&byId.has(id)&&(id===M.holder||M.fans[id]>=10)).map(id=>byId.get(id).abbr);
+  return 'Station range $'+lo+'–'+hi+'M a year · '+(rivals.length?'likely rivals '+rivals.join(', '):'no rival has a following there')+'.';
+}
+// Things the owner has already acted on, waiting for someone else to decide. Shown on the desk; no badge, no Advance count.
+function waitingItems(S){
+  if(!S.club)return [];
+  return S.league.contests.filter(C=>C.status==='open'&&C.bid).map(C=>({id:'rights-'+C.marketId,title:'Broadcast rights in '+openMarket(C.marketId).name,
+    detail:'Your offer: $'+C.bid.annual+'M a year for '+C.bid.years+' years'+(C.lobbied?', and you visited the station':'')+'. '+rightsContext(S,C),
+    route:'markets',deadline:C.deadlineWeek,actions:[['Revise offer','rights',C.marketId]]}));
+}
+// Results that came in on the last advance, for the top of the desk.
+const DECIDED_TITLES={rightsWon:'Won',rightsLost:'Lost',rightsKept:'Kept',rightsLapsed:'Lost'};
+function justDecided(S){
+  if(!S.club)return [];
+  const s=cur(S);
+  return S.events.filter(e=>Object.hasOwn(DECIDED_TITLES,e.type)&&e.season===s.number&&e.week===s.tick);
+}
+function decidedHtml(S,list){
+  return '<ul class="inbox">'+list.map(e=>'<li class="item done '+(e.type==='rightsWon'||e.type==='rightsKept'?'good':'bad')+'"><div class="what"><span class="when">'+esc(DECIDED_TITLES[e.type])+'</span>'+
+    '<strong>'+esc('Broadcast rights in '+e.marketName)+'</strong><small>'+describeEvent(e)+'</small></div><div class="acts"><button data-tab="markets">Broadcast rights</button></div></li>').join('')+'</ul>';
+}
+function waitingHtml(S,list){
+  return '<ul class="inbox">'+list.map(x=>'<li class="item waiting"><div class="what"><span class="when">'+esc(x.deadline<=now(S)+1?'Decided when you advance':'Decided after '+weekLabel(x.deadline))+'</span>'+
+    '<strong>'+esc(x.title)+'</strong><small>'+esc(x.detail)+'</small></div><div class="acts">'+
+    x.actions.map(([label,attr,val])=>'<button data-'+attr+'="'+esc(val)+'">'+esc(label)+'</button>').join('')+'</div></li>').join('')+'</ul>';
+}
 // What is decided before the clock reaches horizon (now+1 for one advance).
 const dueBy=(S,horizon)=>pendingItems(S).filter(x=>x.deadline!=null&&x.deadline<=horizon);
 const urgency=(S,x)=>x.deadline==null?'later':x.deadline<=now(S)+1?'expire':x.deadline<=now(S)+4?'soon':'later';
-const URGENCY=[['expire','Decided when you advance'],['soon','Due in the next few weeks'],['later','No deadline yet']];
+const URGENCY=[['expire','Decided when you advance'],['soon','Due in the next few weeks'],['later','Later, or no deadline']];
 function itemHtml(S,x,{where=true}={}){
   const u=urgency(S,x),sec=sectionOf(x.route),page=sec?.views.find(([id])=>id===x.route)?.[1];
   const due=x.deadline==null?'':u==='expire'?'This week':'After '+weekLabel(x.deadline);
@@ -6309,10 +6351,12 @@ function ownershipDesk(){
   const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+(broadcastGame?.season===s.number?' <button id="watchLast">Watch the broadcast</button>':'')+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
     gameDayCard(S)+headCoachCard(S)+comingDue(S)+'</div>';
-  const items=pendingItems(S),n=items.length;
+  const items=pendingItems(S),n=items.length,waiting=waitingItems(S),decided=justDecided(S);
   const reports=[...S.events].reverse().slice(0,30).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no reports yet.</li>';
   return heading('OWNER’S DESK',n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
-    '<div class="desk"><section><h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+'</section>'+
+    '<div class="desk"><section>'+(decided.length?'<h2>Just decided</h2>'+decidedHtml(S,decided):'')+
+    '<h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+
+    (waiting.length?'<h2>Waiting on others</h2><p><small>You have done your part. These are decided without you doing anything more.</small></p>'+waitingHtml(S,waiting):'')+'</section>'+
     '<aside><h2>Around your club</h2><ul>'+reports+'</ul><div class="controls"><button data-tab="news">League news</button><button data-tab="standings">Standings</button></div></aside></div>';
 }
 // The GM's trade desk: proposals in play, asking for a price, and the picks you hold.
@@ -6852,6 +6896,7 @@ document.addEventListener('click',e=>{
     leagueUi.notice=result==='ok'?'':result==='closed'?'The station has already decided.':'Choose an amount and term.';
     if(result==='ok'){leagueUi.lobby=false;commit();}else draw();
   }
+  if(b.dataset.rights&&openMarket(b.dataset.rights)){Object.assign(leagueUi,{market:b.dataset.rights,bid:null,lobby:false,notice:''});navigate('markets');}
   if(b.id==='withdrawBid'){withdrawBid(save,leagueUi.market);commit();}
   if(b.dataset.call||b.dataset.promise){callOwner(save,b.dataset.call??b.dataset.promise,!!b.dataset.promise);commit();}
   if(b.id==='importNo'){pendingImport=null;draw();}

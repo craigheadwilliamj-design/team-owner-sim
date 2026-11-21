@@ -25,7 +25,8 @@ const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
 const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
 const v17Save = fs.readFileSync(path.join(FIX, 'v17-save.json'), 'utf8');
-const NAMES = ['waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v18Save = fs.readFileSync(path.join(FIX, 'v18-save.json'), 'utf8');
+const NAMES = ['rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -2837,6 +2838,126 @@ test('a market you hold without an offer is a decision with the station range, a
   assert(!api.pendingItems(S).find(i => i.id === 'rights-open')?.detail.includes('Columbus'), 'not double-listed as optional');
 });
 let failed = 0;
+// ---- Club brand ---------------------------------------------------------------
+const look = (api, S, o = {}) => ({ ...api.brandOf(S.club), ...o });
+
+test('v18 save upgrades to v19: no club has a new look yet, nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v18Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.brands, []);
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v18Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('rebrand: an offseason job, once a season, and not while a move is before the owners', () => {
+  const { api, S } = owned(21);
+  assert.equal(api.brandBlock(S), null, 'the preseason is open');
+  api.advance(S);
+  assert.equal(api.brandBlock(S), 'season');
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats' })), 'season');
+  const r = ready();
+  assert.equal(r.api.brandBlock(r.S), null);
+  assert.equal(r.api.rebrandClub(r.S, look(r.api, r.S, { primary: '#7a1f2b', secondary: '#d9b25f' })), 'ok');
+  assert.equal(r.api.brandBlock(r.S), 'once');
+  const m = ready();
+  assert.equal(m.api.fileRelocation(m.S, siteIn(m.S, 'toronto').id), 'ok');
+  assert.equal(m.api.brandBlock(m.S), 'moving');
+});
+
+test('rebrand: the draft is checked against the league', () => {
+  const { api, S } = ready();
+  const err = o => api.brandPlan(S, look(api, S, o)).error;
+  assert.equal(err({}), 'unchanged');
+  assert.equal(err({ nickname: 'Bulls' }), 'nicknameTaken');
+  assert.equal(err({ nickname: 'bulls' }), 'nicknameTaken', 'case does not make a name new');
+  assert.equal(err({ nickname: 'X' }), 'nickname');
+  assert.equal(err({ nickname: '<b>Hax</b>' }), 'nickname');
+  assert.equal(err({ abbr: 'BUF' }), 'abbrTaken');
+  assert.equal(err({ abbr: 'C' }), 'abbr');
+  assert.equal(err({ primary: '#202020', secondary: '#222222' }), 'clash');
+  assert.equal(err({ nickname: '  River   Kings ' }), null, 'spaces are tidied');
+  assert.equal(err({ nickname: "O'Malleys" }), null, 'an apostrophe inside is fine');
+  assert.equal(api.brandPlan(S, look(api, S, { nickname: 'River Kings' })).to.nickname, 'River Kings');
+  assert.equal(api.brandPlan(S, look(api, S, { abbr: 'rk' })).to.abbr, 'RK');
+  assert.equal(api.brandPlan(S, look(api, S, { abbr: 'RVK' })).kind, 'look');
+  assert.equal(api.brandPlan(S, look(api, S, { nickname: 'Steamboats' })).kind, 'nickname');
+  S.finance.ownerCash = 1;
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats' })), 'short');
+  assert.deepEqual(S.brands, []);
+});
+
+test('rebrand: a new name costs more, upsets the faithful, shows everywhere and survives a reload', () => {
+  const { api, S } = ready();
+  const cash = S.finance.ownerCash, mood = S.stadium.homeMood;
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats', abbr: 'CSB', primary: '#0f5257', secondary: '#f2a541' })), 'ok');
+  const me = api.clubs.find(c => c.id === 'club-06');
+  assert.deepEqual([me.market, me.nickname, me.abbr, me.primary, me.secondary], ['Cincinnati', 'Steamboats', 'CSB', '#0f5257', '#f2a541']);
+  assert.equal(S.finance.ownerCash, Math.round((cash - api.BRAND_NICKNAME_COST) * 100) / 100);
+  assert.equal(S.stadium.homeMood, mood - api.BRAND_MOOD_HIT);
+  assert.equal(S.finance.capitalLog.at(-1).project, 'rebrand');
+  assert(S.events.some(e => e.type === 'rebranded') && S.league.news.at(-1).text.includes('Cincinnati Steamboats'));
+  assert(!/Unrecognized/.test(api.describeEvent(S.events.at(-1), S)));
+  assert.equal(api.setTeamColors(S)['--team2'], '#f2a541');
+  // Another league on screen, then this save again: the replay puts the new look back.
+  api.applyIdentity({ relocations: [] });
+  assert.equal(api.clubs.find(c => c.id === 'club-06').nickname, 'Rivermen');
+  const again = api.upgrade(JSON.parse(JSON.stringify(S))).save;
+  assert.deepEqual(api.validateSave(again), []);
+  api.applyIdentity(again);
+  assert.equal(api.clubs.find(c => c.id === 'club-06').nickname, 'Steamboats');
+  // A new look under the old name is cheaper and leaves the mood alone.
+  const l = ready(), c2 = l.S.finance.ownerCash, m2 = l.S.stadium.homeMood;
+  assert.equal(l.api.rebrandClub(l.S, look(l.api, l.S, { primary: '#4b2142', secondary: '#f0c808' })), 'ok');
+  assert.equal(l.S.finance.ownerCash, Math.round((c2 - l.api.BRAND_LOOK_COST) * 100) / 100);
+  assert.equal(l.S.stadium.homeMood, m2);
+});
+
+test('rebrand: sponsorship lifts for the first season played in the new look', () => {
+  const { api, S } = ready();
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats' })), 'ok');
+  assert.equal(api.brandLift(S), 0, 'no games left this season');
+  openSeason(api, S);
+  assert.equal(api.brandLift(S), .12);
+  const lifted = api.weekLines(S, null).sponsorship, kept = S.brands;
+  S.brands = []; const base = api.weekLines(S, null).sponsorship; S.brands = kept;
+  assert(lifted > base * 1.1 && lifted < base * 1.14);
+  api.jumpTo(S, api.SEASON_TICKS + 1);
+  assert.equal(api.brandLift(S), 0, 'one season only');
+});
+
+test('rebrand then move: the club keeps its new name and colors in the new city', () => {
+  const { api, S } = ready();
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats', abbr: 'CSB', primary: '#0f5257', secondary: '#f2a541' })), 'ok');
+  assert.equal(api.fileRelocation(S, siteIn(S, 'toronto').id), 'ok');
+  const vote = runVote(api, S);
+  assert(vote.passed);
+  openSeason(api, S);
+  const me = () => api.clubs.find(c => c.id === 'club-06');
+  assert.deepEqual([me().market, me().nickname, me().abbr, me().primary], ['Toronto', 'Steamboats', 'TOR', '#0f5257']);
+  // The next offseason it can change again, and the replay puts each change in order.
+  api.jumpTo(S, 28);
+  assert.equal(api.rebrandClub(S, look(api, S, { abbr: 'TSB' })), 'ok');
+  api.applyIdentity({ relocations: [] }); api.applyIdentity(S);
+  assert.deepEqual([me().market, me().nickname, me().abbr], ['Toronto', 'Steamboats', 'TSB']);
+  assert.deepEqual(api.validateSave(S), []);
+});
+
+test('the Brand page renders under Business, escapes what the owner typed, and shows the block', () => {
+  const { api, S } = readyLive();
+  assert(api.SECTIONS.find(x => x.id === 'business').views.some(([id]) => id === 'brand'));
+  assert.equal(api.routeFromHash('#business/brand'), 'brand');
+  let html = api.brandView();
+  assert(html.includes('Unveil the new look') && html.includes('id="brandNickname"'));
+  assert.equal(api.rebrandClub(S, look(api, S, { nickname: "O'Malleys" })), 'ok');
+  html = api.brandView();
+  assert(html.includes('O&#39;Malleys') && !html.includes("O'Malleys"));
+  assert(html.includes('Past looks') && !html.includes('Unveil the new look'));
+});
+
 (async () => {
 const only = process.env.ONLY; // ONLY=relocation npm test runs the tests whose names contain it
 for (const [name, fn] of tests) {

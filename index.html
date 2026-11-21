@@ -772,7 +772,7 @@ function inkable(hex){
 }
 // Club logos: small images the player adds, kept in the save as data URLs.
 // Only raster images in base64 get through, so nothing in a logo can run.
-const LOGO_SIZE=128,LOGO_MAX=200000;
+const LOGO_SIZE=128,LOGO_MAX=64000; // a typical 128px logo is 4–12 KB; a photo about 40 KB as WebP
 const logoOk=v=>typeof v==='string'&&v.length<=LOGO_MAX&&/^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(v);
 const logoOf=(id,S=save)=>{const v=S?.logos?.[id];return logoOk(v)?v:null;};
 const logoImg=(id,cls,S=save)=>{const v=logoOf(id,S);return v?'<img class="'+esc(cls)+'" src="'+esc(v)+'" alt="">':'';};
@@ -2387,13 +2387,14 @@ const brandOf=id=>{const t=byId.get(id);return {nickname:t.nickname,abbr:t.abbr,
 function brandBlock(S){
   const s=cur(S);
   if(!S.club)return 'closed';
+  if(ownerSetupOpen(S))return 'setup';
   if(pendingApplication(S))return 'moving';
   if(s.tick>0&&s.tick<MILESTONES.review)return 'season';
   if(S.brands.some(b=>b.club===S.club&&b.season===s.number&&b.kind!=='custom'))return 'once';
   return null;
 }
 function brandBlockText(S,code){
-  return {closed:'Take ownership of a club first.',moving:'Your move is before the league. If it goes through, the club takes its name with the move.',
+  return {closed:'Take ownership of a club first.',setup:'Until you play Week 1, your club’s name, abbreviation and colors are yours to set for free, once, on Customize teams in the settings menu. After that, changes come through here and cost money.',moving:'Your move is before the league. If it goes through, the club takes its name with the move.',
     season:'The league will not let a club change its look mid-season. Come back once the season is over, from '+weekLabel(MILESTONES.review)+'.',
     once:'The club already has a new look this season. The next chance comes after next season.'}[code]??'';
 }
@@ -2475,7 +2476,7 @@ function brandView(){
   let html=heading('CLUB BRAND',teamName(S.club))+
     '<p>'+esc('The name, the abbreviation and the colors are yours to change; the city is not (that takes a move). The league allows one change a season, in the offseason or the preseason, and it shows everywhere at once: the scoreboard, the schedule, the broadcasts and the map.')+'</p>'+
     '<div id="brandPreview">'+brandPreviewHtml(S,d)+'</div>';
-  if(block)html+='<p><b>'+esc(brandBlockText(S,block))+'</b></p>';
+  if(block)html+='<p><b>'+esc(brandBlockText(S,block))+'</b></p>'+(block==='setup'?'<p><button id="teamsMine" class="primary">Set up your club for free</button></p>':'');
   html+='<div class="controls brand-form">'+
     '<label>Nickname <input id="brandNickname" type="text" maxlength="20" autocomplete="off" value="'+esc(d.nickname)+'"'+dis+'></label>'+
     '<label>Abbreviation <input id="brandAbbr" type="text" maxlength="3" autocomplete="off" value="'+esc(d.abbr)+'"'+dis+'></label>'+
@@ -2513,7 +2514,7 @@ function brandInput(id,value){
 // ---------------------------------------------------------------------------
 function customizeClub(S,clubId,draft){
   if(!byId.has(clubId))return 'invalid';
-  if(clubId===S.club)return 'owner';
+  if(clubId===S.club&&!ownerSetupOpen(S))return 'owner';
   const p=brandPlan(S,draft,clubId),s=cur(S);
   if(p.error)return p.error;
   const last=S.brands.at(-1);
@@ -2522,9 +2523,13 @@ function customizeClub(S,clubId,draft){
   applyIdentity(S);
   return 'ok';
 }
+// The owner may set up their own club's look for free once, right after taking it:
+// until the first week of their first season is played. After that it is the Brand page.
+const ownerSetupOpen=S=>!!S.club&&S.seasonIndex===0&&cur(S).tick===0;
 const isCustomized=(S,clubId)=>S.brands.some(b=>b.club===clubId&&b.kind==='custom');
 // Drops every free edit to a club. Refused if the name or abbreviation it would go back to is now another club's.
 function undoCustom(S,clubId){
+  if(clubId===S.club&&!ownerSetupOpen(S))return 'owner';
   if(!isCustomized(S,clubId))return 'unchanged';
   const kept=S.brands;
   S.brands=kept.filter(b=>!(b.club===clubId&&b.kind==='custom'));
@@ -2540,7 +2545,7 @@ function setLogo(S,clubId,url){
   return 'ok';
 }
 function clearLogo(S,clubId){if(!S.logos[clubId])return 'unchanged';delete S.logos[clubId];return 'ok';}
-const customText=code=>({owner:'That is your club. Its name and colors change on the Brand page.',clash:'Another club now uses its old name or abbreviation, so it cannot go back.',
+const customText=code=>({owner:'Your club’s free setup is over. Its name and colors now change on the Brand page.',clash:'Another club now uses its old name or abbreviation, so it cannot go back.',
   badLogo:'That image could not be used. Try a PNG, JPEG, WebP, GIF or SVG under 5 MB.',invalid:'Pick a club.'}[code]??brandErrorText(code));
 // Browser only: shrinks an image file to a LOGO_SIZE square (kept whole, centered) and returns a data URL.
 async function readLogo(file){
@@ -2551,33 +2556,38 @@ async function readLogo(file){
     const c=document.createElement('canvas');c.width=c.height=LOGO_SIZE;
     const k=Math.min(LOGO_SIZE/(img.naturalWidth||LOGO_SIZE),LOGO_SIZE/(img.naturalHeight||LOGO_SIZE)),w=(img.naturalWidth||LOGO_SIZE)*k,h=(img.naturalHeight||LOGO_SIZE)*k;
     c.getContext('2d').drawImage(img,(LOGO_SIZE-w)/2,(LOGO_SIZE-h)/2,w,h);
-    let out=c.toDataURL('image/webp',.9);
-    if(!out.startsWith('data:image/webp'))out=c.toDataURL('image/png');
-    return logoOk(out)?out:null;
+    // WebP keeps transparency and stays small. Browsers that cannot write WebP give PNG,
+    // and a PNG too big for the cap (a photo, say) falls back to JPEG, which loses transparency.
+    for(const [type,q] of [['image/webp',.9],['image/webp',.7],['image/png'],['image/jpeg',.85],['image/jpeg',.6]]){
+      const out=c.toDataURL(type,q);
+      if(out.startsWith('data:'+type)&&logoOk(out))return out;
+    }
+    return null;
   }catch{return null;}
   finally{URL.revokeObjectURL(url);}
 }
 const teamsUi={club:null,draft:null,key:'',notice:''};
 function teamDraft(S){
-  if(!byId.has(teamsUi.club))teamsUi.club=clubs.find(t=>t.id!==S.club).id;
+  if(!byId.has(teamsUi.club))teamsUi.club=ownerSetupOpen(S)?S.club:clubs.find(t=>t.id!==S.club).id;
   const key=S.saveId+'/'+teamsUi.club+'/'+S.brands.length+'/'+S.relocations.length;
   if(teamsUi.key!==key){teamsUi.key=key;teamsUi.draft=brandOf(teamsUi.club);}
   return teamsUi.draft;
 }
 function teamNoteHtml(S,d){
-  if(teamsUi.club===S.club)return '';
+  if(teamsUi.club===S.club&&!ownerSetupOpen(S))return '';
   const p=brandPlan(S,d,teamsUi.club);
   return p.error&&p.error!=='unchanged'?'<p><b>'+esc(brandErrorText(p.error))+'</b></p>':'';
 }
 function teamsView(){
-  const S=save,d=teamDraft(S),id=teamsUi.club,t=byId.get(id),mine=id===S.club,logo=logoOf(id,S);
+  const S=save,d=teamDraft(S),id=teamsUi.club,t=byId.get(id),setup=ownerSetupOpen(S),mine=id===S.club&&!setup,logo=logoOf(id,S);
   let html=heading('SETTINGS','Customize teams')+
-    '<p>'+esc('Rename and recolor any club in the league, free, and give any club a logo. Changes are saved with this season and show everywhere: schedules, standings, broadcasts and the map. Your own club’s name and colors are an owner’s decision and change on the Brand page; its logo you can set here.')+'</p>';
+    '<p>'+esc('Rename and recolor any club in the league, free, and give any club a logo. Changes are saved with this season and show everywhere: schedules, standings, broadcasts and the map. Your own club you can set up here for free once, until you play Week 1; after that its name and colors change on the Brand page, for money. Its logo you can change here any time.')+'</p>';
   html+='<div class="team-grid">'+groups.map(g=>'<h3 class="group">'+esc(g[0].conference+' · '+g[0].division)+'</h3>'+g.map(c=>'<button data-teamedit="'+esc(c.id)+'" aria-pressed="'+(c.id===id)+'">'+chipHtml(c.id,'',S)+
     '<span>'+esc(teamName(c.id))+(c.id===S.club?' (yours)':'')+'</span></button>').join('')).join('')+'</div>';
   html+='<div class="team-edit"><h2>'+esc(teamName(id))+'</h2><div id="teamPreview">'+brandPreviewHtml(S,mine?brandOf(id):d,id)+'</div>';
-  if(mine)html+='<p>'+esc('This is your club. Its name, abbreviation and colors change on the Brand page.')+' <button data-tab="brand">Open Brand</button></p>';
-  else html+='<div class="controls brand-form">'+
+  if(mine)html+='<p>'+esc('This is your club, and its free setup is over. Its name, abbreviation and colors change on the Brand page.')+' <button data-tab="brand">Open Brand</button></p>';
+  else if(id===S.club)html+='<p><b>'+esc('Your club’s free setup: change anything you like until you play Week 1. After that it is locked, and changes go through the Brand page for money.')+'</b></p>';
+  if(!mine)html+='<div class="controls brand-form">'+
     '<label>Nickname <input id="teamNickname" type="text" maxlength="20" autocomplete="off" value="'+esc(d.nickname)+'"></label>'+
     '<label>Abbreviation <input id="teamAbbr" type="text" maxlength="3" autocomplete="off" value="'+esc(d.abbr)+'"></label>'+
     '<label>Primary <input id="teamPrimary" type="color" value="'+esc(color(d.primary).toLowerCase())+'"></label>'+
@@ -6819,6 +6829,7 @@ function ownershipDesk(){
   const items=pendingItems(S),n=items.length,waiting=waitingItems(S),decided=justDecided(S);
   const reports=[...S.events].reverse().slice(0,30).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no reports yet.</li>';
   return heading('OWNER’S DESK',n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
+    (ownerSetupOpen(S)?'<p class="setup-note">'+esc('Make the club yours: until you play Week 1 you can rename it, recolor it and give it a logo, free, once.')+' <button id="teamsMine">Set up your club</button></p>':'')+
     '<div class="desk"><section>'+(decided.length?'<h2>Just decided</h2>'+decidedHtml(S,decided):'')+
     '<h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+
     (waiting.length?'<h2>Waiting on others</h2><p><small>You have done your part. These are decided without you doing anything more.</small></p>'+waitingHtml(S,waiting):'')+'</section>'+
@@ -7351,6 +7362,7 @@ document.addEventListener('click',e=>{
   if(b.id==='withdrawRelocation'){withdrawRelocation(save);commit();}
   if(b.dataset.palette&&save.club){const [p1,p2]=b.dataset.palette.split(',');Object.assign(brandDraft(save),{primary:p1,secondary:p2});brandUi.notice='';draw();}
   if(b.id==='teamsOpen'){navigate('teams');window.scrollTo?.(0,0);}
+  if(b.id==='teamsMine'&&save.club){teamsUi.club=save.club;teamsUi.key='';teamsUi.notice='';navigate('teams');window.scrollTo?.(0,0);}
   if(b.dataset.teamedit&&byId.has(b.dataset.teamedit)){teamsUi.club=b.dataset.teamedit;teamsUi.key='';teamsUi.notice='';draw();}
   if(b.id==='teamSave'){const res=customizeClub(save,teamsUi.club,teamDraft(save));teamsUi.notice=res==='ok'?'Saved. '+teamName(teamsUi.club)+' it is.':customText(res);if(res==='ok')commit();else draw();}
   if(b.id==='teamUndo'){const res=undoCustom(save,teamsUi.club);teamsUi.key='';teamsUi.notice=res==='ok'?'Back to '+teamName(teamsUi.club)+'.':customText(res);if(res==='ok')commit();else draw();}

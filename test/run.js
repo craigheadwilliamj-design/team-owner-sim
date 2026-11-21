@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2456,6 +2456,39 @@ test('team colors: every club gets a shade that carries white text, and no club 
   const { S } = owned();
   assert.equal(api.setTeamColors(S)['--team'], api.inkable(api.clubs.find(t => t.id === 'club-06').primary));
   assert.equal(api.setTeamColors({ club: null })['--team'], '#1e5b37');
+});
+
+test('navigation: every page belongs to one section, routes round-trip through the address bar, old tab names still work', () => {
+  const { api } = load();
+  const pages = api.SECTIONS.flatMap(x => x.views.map(([id]) => id));
+  assert.equal(new Set(pages).size, pages.length, 'no page in two sections');
+  for (const id of pages) {
+    assert(typeof api.VIEWS[id] === 'function', id + ' has a view');
+    assert.equal(api.routeFromHash(api.hashOf(id)), id);
+  }
+  assert.equal(api.hashOf('desk'), '#desk');
+  assert.equal(api.hashOf('depth'), '#football/depth');
+  assert.equal(api.routeFromHash('#game'), 'game');
+  assert.equal(api.routeFromHash('#business/depth'), null, 'a page under the wrong section is not a route');
+  assert.equal(api.routeFromHash('#nowhere'), null);
+  assert.equal(api.routeFromHash('#__proto__'), null);
+  for (const [old, route] of [['Owner desk', 'desk'], ['League', 'markets'], ['Club directory', 'clubs'], ['Team schedule', 'schedule'], ['Game', 'game']]) assert.equal(api.routeOf(old), route);
+  assert.equal(api.routeOf('constructor'), null);
+  const nav = api.navHtml('contracts');
+  assert.match(nav.top, /data-section="football" aria-current="page"/);
+  assert.match(nav.sub, /data-tab="contracts" aria-current="page"/);
+  assert.equal(api.navHtml('desk').sub, '', 'a one-page section has no sub-tabs');
+});
+
+test('league office pages split the old League tab without losing anything', () => {
+  const { api, S } = owned();
+  api.save.club = S.club;
+  const whole = api.marketsView() + api.ownersView() + api.newsView();
+  assert.match(api.marketsView(), /Broadcast rights/);
+  assert.match(api.ownersView(), /Owners and votes/);
+  assert.match(api.ownersView(), /What they remember/, 'owners are listed even with no vote scheduled');
+  assert.match(api.newsView(), /Headlines/);
+  assert(whole.length > 0);
 });
 
 let failed = 0;

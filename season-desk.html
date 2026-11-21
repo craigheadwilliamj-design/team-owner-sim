@@ -53,9 +53,12 @@ small{display:block;color:var(--muted)}
 strong{font-size:1.05rem}
 #advance{background:#ffffff;color:#17201b;border:0;font:900 1.2rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:13px 22px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
 #advance:disabled{background:#d8ddd6;color:#4f5a52;box-shadow:none;opacity:1}
-#tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--rule)}
-#tabs button{border:0;background:transparent;font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase}
-#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg);box-shadow:inset 0 -4px 0 var(--team)}
+#tabs{justify-content:flex-start;gap:4px;border-bottom:3px solid var(--turf);padding:16px 0 0;flex-wrap:nowrap;overflow-x:auto}
+#tabs button{border:0;border-radius:4px 4px 0 0;background:transparent;font:800 1.15rem var(--display);letter-spacing:.07em;text-transform:uppercase;padding:10px 18px;min-height:46px;white-space:nowrap}
+#tabs [aria-current=page]{background:var(--turf);color:var(--band-fg);box-shadow:inset 0 -4px 0 var(--team)}
+#subtabs{justify-content:flex-start;gap:6px;padding:12px 0 0;flex-wrap:nowrap;overflow-x:auto}
+#subtabs button{border:0;border-radius:999px;background:var(--rule-soft);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:40px;white-space:nowrap}
+#subtabs [aria-current=page]{background:var(--fg);color:var(--bg)}
 #app{padding:25px 0}
 #app>small{font:400 .82rem var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--link)}
 #app h2{margin:5px 0 14px}
@@ -153,7 +156,7 @@ header #jump select,header #jump button{min-height:44px}
 header #jump button{background:transparent;color:var(--band-fg);border:2px solid var(--band-fg);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
 </style>
-<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
+<main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Sections"></nav><nav id="subtabs" hidden></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
   "version": 1,
   "name": "Continental Gridiron League",
   "teams": [
@@ -1811,7 +1814,7 @@ function relocationPanel(S){
     const V=S.league.meeting;
     html+='<p>'+esc('Filed after '+weekLabel(A.filedWeek)+': move the club to the '+A.siteName+' in '+A.destination.name+'. The owners vote after '+weekLabel(V.week)+', and it takes '+VOTE_THRESHOLD+' of 32. '+
       money(A.costs.total)+' is set aside ('+money(A.paid.owner)+' of your cash, '+money(A.paid.debt)+' borrowed) and comes back if the vote fails. The '+money(A.costs.filing)+' filing cost does not.')+'</p>'+
-      '<p>'+esc('Everyone knows: '+A.from.market+' fans and the press are watching. Call owners on the League tab before the vote.')+'</p>'+
+      '<p>'+esc('Everyone knows: '+A.from.market+' fans and the press are watching. Call owners in the League office before the vote.')+'</p>'+
       '<button id="withdrawRelocation">Withdraw the application</button>';
     return html;
   }
@@ -2898,9 +2901,11 @@ function dealLabel(S,M){
   if(!M.holder)return 'Up now';
   return M.renewal<=cur(S).number?'Up for renewal':'Through season '+(M.renewal-1);
 }
-function leagueView(){
+// The League office: broadcast rights, the owners and their votes, and the news, each its own page.
+function leagueView(){return marketsView()+ownersView()+newsView();}
+function marketsView(){
   const S=save,L=S.league,s=cur();
-  let html=heading('LEAGUE','Broadcast markets')+
+  let html=heading('LEAGUE OFFICE','Broadcast rights')+
     '<figure class="map"><canvas id="marketMap" role="img" aria-label="Map of broadcast markets. Each market city’s area is filled with the color of the club that holds its broadcast rights."></canvas>'+
     '<figcaption>Each city’s area takes the fill color of the club with broadcast control and that club’s secondary color as its border. Striped areas are shared home markets. Open circles are open markets'+(S.club?'; the solid ring is your home, the dashed rings markets up for renewal':'')+'.</figcaption></figure>';
   html+='<div class="wide"><table><thead><tr><th>Open market</th><th>Broadcast control</th><th>Deal</th><th>Fan preference</th></tr></thead><tbody>'+OPEN_MARKETS.map(m=>{
@@ -2908,7 +2913,7 @@ function leagueView(){
     return '<tr><td>'+esc(m.name)+'<small>'+esc('Metro '+m.metro+'M · potential '+m.potential)+'</small></td><td>'+(M.holder?club(M.holder):'Unclaimed')+'</td><td>'+esc(dealLabel(S,M)+(M.holder?' · $'+M.fee+'M a year':''))+'</td><td>'+esc(fans)+'</td></tr>';
   }).join('')+'</tbody></table></div>';
   if(L.rules.firstRefusal)html+='<p>'+esc('First refusal is league policy: at renewal a holder keeps its market by matching the winning offer, if that offer is no more than a quarter above its own.')+'</p>';
-  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>'+headlines(S);
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>';
   const open=openContests(S),decided=L.contests.filter(C=>C.status==='decided'&&C.season===s.number);
   if(open.length){
     const pick=open.find(C=>C.marketId===leagueUi.market)??open.find(C=>C.holder===S.club)??open.find(C=>C.bid)??
@@ -2944,7 +2949,12 @@ function leagueView(){
   const mineHeld=OPEN_MARKETS.filter(m=>L.markets[m.id].holder===S.club);
   if(mineHeld.length&&s.completed<s.weeks.length)html+='<h2>Your markets</h2><ul>'+mineHeld.map(m=>{const M=L.markets[m.id];
     return '<li><strong>'+esc(m.name)+'</strong> '+esc(Math.round(M.fans[S.club]??0)+'% of fans · $'+M.fee+'M a year · '+dealLabel(S,M).toLowerCase()+'. This week: '+coverageText(S,m.id,s.completed))+'</li>';}).join('')+'</ul>';
-  const V=L.meeting;
+  return html;
+}
+function ownersView(){
+  const S=save,L=S.league,V=L.meeting;
+  let html=heading('LEAGUE OFFICE','Owners and votes');
+  if(!S.club)return html+'<p>Take ownership on the Owner desk to join the league’s business.</p>';
   if(V){
     const sponsor=L.owners[V.sponsor],name=KNOWN_MARKETS.get(V.marketId).name,reloc=V.kind==='relocation',A=S.stadium.application;
     if(reloc)html+='<h2>League meeting</h2><p>'+esc('You have asked the owners to let your club move from '+A.from.market+' to '+name+'. Passing needs '+VOTE_THRESHOLD+' of 32 votes.')+'</p>'+
@@ -2963,9 +2973,17 @@ function leagueView(){
         const calls=V.status==='scheduled'&&t.id!==V.sponsor&&V.callsLeft>0?'<button data-call="'+t.id+'">Call</button><button data-promise="'+t.id+'">Promise support</button>':'';
         return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+esc(stand)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td><td class="calls">'+calls+'</td></tr>';
       }).join('')+'</tbody></table></div>';
+  }else{
+    html+='<p>No vote is scheduled. How the other owners feel about you, and what they remember:</p>'+
+      '<div class="wide"><table class="owners"><thead><tr><th>Club</th><th>Owner</th><th>Toward you</th><th>What they remember</th></tr></thead><tbody>'+
+      clubs.filter(t=>t.id!==S.club).map(t=>{
+        const o=L.owners[t.id],m=o.memory.at(-1);
+        return '<tr><td>'+club(t.id)+'</td><td>'+esc(o.name)+'<small>'+esc(o.style)+'</small></td><td>'+relationLabel(o.relation)+'</td><td>'+(m?esc(m.text):'<small>Nothing in particular</small>')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
   }
-  return html+leagueTrades(S)+headlines(S);
+  return html;
 }
+function newsView(){return heading('LEAGUE OFFICE','News')+headlines(save)+leagueTrades(save);}
 function leagueTrades(S){
   const list=[...(S.league.transactions??[])].reverse().slice(0,12);
   if(!list.length)return '';
@@ -5937,34 +5955,34 @@ function leagueCard(S){
   const open=openContests(S),V=S.league.meeting;
   if(open.length){
     const mine=open.filter(C=>C.bid).length,held=open.filter(C=>C.holder===S.club&&!C.bid).length;
-    return '<div><small>Broadcast rights</small>'+esc(open.length+' market'+(open.length===1?'':'s')+' up for renewal'+(held?', '+held+' of yours without an offer':mine?', '+mine+' with your offer':'')+'; the station decides after '+weekLabel(Math.min(...open.map(C=>C.deadlineWeek))))+' <button data-tab="League">Bid</button></div>';
+    return '<div><small>Broadcast rights</small>'+esc(open.length+' market'+(open.length===1?'':'s')+' up for renewal'+(held?', '+held+' of yours without an offer':mine?', '+mine+' with your offer':'')+'; the station decides after '+weekLabel(Math.min(...open.map(C=>C.deadlineWeek))))+' <button data-tab="markets">Bid</button></div>';
   }
-  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="League">Lobby</button></div>';
+  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="owners">Lobby</button></div>';
   const n=S.league.news.at(-1);
   return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
 }
 function depthCard(S){
   const alerts=S.staff.directives.rosterMoves==='owner'?rosterAlerts(S):[];
-  if(alerts.length)return '<div><small>Roster</small>'+esc(alerts[0])+' <button data-tab="Depth chart">Fix it</button></div>';
+  if(alerts.length)return '<div><small>Roster</small>'+esc(alerts[0])+' <button data-tab="depth">Fix it</button></div>';
   const out=inactivesFor(S,S.club);
   return '<div><small>Game day</small>'+(out.length?esc(out.length+' inactive: '+out.slice(0,3).map(p=>p.pos+' '+p.name.split(' ')[1]).join(', ')+(out.length>3?'…':'')):'Everyone healthy dresses')+'</div>';
 }
 function staffCard(S){
   const C=S.staff.clubs[S.club],n=S.staff.proposals.length;
-  if(n)return '<div><small>Needs your answer</small>'+n+' proposal'+(n===1?'':'s')+' and offer'+(n===1?'':'s')+' <button data-tab="Staff">Review</button></div>';
+  if(n)return '<div><small>Needs your answer</small>'+n+' proposal'+(n===1?'':'s')+' and offer'+(n===1?'':'s')+' <button data-tab="staff">Review</button></div>';
   const open=['hc','gm'].filter(role=>C[role].interim);
-  if(open.length)return '<div><small>Staff</small>'+esc(open.map(role=>(role==='hc'?'Head coach':'GM')+' job open').join(', '))+' <button data-tab="Staff">Search</button></div>';
+  if(open.length)return '<div><small>Staff</small>'+esc(open.map(role=>(role==='hc'?'Head coach':'GM')+' job open').join(', '))+' <button data-tab="staff">Search</button></div>';
   return '<div><small>Head coach</small>'+esc(C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
 }
 function capCard(S){
   const room=capRoom(S,S.club);
-  return '<div><small>Cap room</small>'+(room<0?'Over by '+m1(-room):m1(room))+' <button data-tab="Contracts">Cap sheet</button></div>';
+  return '<div><small>Cap room</small>'+(room<0?'Over by '+m1(-room):m1(room))+' <button data-tab="contracts">Cap sheet</button></div>';
 }
 function moneyCard(S){
-  if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="Finances">Review</button></div>';
+  if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="finances">Review</button></div>';
   const season=S.finance.ledger.filter(x=>x.season===cur(S).number);
   if(!season.length)return '';
-  return '<div><small>Operating result</small>'+m1(round2(season.reduce((a,x)=>a+x.result,0)))+' this season <button data-tab="Finances">Books</button></div>';
+  return '<div><small>Operating result</small>'+m1(round2(season.reduce((a,x)=>a+x.result,0)))+' this season <button data-tab="finances">Books</button></div>';
 }
 // What comes next once the regular season is over.
 function calendarCard(S){
@@ -5976,7 +5994,7 @@ function calendarCard(S){
     return '<div><small>Playoffs</small>'+esc(st.alive?'Seed #'+(st.seed+1)+' · '+capital(ROUND_NAMES[s.postseason.rounds.length])+' next':st.finish)+'</div>';
   }
   const next=jumpTargets(S)[0];
-  return '<div><small>Next on the calendar</small>'+esc(next?next[1]:'Season '+(s.number+1))+(S.draft.status==='live'?' <button data-tab="Draft">Draft room</button>':'')+'</div>';
+  return '<div><small>Next on the calendar</small>'+esc(next?next[1]:'Season '+(s.number+1))+(S.draft.status==='live'?' <button data-tab="draft">Draft room</button>':'')+'</div>';
 }
 function tradeSummary(S,P){
   const T=P.trade,picks=T.picks.map(pickLabel).join(' and ');
@@ -6038,7 +6056,7 @@ function standingsView(){
 function scheduleView(){
   const t=byId.get(selected),rating=personnel(save.rosters[selected]);
   return heading(t.conference+' '+t.division,teamName(selected))+
-    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="Rosters">View roster</button></div>'+
+    '<div class="controls"><label>Club '+clubSelect('team',selected)+'</label><span>Offense '+rating.offense+' · Defense '+rating.defense+'</span><button data-tab="rosters">View roster</button></div>'+
     '<div class="wide"><table><thead><tr><th>Week</th><th>Site</th><th>Opponent</th><th>Result</th></tr></thead><tbody>'+cur().weeks.map((games,i)=>{
       const g=games.find(g=>[g.home,g.away].includes(selected));
       if(!g)return '<tr><td>'+(i+1)+'</td><td></td><td>Bye</td><td>—</td></tr>';
@@ -6093,12 +6111,12 @@ function canWatch(S){
   if(seed<0||(P&&!playoffStatus(S,id)?.alive))return false;
   return !(seed===0&&!(P?.rounds.length));
 }
-function startBroadcast(){bc.i=0;bc.playing=true;tab='Game';}
+function startBroadcast(){bc.i=0;bc.playing=true;tab='game';}
 function stopBroadcastTimer(){if(bc.timer){clearTimeout(bc.timer);bc.timer=null;}}
 function scheduleBroadcast(){
   stopBroadcastTimer();
   const B=broadcastGame;
-  if(!B||!bc.playing||tab!=='Game')return;
+  if(!B||!bc.playing||tab!=='game')return;
   if(bc.i>=B.plays.length){bc.playing=false;drawBroadcast();return;}
   const p=B.plays[bc.i-1];
   let wait=bc.i===0?600:BC_PACE[p.kind]??1200;
@@ -6220,34 +6238,71 @@ function broadcastInner(){
 }
 function broadcastView(){
   const B=broadcastGame;
-  if(!B)return heading('GAME DAY','No game on')+'<p>Your club has not played since the page opened.</p><button data-tab="Owner desk">Back to the desk</button>';
+  if(!B)return heading('GAME DAY','No game on')+'<p>Your club has not played since the page opened.</p><button data-tab="desk">Back to the desk</button>';
   const away=teamName(B.away),home=teamName(B.home);
   return heading(B.label.toUpperCase(),away+(B.neutral?' vs. ':' at ')+home)+'<div id="broadcast">'+broadcastInner()+'</div>';
 }
 function drawBroadcast(){const el=$('#broadcast');if(el&&broadcastGame)el.innerHTML=broadcastInner();}
-const TABS=['Owner desk','Depth chart','Staff','Stadium','Finances','Contracts','League','Draft','Scoreboard','Standings','Team schedule','Rosters','Club directory'];
+// Navigation: five sections, each with its own pages. A page's route is its id; the address bar shows section/page
+// (#football/depth) so back, forward and refresh work. The game broadcast is a page with no tab of its own.
+const SECTIONS=[
+  {id:'desk',label:'Desk',views:[['desk','Owner desk']]},
+  {id:'football',label:'Football',views:[['depth','Depth chart'],['contracts','Contracts'],['draft','Draft'],['staff','Staff']]},
+  {id:'business',label:'Business',views:[['finances','Finances'],['stadium','Stadium']]},
+  {id:'office',label:'League office',views:[['owners','Owners & votes'],['markets','Broadcast rights'],['news','News']]},
+  {id:'around',label:'Around the league',views:[['scoreboard','Scoreboard'],['standings','Standings'],['schedule','Team schedule'],['rosters','Rosters'],['clubs','Club directory']]}
+];
+const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
+  finances:()=>financesView(),stadium:()=>stadiumView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
+  scoreboard:()=>scoreboard(),standings:()=>standingsView(),schedule:()=>scheduleView(),rosters:()=>rosterView(),clubs:()=>'',game:()=>broadcastView()};
+const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route))??null;
+// Tab names from builds before sections, still found in page snapshots and old links.
+const LEGACY_TABS={'Owner desk':'desk','Depth chart':'depth',Staff:'staff',Stadium:'stadium',Finances:'finances',Contracts:'contracts',League:'markets',Draft:'draft',
+  Scoreboard:'scoreboard',Standings:'standings','Team schedule':'schedule',Rosters:'rosters','Club directory':'clubs',Game:'game'};
+const routeOf=v=>typeof v!=='string'?null:Object.hasOwn(VIEWS,v)?v:Object.hasOwn(LEGACY_TABS,v)?LEGACY_TABS[v]:null;
+const hashOf=route=>{const sec=sectionOf(route);return '#'+(!sec||sec.id===route?route:sec.id+'/'+route);};
+const routeFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');const r=routeOf(parts.at(-1));return r&&(parts.length===1||sectionOf(r)?.id===parts[0])?r:null;};
+const lastPage={};
+function navHtml(route){
+  const here=sectionOf(route);
+  const top=SECTIONS.map(x=>'<button data-section="'+x.id+'"'+(x===here?' aria-current="page"':'')+'>'+esc(x.label)+'</button>').join('');
+  const sub=here&&here.views.length>1?here.views.map(([id,label])=>'<button data-tab="'+id+'"'+(id===route?' aria-current="page"':'')+'>'+esc(label)+'</button>').join(''):'';
+  return {top,sub,label:here?.label??''};
+}
+// Go to a page. Clicks add a history entry; the hashchange that follows finds the page already open.
+function navigate(route){
+  route=routeOf(route);if(!route)return;
+  tab=route;
+  const sec=sectionOf(route);if(sec)lastPage[sec.id]=route;
+  try{if(window.location&&window.location.hash!==hashOf(route))window.location.hash=hashOf(route);}catch{}
+  draw();
+}
+function syncHash(){try{const h=hashOf(tab);if(window.location&&window.location.hash!==h)window.history?.replaceState?.(null,'',h);}catch{}}
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
 function draw(){
   const s=cur();
   setTeamColors(save);
-  $('#tabs').innerHTML=TABS.map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
+  const nav=navHtml(tab);
+  $('#tabs').innerHTML=nav.top;
+  const subtabs=$('#subtabs');subtabs.innerHTML=nav.sub;subtabs.hidden=!nav.sub;subtabs.setAttribute?.('aria-label',nav.label);
+  syncHash();
   drawStatus();
   const prompt=$('#importPrompt');
   prompt.hidden=!pendingImport;
   prompt.innerHTML=pendingImport?'<span>'+esc('Replace your current season ('+describeSave(save)+') with the one you loaded ('+describeSave(pendingImport)+')?')+'</span><button id="importYes">Replace season</button><button id="importNo">Keep current season</button>':'';
   const live=$('#watchLive');
   live.hidden=!canWatch(save);
-  if(tab!=='Game')stopBroadcastTimer();
+  if(tab!=='game')stopBroadcastTimer();
   const next=$('#advance');
   next.disabled=!save.club;
   next.textContent=!save.club?'Choose a club':advanceLabel(save);
   const targets=save.club?jumpTargets(save):[];
   $('#jump').innerHTML=targets.length?'<select id="jumpTarget" aria-label="Jump ahead to">'+targets.map(([t,label])=>option(t,label,false)).join('')+'</select><button id="jumpGo">Jump ahead</button>':'';
   $('#clockLabel').textContent='Season '+s.number+' · '+(s.tick?capital(weekLabel(s.tick)):'Preseason');
-  $('#directoryPane').hidden=tab!=='Club directory';
-  app.innerHTML=tab==='Owner desk'?ownershipDesk():tab==='Stadium'?stadiumView():tab==='Finances'?financesView():tab==='Contracts'?contractsView():tab==='Staff'?staffView():tab==='Depth chart'?depthView():tab==='League'?leagueView():tab==='Draft'?draftView():tab==='Scoreboard'?scoreboard():tab==='Standings'?standingsView():tab==='Team schedule'?scheduleView():tab==='Rosters'?rosterView():tab==='Game'?broadcastView():'';
-  if(tab==='Game')scheduleBroadcast();
-  if(tab==='League'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
+  $('#directoryPane').hidden=tab!=='clubs';
+  app.innerHTML=(VIEWS[tab]??VIEWS.desk)();
+  if(tab==='game')scheduleBroadcast();
+  if(tab==='markets'){try{const canvas=$('#marketMap');if(canvas?.getContext)drawMap(canvas,save);}catch{}}
 }
 
 // ---------------------------------------------------------------------------
@@ -6259,14 +6314,15 @@ persist();
 let scoutPos='DE';
 let viewed,tab,selected,pendingImport=null;
 const latestView=()=>{const s=cur(),n=s.postseason?.rounds.length??0;return n?REGULAR_WEEKS+n:Math.max(1,s.completed);};
-function resetView(){viewed=latestView();tab='Owner desk';selected=save.club??clubs[0].id;}
+function resetView(){viewed=latestView();tab='desk';selected=save.club??clubs[0].id;}
 resetView();
 const app=$('#app');
 
 document.addEventListener('click',e=>{
   const b=e.target.closest?.('button');if(!b)return;
-  if(b.dataset.tab){tab=b.dataset.tab;draw();}
-  if(b.dataset.id){selected=b.dataset.id;tab='Team schedule';draw();window.scrollTo(0,0);}
+  if(b.dataset.section){const sec=SECTIONS.find(x=>x.id===b.dataset.section);if(sec)navigate(lastPage[sec.id]??sec.views[0][0]);}
+  if(b.dataset.tab)navigate(b.dataset.tab);
+  if(b.dataset.id){selected=b.dataset.id;navigate('schedule');window.scrollTo(0,0);}
   if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
   if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
@@ -6306,7 +6362,7 @@ document.addEventListener('click',e=>{
   if(b.id==='importNo'){pendingImport=null;draw();}
   if(b.id==='watchLive'&&save.club&&canWatch(save)){
     const before=broadcastGame;advance(save);viewed=latestView();
-    if(broadcastGame!==before)startBroadcast();else tab='Owner desk';
+    if(broadcastGame!==before)startBroadcast();else tab='desk';
     commit();window.scrollTo(0,0);
   }
   if(b.id==='watchLast'&&broadcastGame){startBroadcast();draw();window.scrollTo(0,0);}
@@ -6315,15 +6371,15 @@ document.addEventListener('click',e=>{
   if(b.id==='bcNext'&&broadcastGame){bc.i=Math.min(broadcastGame.plays.length,bc.i+1);drawBroadcast();}
   if(b.id==='bcEnd'&&broadcastGame){bc.i=broadcastGame.plays.length;bc.playing=false;stopBroadcastTimer();drawBroadcast();}
   if(b.dataset.bcspeed){bc.speed=Number(b.dataset.bcspeed);drawBroadcast();scheduleBroadcast();}
-  if(b.id==='bcBack'){tab='Owner desk';draw();}
-  if(b.id==='advance'&&save.club){advance(save);viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();}
-  if(b.id==='jumpGo'&&save.club){jumpTo(save,Number($('#jumpTarget').value));viewed=latestView();tab=save.draft.status==='live'?'Draft':'Owner desk';commit();window.scrollTo(0,0);}
+  if(b.id==='bcBack')navigate('desk');
+  if(b.id==='advance'&&save.club){advance(save);viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();}
+  if(b.id==='jumpGo'&&save.club){jumpTo(save,Number($('#jumpTarget').value));viewed=latestView();tab=save.draft.status==='live'?'draft':'desk';commit();window.scrollTo(0,0);}
   if(b.dataset.draft){ownerPick(save,b.dataset.draft);commit();}
   if(b.id==='gmPick'&&save.draft.order[save.draft.pick]?.owner===save.club){aiPick(save);commit();}
   if(b.id==='simToMine'){simToMyPick(save);commit();}
   if(b.dataset.scoutp){scoutProspect(save,b.dataset.scoutp);commit();}
   if(b.dataset.watch){toggleWatch(save,b.dataset.watch);commit();}
-  if(b.dataset.profile){draftUi.profile=b.dataset.profile;if(tab!=='Draft')tab='Draft';draw();window.scrollTo?.(0,0);}
+  if(b.dataset.profile){draftUi.profile=b.dataset.profile;if(tab!=='draft')navigate('draft');else draw();window.scrollTo?.(0,0);}
   if(b.id==='closeProfile'){draftUi.profile=null;draw();}
   if(b.id==='toggleWire'){draftUi.allWire=!draftUi.allWire;draw();}
   const contractNotice={capShort:'That does not fit under the cap. Clear room first.',ownerShort:'You do not have that much cash on hand.',unavailable:'That move is no longer available.',invalid:'Those terms are not valid.'};
@@ -6436,7 +6492,7 @@ $('#copy').onclick=()=>offerFile('cgl-season-'+cur().number+'-'+shortLabel(cur()
 // Keep the open tab and selections when a new version of the page arrives.
 function start(data){
   if(data&&typeof data==='object'){
-    if(TABS.includes(data.tab))tab=data.tab;
+    if(routeOf(data.tab))tab=routeOf(data.tab);
     if(isInt(data.viewed,1,22))viewed=data.viewed;
     if(byId.has(data.selected))selected=data.selected;
     if(positionNames.has(data.scoutPos))scoutPos=data.scoutPos;
@@ -6445,8 +6501,10 @@ function start(data){
       for(const k of Object.keys(stadiumUi.plan))if(typeof data.stadiumUi.plan?.[k]==='string')stadiumUi.plan[k]=data.stadiumUi.plan[k];
     }
   }
+  tab=routeFromHash(window.location?.hash)??tab;
   draw();
 }
+window.addEventListener?.('hashchange',()=>{const r=routeFromHash(window.location.hash);if(r&&r!==tab)navigate(r);});
 const hot=window.claude?.hot;
 try{hot?.snapshot?.(()=>({tab,viewed,selected,scoutPos,stadiumUi}));}catch{}
 // Draw once we know where the season lives (immediately when there is no IndexedDB).

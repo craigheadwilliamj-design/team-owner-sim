@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'draftBook', 'corkBoard', 'clipboard', 'draftGroupOf', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency', 'findPlayer', 'findPlayers', 'playerView', 'showPlayer', 'playerFromHash', 'card:()=>({cardPlayer,cardTab})', 'draftBook', 'corkBoard', 'clipboard', 'draftGroupOf', 'clubView', 'clubsView', 'clubFromHash', 'standingsView', 'setClub:(id,t)=>{selected=id;clubTab=t;}', 'setCard:(id,t)=>{cardPlayer=id;cardTab=t||"overview";}'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2472,7 +2472,7 @@ test('navigation: every page belongs to one section, routes round-trip through t
   assert.equal(api.routeFromHash('#business/depth'), null, 'a page under the wrong section is not a route');
   assert.equal(api.routeFromHash('#nowhere'), null);
   assert.equal(api.routeFromHash('#__proto__'), null);
-  for (const [old, route] of [['Owner desk', 'desk'], ['League', 'markets'], ['Club directory', 'clubs'], ['Team schedule', 'schedule'], ['Game', 'game']]) assert.equal(api.routeOf(old), route);
+  for (const [old, route] of [['Owner desk', 'desk'], ['League', 'markets'], ['Club directory', 'clubs'], ['Team schedule', 'club'], ['Rosters', 'club'], ['Game', 'game']]) assert.equal(api.routeOf(old), route);
   assert.equal(api.routeOf('constructor'), null);
   const nav = api.navHtml('contracts');
   assert.match(nav.top, /data-section="football" aria-current="page"/);
@@ -2623,6 +2623,28 @@ test('draft room: cork board tiers, a sortable and filterable clipboard, and tak
   api.draftUi.view = 'list';
   assert(api.draftView().includes('data-draft='), 'your pick can be made from the clipboard');
   Object.assign(api.draftUi, { view: 'board', group: 'All', q: '' });
+});
+
+test('club pages: one page per club with schedule and roster, a directory, and club names that link to it', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  for (let i = 0; i < 2; i++) api.playWeek(S);
+  const dir = api.clubsView();
+  for (const t of api.clubs) assert(dir.includes('data-id="' + t.id + '"'), t.id + ' is in the directory');
+  S.league.owners['club-03'].name = 'Rich <script>x</script>';
+  api.setClub('club-03', 'schedule');
+  let html = api.clubView();
+  assert(html.includes('Schedule') && html.includes('Toward you') && !html.includes('<script>x'));
+  assert.match(html, /data-id="club-\d\d"/, 'opponents link to their club pages');
+  api.setClub('club-03', 'roster');
+  html = api.clubView();
+  assert(html.includes('data-player="' + S.rosters['club-03'][0].id + '"') || S.rosters['club-03'].some(p => html.includes('data-player="' + p.id + '"')), 'roster names open player cards');
+  api.setClub('club-06', 'schedule');
+  assert(api.clubView().includes('<dd>You</dd>'), 'your own club shows you as owner');
+  assert.equal(api.routeFromHash('#club/club-03'), 'club');
+  assert.equal(api.clubFromHash('#club/club-03'), 'club-03');
+  assert.equal(api.routeFromHash('#club/club-99'), null);
+  assert(api.standingsView().includes('data-id="club-06"'), 'standings link to club pages');
 });
 
 let failed = 0;

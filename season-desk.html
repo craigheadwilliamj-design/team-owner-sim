@@ -1,53 +1,63 @@
 <title>CGL Season Desk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&amp;family=Big+Shoulders+Display:wght@700;800;900&amp;family=Graduate&amp;display=swap">
 <style>
 /* Layout: one desk column. Header with the advance button, a tab strip, the working pane, then the save footer. */
+/* Look: Gameday. Turf band, chalk page, scoreboard numerals in amber, penalty-flag yellow for anything that expires.
+   The night set is the same stadium under the lights. --team, --team-fg and --team2 follow the owner's club (setTeamColors). */
 :root{
-  --bg:#f5f3eb;--surface:#fffefa;--fg:#192d36;--muted:#4d6266;
-  --rule:#c4ccc5;--rule-strong:#a7afa7;--rule-soft:#ebe9e0;--rule-table:#d7dace;--control-border:#a5afaa;
-  --band:#213e43;--band-fg:#ffffff;--accent:#174b46;--accent-fg:#ffffff;--accent-muted:#526662;
-  --link:#163e40;--focus:#db8742;
-  --display:Georgia,'Times New Roman',serif;--body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --bg:#f1efe6;--surface:#ffffff;--fg:#17201b;--muted:#4f5a52;
+  --rule:#d3d6cc;--rule-strong:#9ea79f;--rule-soft:#e6e8e0;--rule-table:#dde0d6;--control-border:#9ea79f;
+  --band:#1e5b37;--band-fg:#ffffff;--accent:#1e5b37;--accent-fg:#ffffff;--accent-muted:#5d7a68;
+  --link:#1e5b37;--focus:#c25e12;
+  --turf:#1e5b37;--turf-2:#226640;--yard:rgba(255,255,255,.22);
+  --board:#0c0d0c;--board-cell:#141514;--board-edge:#2a2c2a;--board-label:#d9d9d0;--amber:#ffb000;
+  --flag:#f7d117;--flag-fg:#17201b;--warn:#8a3b0c;
+  --team:#1e5b37;--team-fg:#ffffff;--team2:#f7d117;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;--label:Graduate,Georgia,serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
-  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
-  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
-  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}}
+  --bg:#0e1411;--surface:#17201b;--fg:#e6ebe7;--muted:#a3afa7;
+  --rule:#2a3530;--rule-strong:#3a4740;--rule-soft:#1f2924;--rule-table:#2a3530;--control-border:#47554d;
+  --band:#173f28;--band-fg:#eef5f0;--accent:#2a7d4c;--accent-fg:#ffffff;--accent-muted:#34493d;
+  --link:#8fd6a8;--focus:#f7d117;--turf:#173f28;--turf-2:#1a4a2f;--yard:rgba(255,255,255,.14);--warn:#ff9a66;color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0f1a1c;--surface:#162427;--fg:#e2ebe8;--muted:#9fb3b0;
-  --rule:#2b3d40;--rule-strong:#3a5053;--rule-soft:#203033;--rule-table:#2b3d40;--control-border:#405659;
-  --band:#24494d;--band-fg:#eef5f3;--accent:#2c776c;--accent-fg:#ffffff;--accent-muted:#34494a;
-  --link:#9fd6cc;--focus:#e89a55;color-scheme:dark}
+  --bg:#0e1411;--surface:#17201b;--fg:#e6ebe7;--muted:#a3afa7;
+  --rule:#2a3530;--rule-strong:#3a4740;--rule-soft:#1f2924;--rule-table:#2a3530;--control-border:#47554d;
+  --band:#173f28;--band-fg:#eef5f0;--accent:#2a7d4c;--accent-fg:#ffffff;--accent-muted:#34493d;
+  --link:#8fd6a8;--focus:#f7d117;--turf:#173f28;--turf-2:#1a4a2f;--yard:rgba(255,255,255,.14);--warn:#ff9a66;color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);margin:0;font:16px/1.45 var(--body)}
 main{max-width:1240px;margin:0 auto;padding-block:36px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{border-top:6px solid var(--band);border-bottom:1px solid var(--rule-strong);padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-h1{font:700 clamp(2.3rem,6vw,4.8rem)/1 var(--display);letter-spacing:-.05em;margin:8px 0 18px;text-wrap:balance}
-header p{margin:0;color:var(--muted)}
+header{background-color:var(--turf);background-image:repeating-linear-gradient(90deg,transparent 0 118px,var(--yard) 118px 121px),repeating-linear-gradient(90deg,var(--turf) 0 120px,var(--turf-2) 120px 240px);color:var(--band-fg);border-radius:6px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font:900 clamp(2.3rem,6vw,4.4rem)/1 var(--display);letter-spacing:.01em;text-transform:uppercase;margin:8px 0 14px;text-wrap:balance}
+header p{margin:0;color:var(--band-fg);opacity:.85}
+header p:first-child{font:400 .82rem var(--label);letter-spacing:.12em;text-transform:uppercase;opacity:1}
 nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 0}
-select,button{font:inherit;padding:8px 12px;background:var(--surface);color:inherit;border:1px solid var(--control-border);border-radius:5px;margin:0}
+select,button{font:inherit;padding:8px 12px;background:var(--surface);color:var(--fg);border:1px solid var(--control-border);border-radius:4px;margin:0}
+button{font-weight:600}
 button{cursor:pointer}
 button:disabled{cursor:default;opacity:.6}
-h2{font:700 1.85rem var(--display);margin:22px 0 12px;text-wrap:balance}
+h2{font:900 2rem/1.05 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:22px 0 12px;text-wrap:balance}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
 article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
-h3{background:var(--band);color:var(--band-fg);padding:9px 12px;margin:0;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase}
+h3{background:var(--band);color:var(--band-fg);padding:8px 12px;margin:0;font:400 .8rem var(--label);letter-spacing:.12em;text-transform:uppercase}
 ul{padding:0;margin:0;list-style:none}
 li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid var(--rule-soft);flex-wrap:wrap}
 li:last-child{border:0}
 .chip{width:24px;height:24px;border:4px solid;border-radius:50%;flex:none}
+strong{font-weight:700}
 small{display:block;color:var(--muted)}
 strong{font-size:1.05rem}
-#advance{background:var(--accent);color:var(--accent-fg);border:0;font-weight:700;padding:14px 20px}
-#advance:disabled{background:var(--accent-muted);opacity:1}
+#advance{background:#ffffff;color:#17201b;border:0;font:900 1.2rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:13px 22px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+#advance:disabled{background:#d8ddd6;color:#4f5a52;box-shadow:none;opacity:1}
 #tabs{justify-content:flex-start;gap:4px;border-bottom:1px solid var(--rule)}
-#tabs button{border:0;background:transparent}
-#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+#tabs button{border:0;background:transparent;font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase}
+#tabs [aria-pressed=true]{background:var(--accent);color:var(--accent-fg);box-shadow:inset 0 -4px 0 var(--team)}
 #app{padding:25px 0}
-#app>small{letter-spacing:.11em;font-weight:700}
+#app>small{font:400 .82rem var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--link)}
 #app h2{margin:5px 0 14px}
 #app p{max-width:75ch}
 .controls,footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:16px 0;color:var(--muted)}
@@ -63,9 +73,10 @@ strong{font-size:1.05rem}
 .club i{display:inline-block;width:12px;height:12px;border:2px solid;border-radius:50%;margin-right:7px}
 table{width:100%;border-collapse:collapse;background:var(--surface);font-size:.9rem;font-variant-numeric:tabular-nums}
 th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
+thead th{font:800 .9rem var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--rule-strong)}
 .units{display:flex;flex-wrap:wrap;gap:12px}
-.units>div{background:var(--surface);padding:12px 18px;border-top:3px solid var(--accent);min-width:115px}
-.units b{display:block;font:700 1.5rem var(--display)}
+.units>div{background:var(--surface);padding:12px 18px;border-top:4px solid var(--turf);border-radius:0 0 6px 6px;min-width:115px}
+.units b{display:block;font:900 1.8rem/1.05 var(--display)}
 .units>div{max-width:100%}
 .compare{min-width:340px}
 @media (max-width:560px){.compare{font-size:.82rem}.compare tbody th{width:5.6rem}.compare th,.compare td{padding:6px 5px}}
@@ -81,7 +92,7 @@ th,td{border-bottom:1px solid var(--rule-table);padding:7px;text-align:left}
 .ledger .sum th{border-bottom:2px solid var(--rule-strong)}
 fieldset.exclude{border:1px solid var(--rule);border-radius:6px;display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 16px;padding:10px 12px;color:var(--muted)}
 .clock{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.clock small{letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+.clock small{font:400 .82rem var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--band-fg)}
 #jump{display:flex;gap:8px;flex-wrap:wrap}
 #jump:empty{display:none}
 figure.map{margin:0 0 16px}
@@ -137,7 +148,9 @@ ol.pbp{list-style:none;padding:0;margin:0;max-height:28rem;overflow-y:auto;backg
 ol.pbp li{display:block;padding:8px 12px}
 ol.pbp li.note{color:var(--muted);font-style:italic}
 .boxscore{max-width:520px}
-#watchLive{font-weight:700;padding:14px 20px}
+#watchLive{font:800 1.05rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:13px 18px;background:transparent;color:var(--band-fg);border:2px solid var(--band-fg)}
+header #jump select,header #jump button{min-height:44px}
+header #jump button{background:transparent;color:var(--band-fg);border:2px solid var(--band-fg);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase}
 button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
 </style>
 <main><header><p>Continental Gridiron League</p><h1>Season desk</h1><p>32 clubs · 2 conferences · 8 divisions</p><div class="clock"><small id="clockLabel"></small><div class="advance"><button id="advance"></button> <button id="watchLive" hidden>Watch live</button></div><div id="jump"></div></div></header><nav id="tabs" aria-label="Season navigation"></nav><div id="app"></div><section id="directoryPane" hidden><h2>Club directory</h2><nav><label for="conf">Conference</label><select id="conf"><option>All</option><option>Charter</option><option>Union</option></select><button id="save" hidden>Export league JSON</button></nav><div id="directory"></div></section><footer><span id="status" role="status"></span><div id="importPrompt" hidden></div><button id="loadSeason" title="Open a season file saved with Save a copy, or a cgl-week file from an older build.">Load save</button><input id="seasonFile" type="file" accept=".json,.html,.htm" hidden><button id="copy" hidden title="Save this season as a file you can load later, here or in a newer build.">Save a copy</button></footer></main><script id="initialSeason" type="application/json">null</script><script id="seed" type="application/json">{
@@ -522,6 +535,21 @@ const byName=new Map(clubs.map(t=>[teamName(t.id),t.id]));
 // All text that reaches innerHTML goes through esc(). Colors go through color().
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const color=v=>/^#[0-9a-f]{6}$/i.test(v)?v:'#888888';
+// A club color dark enough to carry white text (4.5:1), darkened toward black in steps when it is too pale.
+const luminance=hex=>{const ch=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(c=>c<=.03928?c/12.92:((c+.055)/1.055)**2.4);return .2126*ch[0]+.7152*ch[1]+.0722*ch[2];};
+const contrast=(a,b)=>{const [x,y]=[luminance(a),luminance(b)].sort((p,q)=>q-p);return (x+.05)/(y+.05);};
+function inkable(hex){
+  let c=color(hex).toLowerCase();
+  for(let k=0;k<12&&contrast(c,'#ffffff')<4.5;k++)c='#'+[1,3,5].map(i=>Math.round(parseInt(c.slice(i,i+2),16)*.88).toString(16).padStart(2,'0')).join('');
+  return c;
+}
+// The owner's club colors as CSS variables; the league's turf green before a club is chosen.
+function setTeamColors(S){
+  const t=S?.club&&byId.get(S.club),root=document.documentElement.style;
+  const vars=t?{'--team':inkable(t.primary),'--team-fg':'#ffffff','--team2':color(t.secondary)}:{'--team':'#1e5b37','--team-fg':'#ffffff','--team2':'#f7d117'};
+  for(const [k,v] of Object.entries(vars))root.setProperty?.(k,v);
+  return vars;
+}
 const isInt=(v,min=-Infinity,max=Infinity)=>Number.isInteger(v)&&v>=min&&v<=max;
 const $=sel=>document.querySelector(sel);
 const sentence=m=>/[.!?]$/.test(m)?m:m+'.';
@@ -6201,6 +6229,7 @@ const TABS=['Owner desk','Depth chart','Staff','Stadium','Finances','Contracts',
 const describeSave=S=>(S.club?teamName(S.club):'no club chosen')+', season '+cur(S).number+', '+(cur(S).tick?'after '+weekLabel(cur(S).tick):'preseason');
 function draw(){
   const s=cur();
+  setTeamColors(save);
   $('#tabs').innerHTML=TABS.map(t=>'<button data-tab="'+t+'" aria-pressed="'+(t===tab)+'">'+t+'</button>').join('');
   drawStatus();
   const prompt=$('#importPrompt');

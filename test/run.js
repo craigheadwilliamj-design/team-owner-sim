@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2442,6 +2442,20 @@ test('AI clubs are turned down when the owners do not want it', () => {
   for (let i = 0; i < 80; i++) { S.rng.state = i * 7919 + 13; api.aiRelocations(S, api.rngFor(S.rng)); }
   assert.equal(S.relocations.length, 0);
   assert(S.league.news.some(n => /turn down/.test(n.text)));
+});
+
+test('team colors: every club gets a shade that carries white text, and no club before one is owned', () => {
+  const { api } = load();
+  for (const t of api.clubs) {
+    const c = api.inkable(t.primary);
+    assert.match(c, /^#[0-9a-f]{6}$/);
+    assert(api.contrast(c, '#ffffff') >= 4.5, t.id + ' ' + t.primary + ' -> ' + c);
+  }
+  assert(api.contrast(api.inkable('#ffe2a3'), '#ffffff') >= 4.5, 'a pale color is darkened until it passes');
+  assert.equal(api.inkable('#193c56'), '#193c56', 'a dark color is left alone');
+  const { S } = owned();
+  assert.equal(api.setTeamColors(S)['--team'], api.inkable(api.clubs.find(t => t.id === 'club-06').primary));
+  assert.equal(api.setTeamColors({ club: null })['--team'], '#1e5b37');
 });
 
 let failed = 0;

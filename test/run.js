@@ -33,7 +33,7 @@ const NAMES = ['aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawR
   'standings', 'advance', 'jumpTo', 'jumpTargets', 'advanceLabel', 'weekLabel', 'now', 'seedsFor', 'playoffStatus', 'draftOrder', 'draftAvailable', 'ownerPick', 'simToMyPick', 'draftView', 'scoreboard', 'MILESTONES', 'SEASON_TICKS', 'personnel',
   'restructure', 'restructureSavings', 'releaseCost', 'trueGrade', 'scoutProspect', 'toggleWatch', 'setScoutAssign', 'scoutingReport', 'pointsPerWeek', 'rookieFrom', 'draftUi', 'priceFor', 'aiTradeIdea', 'leagueView', 'rivalFactor', 'executeTrade', 'gmTradeIdea', 'aiOfferIdea', 'needsCall', 'tradeRead', 'tradeWindow', 'processTradeTalk', 'starterIds', 'tradeSummary', 'activesFor', 'inactivesFor', 'moveDepth', 'resetDepth', 'toggleActive', 'placeOnIR', 'activateFromIR', 'canReturn', 'promote', 'releasePractice', 'fillPractice', 'poachPractice', 'practiceOf', 'rosterCount', 'rosterAlerts', 'manageRoster', 'depthView', 'staffReview', 'trackStarts', 'finishMedicalWeek', 'clubUnits', 'devFactor', 'perceivedGrade', 'fireStaff', 'interview', 'hire', 'staffView', 'setDirective', 'approveProposal', 'declineProposal', 'bestFor', 'negotiationView', 'carousel', 'fillOpenings', 'hcOf', 'gmOf', 'weekLines', 'tradeFactor', 'developPlayers', 'rngFor', 'utility', 'agentRead', 'counterTerms', 'priorityFor', 'askFor', 'tagPlayer', 'tagAmount', 'exerciseOption', 'optionAmount', 'limitFor', 'prepayToFloor', 'termsNeeded', 'contractSurplus', 'marketValue', 'CAP_FLOOR', 'capHit', 'capRoom', 'committed', 'deadIfCut', 'ownerRelease', 'extendPlayer', 'extensionTerms', 'makeOffer', 'withdrawOffer', 'setGmHandles', 'rookieTerms', 'contractsView', 'termsHit', 'tradeQuote',
   'playGame', 'rngFor', 'statLine', 'statEdge', 'statText', 'statNote', 'statLeaders', 'perceivedRating', 'tradeValue', 'leadersView', 'broadcastView', 'bcDrive', 'canWatch', 'bc', 'broadcast:()=>broadcastGame',
-  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml'];
+  'live:()=>({save,saveMessage})', 'inkable', 'contrast', 'setTeamColors', 'routeOf', 'routeFromHash', 'hashOf', 'navHtml', 'SECTIONS', 'VIEWS', 'ownersView', 'marketsView', 'newsView', 'dueBy', 'scoreboardCells', 'confirmHtml', 'pendingItems', 'tradesView', 'urgency'];
 const load = opts => loadGame(GAME, { exportNames: NAMES, ...opts });
 const playSeason = (api, S) => { while (api.cur(S).completed < api.cur(S).weeks.length) api.playWeek(S); return S; };
 
@@ -2526,6 +2526,34 @@ test('Jump ahead offers the nearest milestone first, and the confirm names what 
   const cells = api.scoreboardCells(S);
   assert.deepEqual(cells.map(c => c[0]), ['Record', 'Week', 'Cap room', 'Cash']);
   assert.equal(cells[1][1], 'PRE');
+});
+
+test('one list of pending items drives the desk inbox, the nav badges and the Advance count', () => {
+  const { api } = load();
+  const S = api.save; S.club = 'club-06';
+  S.finance.naming = { status: 'awaiting', expiresWeek: 3, offer: { company: 'Ohio Valley <b>Bank</b>' } };
+  for (let i = 0; i < 6 && !S.staff.proposals.some(P => P.kind === 'trade' || P.kind === 'offer'); i++) api.playWeek(S);
+  const items = api.pendingItems(S);
+  assert(items.some(x => x.route === 'finances'), 'the naming offer is waiting');
+  for (const x of items) {
+    assert(typeof x.title === 'string' && x.title && api.VIEWS[x.route], x.id);
+    assert(x.actions.length > 0, x.id + ' can be acted on');
+  }
+  const desk = api.ownershipDesk();
+  assert(desk.includes(items.length + (items.length === 1 ? ' thing needs' : ' things need')));
+  assert(!desk.includes('<b>Bank'), 'item text is escaped');
+  const nav = api.navHtml('desk', items);
+  assert.match(nav.top, new RegExp('data-section="desk"[^>]*>Desk<span class="badge"[^>]*>' + items.length + '<'));
+  const biz = items.filter(x => x.route === 'finances' || x.route === 'stadium').length;
+  assert.match(nav.top, new RegExp('Business<span class="badge"[^>]*>' + biz + '<'));
+  const expiring = items.filter(x => api.urgency(S, x) === 'expire').map(x => x.id).sort();
+  assert.deepEqual(api.dueBy(S, api.now(S) + 1).map(x => x.id).sort(), expiring, 'Advance counts exactly the items decided this week');
+  const talk = S.staff.proposals.find(P => P.kind === 'trade' || P.kind === 'offer');
+  if (talk) assert(api.tradesView().includes('data-approve="' + talk.id + '"'), 'trade talk can be answered on the Trades page');
+  assert(api.tradesView().includes('GM’s trade desk'));
+  assert(api.depthView().includes('Medical report'));
+  S.club = null;
+  assert.deepEqual(api.pendingItems(S), []);
 });
 
 let failed = 0;

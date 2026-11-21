@@ -84,6 +84,23 @@ strong{font-size:1.05rem}
 #subtabs{justify-content:flex-start;gap:6px;padding:12px 0 0;flex-wrap:nowrap;overflow-x:auto}
 #subtabs button{border:0;border-radius:999px;background:var(--rule-soft);font:800 1rem var(--display);letter-spacing:.06em;text-transform:uppercase;padding:8px 16px;min-height:40px;white-space:nowrap}
 #subtabs [aria-current=page]{background:var(--fg);color:var(--bg)}
+.badge{display:inline-block;min-width:20px;margin-left:7px;padding:1px 6px;border-radius:999px;background:var(--team);color:var(--team-fg);font:700 .75rem/1.4 var(--body);letter-spacing:0;text-align:center;vertical-align:2px}
+h3.group{background:none;color:var(--muted);padding:18px 0 8px;font:400 .78rem var(--label);letter-spacing:.12em}
+ul.inbox{display:flex;flex-direction:column;gap:10px}
+ul.inbox li.item{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;gap:16px;flex-wrap:wrap;justify-content:space-between}
+li.item .what{flex:1 1 320px;min-width:0}
+li.item strong{display:block;font:800 1.25rem/1.15 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:3px 0 2px}
+li.item .when{display:inline-block;margin-right:10px;background:var(--rule-soft);color:var(--link);font:800 .82rem var(--display);letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:2px}
+li.item.expire .when{background:var(--flag);color:var(--flag-fg)}
+li.item .where{border:0;background:none;padding:0;color:var(--link);text-decoration:underline;font:600 .85rem var(--body)}
+li.item .acts{display:flex;gap:8px;flex-wrap:wrap}
+li.item .acts button{min-height:44px}
+.desk{display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start}
+.desk>section{flex:999 1 560px;min-width:0}
+.desk>aside{flex:1 1 300px;min-width:0}
+.desk>aside ul{background:var(--surface);border:1px solid var(--rule);border-radius:6px;max-height:34rem;overflow-y:auto}
+.desk>aside li{display:block;padding:10px 12px}
+.desk>aside li strong{font-size:.9rem;margin-right:6px}
 #app{padding:25px 0}
 #app>small{font:400 .82rem var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--link)}
 #app h2{margin:5px 0 14px}
@@ -3469,30 +3486,64 @@ function advanceLabel(S){
   return 'Open season '+(s.number+1)+' →';
 }
 
-// What resolves before the clock reaches horizon (now+1 for one advance): offers that lapse unanswered,
-// deadlines that pass and votes that are held. Each item is {title, fate, route}; the Advance button counts them
-// and the confirm lists them. Deadlines fire when the tick reaches them; GM proposals last through their week.
-function dueBy(S,horizon){
+// Everything waiting on the owner, from every corner of the club. The desk inbox, the nav badges and the Advance
+// button all read this list, so they cannot disagree. Each item: {id, title, detail, route, deadline, fate, actions}.
+// deadline is the tick at which it is decided without you (null: no deadline). Deadlines fire when the clock reaches
+// them; GM proposals last through the week they were made. actions are [label, data-attribute, value].
+function pendingItems(S){
   if(!S.club)return [];
-  const t=now(S),s=cur(S),L=S.league,items=[];
+  const t=now(S),s=cur(S),L=S.league,items=[],add=x=>items.push(x);
   if(S.offer){const p=S.rosters[S.offer.seller]?.find(x=>x.id===S.offer.targetId);
-    items.push({title:'Your GM’s price on '+(p?p.pos+' '+p.name:'a trade target')+' ('+byId.get(S.offer.seller).abbr+')',fate:'The quote expires.',route:'desk'});}
+    add({id:'quote',title:'Your GM’s price on '+(p?p.pos+' '+p.name:'a trade target')+' ('+byId.get(S.offer.seller).abbr+')',detail:'Talks are open on the Trades page.',
+      route:'trades',deadline:t+1,fate:'The quote expires.',actions:[['Open talks','tab','trades']]});}
   for(const P of S.staff?.proposals??[]){
-    if((P.kind==='trade'||P.kind==='offer')&&P.week<horizon)items.push({title:tradeSummary(S,P),fate:P.kind==='trade'?'The chance passes.':'Their offer expires.',route:'desk'});
-    else if(P.kind==='fa'&&P.week<horizon)items.push({title:'Sign free agent '+P.pos+' '+P.name,fate:'The proposal lapses.',route:'contracts'});
+    if(P.kind==='trade'||P.kind==='offer')add({id:'p'+P.id,title:tradeSummary(S,P),detail:(P.kind==='trade'?'Your GM: ':'Your GM on it: ')+tradeRead(S,P.trade).text,
+      route:'trades',deadline:P.week+1,fate:P.kind==='trade'?'The chance passes.':'Their offer expires.',
+      actions:[[P.kind==='trade'?'Make the trade':'Accept','approve',P.id],[P.kind==='trade'?'Pass':'Decline','reject',P.id]]});
+    else add({id:'p'+P.id,title:(P.kind==='fa'?'Sign free agent ':'Re-sign ')+P.pos+' '+P.name,
+      detail:'Age '+P.age+', rating '+P.rating+' · '+P.terms.years+' yrs, '+m1(termsHit(P.terms))+' a year'+(P.terms.bonus?', '+m1(P.terms.bonus)+' bonus':''),
+      route:'contracts',deadline:P.kind==='fa'?P.week+1:null,fate:'The proposal lapses.',actions:[['Approve','approve',P.id],['Decline','reject',P.id]]});
   }
   const N=S.finance.naming;
-  if(N.status==='awaiting'&&N.expiresWeek<=horizon)items.push({title:'Naming-rights offer from '+N.offer.company,fate:'The offer lapses.',route:'finances'});
+  if(N.status==='awaiting')add({id:'naming',title:'Naming-rights offer from '+N.offer.company,detail:'Your negotiator has terms for you to sign or turn down.',
+    route:'finances',deadline:N.expiresWeek,fate:'The offer lapses.',actions:[['Review the deal','tab','finances']]});
   const tracked=new Set(S.stadium.knowledge.map(f=>f.siteId)),filed=pendingApplication(S)?.siteId;
-  for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed&&x.expiresWeek<=horizon)
-    items.push({title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),fate:'The site offer expires.',route:'stadium'});
-  for(const C of L.contests)if(C.status==='open'&&C.deadlineWeek<=horizon&&(C.holder===S.club||C.bid))
-    items.push({title:'Broadcast rights in '+openMarket(C.marketId).name,fate:C.bid?'The station decides on your $'+C.bid.annual+'M offer.':'The station decides, and you have made no offer for rights you hold.',route:'markets'});
+  for(const x of S.world.sites)if(x.status==='open'&&tracked.has(x.id)&&x.id!==filed)
+    add({id:'site-'+x.id,title:marketById(S,x.marketId).name+' '+x.name.toLowerCase(),detail:'A stadium site you have looked into. The offer is open until it expires.',
+      route:'stadium',deadline:x.expiresWeek,fate:'The site offer expires.',actions:[['Stadium page','tab','stadium']]});
+  for(const C of L.contests)if(C.status==='open'&&(C.holder===S.club||C.bid))
+    add({id:'rights-'+C.marketId,title:'Broadcast rights in '+openMarket(C.marketId).name,detail:C.bid?'Your offer is in: $'+C.bid.annual+'M a year for '+C.bid.years+' years.':'You hold these rights and have not made an offer to keep them.',
+      route:'markets',deadline:C.deadlineWeek,fate:C.bid?'The station decides on your $'+C.bid.annual+'M offer.':'The station decides, and you have made no offer for rights you hold.',actions:[[C.bid?'Revise offer':'Make an offer','tab','markets']]});
   const V=L.meeting;
-  if(V?.status==='scheduled'&&V.week<=horizon)items.push({title:V.kind==='relocation'?'League vote on your relocation':'League vote on first refusal',fate:'The owners vote.',route:'owners'});
+  if(V?.status==='scheduled')add({id:'vote',title:V.kind==='relocation'?'League vote on your relocation':'League vote on first refusal',
+    detail:V.callsLeft>0?V.callsLeft+' call'+(V.callsLeft===1?'':'s')+' left before the meeting.':'No calls left before the meeting.',
+    route:'owners',deadline:V.week,fate:'The owners vote.',actions:[[V.callsLeft>0?'Lobby owners':'See where they stand','tab','owners']]});
   const gameNext=s.completed<s.weeks.length||(t>=REGULAR_WEEKS&&t<22&&!!s.postseason&&playoffStatus(S,S.club).alive);
-  if(horizon===t+1&&gameNext&&S.staff?.directives?.rosterMoves==='owner')for(const a of rosterAlerts(S))items.push({title:a,fate:'Kickoff with the roster as it stands.',route:'depth'});
+  if(S.staff?.directives?.rosterMoves==='owner')rosterAlerts(S).forEach((a,k)=>add({id:'roster-'+k,title:a,detail:'You handle roster moves yourself.',
+    route:'depth',deadline:gameNext?t+1:null,fate:'Kickoff with the roster as it stands.',actions:[['Fix it','tab','depth']]}));
+  const C=S.staff?.clubs?.[S.club];
+  for(const role of ['hc','gm'])if(C?.[role]?.interim)add({id:'job-'+role,title:(role==='hc'?'Head coach':'General manager')+' job open',
+    detail:'An interim is filling in. Interview candidates and hire.',route:'staff',deadline:null,fate:'',actions:[['Search','tab','staff']]});
+  const D=S.draft;
+  if(D.status==='live'&&D.order[D.pick]?.owner===S.club)add({id:'draft',title:'You are on the clock',detail:'Pick '+D.order[D.pick].overall+', round '+D.order[D.pick].round+'.',
+    route:'draft',deadline:null,fate:'',actions:[['Draft room','tab','draft']]});
   return items;
+}
+// What is decided before the clock reaches horizon (now+1 for one advance).
+const dueBy=(S,horizon)=>pendingItems(S).filter(x=>x.deadline!=null&&x.deadline<=horizon);
+const urgency=(S,x)=>x.deadline==null?'later':x.deadline<=now(S)+1?'expire':x.deadline<=now(S)+4?'soon':'later';
+const URGENCY=[['expire','Decided when you advance'],['soon','Due in the next few weeks'],['later','No deadline yet']];
+function itemHtml(S,x,{where=true}={}){
+  const u=urgency(S,x),sec=sectionOf(x.route),page=sec?.views.find(([id])=>id===x.route)?.[1];
+  const due=x.deadline==null?'':u==='expire'?'This week':'After '+weekLabel(x.deadline);
+  return '<li class="item '+u+'"><div class="what">'+(due?'<span class="when">'+esc(due)+'</span>':'')+
+    (where&&sec?'<button class="where" data-tab="'+esc(x.route)+'">'+esc(sec.label+(sec.views.length>1?' › '+page:''))+'</button>':'')+
+    '<strong>'+esc(x.title)+'</strong><small>'+esc(x.detail)+'</small></div><div class="acts">'+
+    x.actions.map(([label,attr,val],k)=>'<button class="'+(k?'':'primary')+'" data-'+attr+'="'+esc(val)+'">'+esc(label)+'</button>').join('')+'</div></li>';
+}
+function inboxHtml(S,list){
+  return URGENCY.map(([u,label])=>{const xs=list.filter(x=>urgency(S,x)===u);
+    return xs.length?'<h3 class="group">'+esc(label+' · '+xs.length)+'</h3><ul class="inbox">'+xs.map(x=>itemHtml(S,x)).join('')+'</ul>':'';}).join('');
 }
 
 // Words for calendar events.
@@ -4710,7 +4761,7 @@ function depthView(){
   const hc=S.staff.clubs[id].hc,trust=hc.trust??70,actives=new Set(activesFor(S,id).map(p=>p.id)),roster=S.rosters[id];
   const u=personnel(roster.filter(p=>!p.ir),lineupCoach(S,id)),ir=roster.filter(p=>p.ir),ps=practiceOf(S,id);
   const coachName=hc.interim?'The interim coach':'Coach '+hc.name;
-  let html=heading('DEPTH CHART AND GAME DAY',teamName(id))+'<div class="units">'+
+  let html=heading('DEPTH CHART AND GAME DAY',teamName(id))+medicalHtml(S)+'<div class="units">'+
     '<div><small>Active roster</small><b>'+rosterCount(S,id)+'/53</b>'+ir.length+' on injured reserve</div>'+
     '<div><small>Game day</small><b>'+actives.size+'/'+ACTIVE_LIMIT+'</b>dress this week</div>'+
     '<div><small>Practice squad</small><b>'+ps.length+'/'+PRACTICE_LIMIT+'</b>'+m1(ps.reduce((a,p)=>a+capHit(p),0))+' on the cap</div>'+
@@ -5999,38 +6050,13 @@ function comingDue(S){
   const site=open[0];
   return '<div><small>Coming due</small>'+esc(marketById(S,site.marketId).name+' '+site.name.toLowerCase()+' offer expires after '+weekLabel(site.expiresWeek))+'</div>';
 }
-function leagueCard(S){
-  const open=openContests(S),V=S.league.meeting;
-  if(open.length){
-    const mine=open.filter(C=>C.bid).length,held=open.filter(C=>C.holder===S.club&&!C.bid).length;
-    return '<div><small>Broadcast rights</small>'+esc(open.length+' market'+(open.length===1?'':'s')+' up for renewal'+(held?', '+held+' of yours without an offer':mine?', '+mine+' with your offer':'')+'; the station decides after '+weekLabel(Math.min(...open.map(C=>C.deadlineWeek))))+' <button data-tab="markets">Bid</button></div>';
-  }
-  if(V?.status==='scheduled')return '<div><small>League vote</small>'+esc('First refusal, after '+weekLabel(V.week))+' <button data-tab="owners">Lobby</button></div>';
-  const n=S.league.news.at(-1);
-  return n?'<div><small>Latest headline</small>'+esc(n.text)+'</div>':'';
-}
-function depthCard(S){
-  const alerts=S.staff.directives.rosterMoves==='owner'?rosterAlerts(S):[];
-  if(alerts.length)return '<div><small>Roster</small>'+esc(alerts[0])+' <button data-tab="depth">Fix it</button></div>';
+function gameDayCard(S){
   const out=inactivesFor(S,S.club);
   return '<div><small>Game day</small>'+(out.length?esc(out.length+' inactive: '+out.slice(0,3).map(p=>p.pos+' '+p.name.split(' ')[1]).join(', ')+(out.length>3?'…':'')):'Everyone healthy dresses')+'</div>';
 }
-function staffCard(S){
-  const C=S.staff.clubs[S.club],n=S.staff.proposals.length;
-  if(n)return '<div><small>Needs your answer</small>'+n+' proposal'+(n===1?'':'s')+' and offer'+(n===1?'':'s')+' <button data-tab="staff">Review</button></div>';
-  const open=['hc','gm'].filter(role=>C[role].interim);
-  if(open.length)return '<div><small>Staff</small>'+esc(open.map(role=>(role==='hc'?'Head coach':'GM')+' job open').join(', '))+' <button data-tab="staff">Search</button></div>';
-  return '<div><small>Head coach</small>'+esc(C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
-}
-function capCard(S){
-  const room=capRoom(S,S.club);
-  return '<div><small>Cap room</small>'+(room<0?'Over by '+m1(-room):m1(room))+' <button data-tab="contracts">Cap sheet</button></div>';
-}
-function moneyCard(S){
-  if(S.finance.naming.status==='awaiting')return '<div><small>Needs your decision</small>Naming-rights offer <button data-tab="finances">Review</button></div>';
-  const season=S.finance.ledger.filter(x=>x.season===cur(S).number);
-  if(!season.length)return '';
-  return '<div><small>Operating result</small>'+m1(round2(season.reduce((a,x)=>a+x.result,0)))+' this season <button data-tab="finances">Books</button></div>';
+function headCoachCard(S){
+  const C=S.staff.clubs[S.club];
+  return '<div><small>Head coach</small>'+esc(C.hc.interim?'Interim · job open':C.hc.name+' · '+C.hc.record.w+'–'+C.hc.record.l)+'</div>';
 }
 // What comes next once the regular season is over.
 function calendarCard(S){
@@ -6060,14 +6086,23 @@ function ownershipDesk(){
     const {g,w}=entry,home=g.home===id;
     return esc('Wk '+w+' · '+(home?'vs. ':'at ')+teamName(home?g.away:g.home)+(g.score?' · '+resultText(g,id):''));
   };
-  const week=s.completed+1,injuries=S.rosters[id].filter(p=>p.out);
+  const week=s.completed+1;
   const playoffGames=(s.postseason?.rounds??[]).flatMap(round=>round.games.filter(g=>g.home===id||g.away===id).map(g=>({g,name:round.name})));
   const lastPlayoff=playoffGames.at(-1);
   const last=lastPlayoff?esc(lastPlayoff.name+' · '+(lastPlayoff.g.home===id||lastPlayoff.g.neutral?'vs. ':'at ')+teamName(lastPlayoff.g.home===id?lastPlayoff.g.away:lastPlayoff.g.home)+' · '+resultText(lastPlayoff.g,id)):fixture(games.filter(x=>x.g.score).pop());
   const schedule='<div class="units"><div><small>Division standing</small><b>#'+(place+1)+'</b> '+esc(byId.get(id).division)+' · '+[r.w,r.l,r.t].join('–')+'</div><div><small>Last game</small>'+last+(broadcastGame?.season===s.number?' <button id="watchLast">Watch the broadcast</button>':'')+'</div>'+
     (s.completed<s.weeks.length?'<div><small>Next opponent</small>'+(!games.some(x=>x.w===week)?'Bye this week · ':'')+fixture(games.find(x=>!x.g.score))+'</div>':calendarCard(S))+
-    depthCard(S)+staffCard(S)+comingDue(S)+moneyCard(S)+capCard(S)+leagueCard(S)+'</div>';
-  const medical=injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>';
+    gameDayCard(S)+headCoachCard(S)+comingDue(S)+'</div>';
+  const items=pendingItems(S),n=items.length;
+  const reports=[...S.events].reverse().slice(0,30).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no reports yet.</li>';
+  return heading('OWNER’S DESK',n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
+    '<div class="desk"><section><h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+'</section>'+
+    '<aside><h2>Around your club</h2><ul>'+reports+'</ul><div class="controls"><button data-tab="news">League news</button><button data-tab="standings">Standings</button></div></aside></div>';
+}
+// The GM's trade desk: proposals in play, asking for a price, and the picks you hold.
+function tradesView(){
+  const S=save,id=S.club;
+  if(!id)return heading('TRADES','Choose a club first')+'<p>Take ownership on the Owner desk to talk trades.</p>';
   let gm;
   if(S.offer)gm=negotiationView(S);
   else if(!tradeWindow(S))gm='<p>'+esc('The trade deadline has passed. Trades reopen at the new league year, '+weekLabel(MILESTONES.leagueYear)+'.')+'</p>';
@@ -6076,12 +6111,14 @@ function ownershipDesk(){
     gm='<div class="controls"><label>Position <select id="scout">'+positions.map(([pos])=>option(pos,pos,pos===scoutPos)).join('')+'</select></label>'+
       '<label>Trade target <select id="target">'+candidates.map(({p,t})=>option(t.id+'/'+p.id,p.name+' · '+t.abbr+' · '+p.rating,false)).join('')+'</select></label><button id="quote">Ask for a price</button></div>';
   }
-  const reports=[...S.events].reverse().slice(0,40).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no pending reports.</li>';
-  const talk=S.staff.proposals.filter(P=>P.kind==='trade'||P.kind==='offer');
-  const talkHtml=talk.length?'<h2>Trade talk</h2><ul>'+talk.map(P=>'<li><div><strong>'+esc(tradeSummary(S,P))+'</strong><small>'+esc((P.kind==='trade'?'Your GM: ':'Your GM on it: ')+tradeRead(S,P.trade).text)+'</small></div><button data-approve="'+P.id+'">'+(P.kind==='trade'?'Make the trade':'Accept')+'</button><button data-reject="'+P.id+'">'+(P.kind==='trade'?'Pass':'Decline')+'</button></li>').join('')+'</ul>':'';
-  return heading('OWNER’S DESK',teamName(id))+schedule+talkHtml+'<h2>Medical report</h2><ul>'+medical+'</ul><h2>GM’s trade desk</h2>'+gm+
-    '<small>Available draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', '))+'</small>'+
-    '<h2>Staff messages</h2><ul>'+reports+'</ul>';
+  const talk=pendingItems(S).filter(x=>x.route==='trades'&&x.id!=='quote');
+  return heading('FOOTBALL','Trades')+(talk.length?'<h2>Trade talk</h2><ul class="inbox">'+talk.map(x=>itemHtml(S,x,{where:false})).join('')+'</ul>':'')+
+    '<h2>GM’s trade desk</h2>'+gm+
+    '<p><small>Your draft picks · '+esc(S.picks.filter(p=>p.owner===id).map(p=>byId.get(p.origin).abbr+' R'+p.round).join(', ')||'none')+'</small></p>'+leagueTrades(S);
+}
+function medicalHtml(S){
+  const injuries=S.rosters[S.club].filter(p=>p.out);
+  return '<h2>Medical report</h2><ul>'+(injuries.length?injuries.map(p=>'<li><strong>'+esc(p.pos)+'</strong> '+esc(p.name)+' · '+(p.ir?'injured reserve · ':'')+'out '+p.out+' wk <button data-scout="'+esc(p.pos)+'">Ask GM for options</button></li>').join(''):'<li>All players available.</li>')+'</ul>';
 }
 function scoreboard(){
   const s=cur(),P=s.postseason;
@@ -6295,12 +6332,12 @@ function drawBroadcast(){const el=$('#broadcast');if(el&&broadcastGame)el.innerH
 // (#football/depth) so back, forward and refresh work. The game broadcast is a page with no tab of its own.
 const SECTIONS=[
   {id:'desk',label:'Desk',views:[['desk','Owner desk']]},
-  {id:'football',label:'Football',views:[['depth','Depth chart'],['contracts','Contracts'],['draft','Draft'],['staff','Staff']]},
+  {id:'football',label:'Football',views:[['depth','Depth chart'],['trades','Trades'],['contracts','Contracts'],['draft','Draft'],['staff','Staff']]},
   {id:'business',label:'Business',views:[['finances','Finances'],['stadium','Stadium']]},
   {id:'office',label:'League office',views:[['owners','Owners & votes'],['markets','Broadcast rights'],['news','News']]},
   {id:'around',label:'Around the league',views:[['scoreboard','Scoreboard'],['standings','Standings'],['schedule','Team schedule'],['rosters','Rosters'],['clubs','Club directory']]}
 ];
-const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
+const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
   finances:()=>financesView(),stadium:()=>stadiumView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
   scoreboard:()=>scoreboard(),standings:()=>standingsView(),schedule:()=>scheduleView(),rosters:()=>rosterView(),clubs:()=>'',game:()=>broadcastView()};
 const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route))??null;
@@ -6311,10 +6348,14 @@ const routeOf=v=>typeof v!=='string'?null:Object.hasOwn(VIEWS,v)?v:Object.hasOwn
 const hashOf=route=>{const sec=sectionOf(route);return '#'+(!sec||sec.id===route?route:sec.id+'/'+route);};
 const routeFromHash=h=>{const parts=String(h??'').replace(/^#/,'').split('/');const r=routeOf(parts.at(-1));return r&&(parts.length===1||sectionOf(r)?.id===parts[0])?r:null;};
 const lastPage={};
-function navHtml(route){
-  const here=sectionOf(route);
-  const top=SECTIONS.map(x=>'<button data-section="'+x.id+'"'+(x===here?' aria-current="page"':'')+'>'+esc(x.label)+'</button>').join('');
-  const sub=here&&here.views.length>1?here.views.map(([id,label])=>'<button data-tab="'+id+'"'+(id===route?' aria-current="page"':'')+'>'+esc(label)+'</button>').join(''):'';
+// Badges count what is waiting on each page and section; the Desk counts everything.
+function navHtml(route,items=[]){
+  const here=sectionOf(route),byPage={};
+  for(const x of items)byPage[x.route]=(byPage[x.route]??0)+1;
+  const badge=(n,what)=>n?'<span class="badge" aria-label="'+n+' waiting'+(what?' in '+esc(what):'')+'">'+n+'</span>':'';
+  const top=SECTIONS.map(x=>{const n=x.id==='desk'?items.length:x.views.reduce((a,[id])=>a+(byPage[id]??0),0);
+    return '<button data-section="'+x.id+'"'+(x===here?' aria-current="page"':'')+'>'+esc(x.label)+badge(n,x.label)+'</button>';}).join('');
+  const sub=here&&here.views.length>1?here.views.map(([id,label])=>'<button data-tab="'+id+'"'+(id===route?' aria-current="page"':'')+'>'+esc(label)+badge(byPage[id]??0,label)+'</button>').join(''):'';
   return {top,sub,label:here?.label??''};
 }
 // Go to a page. Clicks add a history entry; the hashchange that follows finds the page already open.
@@ -6379,7 +6420,7 @@ function applyTheme(v){
 function draw(){
   const s=cur();
   setTeamColors(save);
-  const nav=navHtml(tab);
+  const nav=navHtml(tab,pendingItems(save));
   $('#tabs').innerHTML=nav.top;
   const subtabs=$('#subtabs');subtabs.innerHTML=nav.sub;subtabs.hidden=!nav.sub;subtabs.setAttribute?.('aria-label',nav.label);
   syncHash();
@@ -6420,7 +6461,7 @@ document.addEventListener('click',e=>{
   if(b.dataset.tab)navigate(b.dataset.tab);
   if(b.dataset.id){selected=b.dataset.id;navigate('schedule');window.scrollTo(0,0);}
   if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
-  if(b.dataset.scout){scoutPos=b.dataset.scout;draw();$('#scout')?.focus();}
+  if(b.dataset.scout){scoutPos=b.dataset.scout;navigate('trades');$('#scout')?.focus?.();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
   if(b.id==='accept'||b.id==='decline'){resolveOffer(save,b.id==='accept');commit();}

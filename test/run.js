@@ -23,7 +23,8 @@ const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
 const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
 const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
 const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
-const NAMES = ['LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
+const NAMES = ['fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -353,7 +354,7 @@ test('v3 save upgrades with finances, and stadium talks survive', () => {
   const old = JSON.parse(v3Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.deepEqual(S.stadium, old.stadium);
+  assert.deepEqual(S.stadium, { ...old.stadium, application: null, coolingUntil: 0 });
   assert.deepEqual(S.world.markets.slice(0, old.world.markets.length), old.world.markets);
   assert.deepEqual(S.world.sites.slice(0, old.world.sites.length), old.world.sites);
   assert.deepEqual(S.world.leases, old.world.leases);
@@ -2129,11 +2130,250 @@ test('the page never relies on confirm() or a page-started download', () => {
   assert(downloads.length <= 1 && /if\(!d&&standalone\)\{downloadDirect/.test(html), 'only a standalone page downloads files itself');
 });
 
+// ---- Relocation --------------------------------------------------------------
+// A save in the offseason of season 3, after the new league year: the first moment a move can be filed.
+const readyCache = {};
+const ready = (club = 'club-06') => {
+  const { api } = load();
+  if (!readyCache[club]) {
+    const S = api.newSave(5); S.club = club;
+    while (api.cur(S).number < 3 || api.cur(S).tick < 28) api.advance(S);
+    readyCache[club] = JSON.stringify(S);
+  }
+  const S = JSON.parse(readyCache[club]); api.applyIdentity(S);
+  return { api, S };
+};
+const readyLive = (club = 'club-06') => {
+  const { api, S } = ready(club);
+  for (const k of Object.keys(api.save)) delete api.save[k];
+  Object.assign(api.save, S);
+  return { api, S: api.save };
+};
+const siteIn = (S, marketId, kind = 'downtown') => S.world.sites.find(x => x.marketId === marketId && x.kind === kind);
+const runVote = (api, S) => { while (S.league.meeting.status === 'scheduled') api.advance(S); return S.league.meeting; };
+const openSeason = (api, S) => { api.jumpTo(S, api.SEASON_TICKS + 1); };
+
+test('v16 save upgrades to v17: no moves yet, no application, nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v16Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.relocations, []);
+  assert.equal(S.stadium.application, null);
+  assert.equal(S.stadium.coolingUntil, 0);
+  assert.deepEqual(S.rosters, old.rosters);
+  assert.deepEqual(S.seasons, old.seasons);
+  assert.deepEqual(S.world, old.world);
+  assert.deepEqual(api.validateSave(S), []);
+});
+
+test('relocation is rare: tenure, a pending application, a denial and a late calendar each block it', () => {
+  const { api } = load();
+  const young = api.newSave(7); young.club = 'club-06';
+  assert.equal(api.relocationBlock(young), 'tenure');
+  const { api: a, S } = ready();
+  assert.equal(a.relocationBlock(S), null);
+  assert.equal(a.fileRelocation(S, siteIn(S, 'toronto').id), 'ok');
+  assert.equal(a.relocationBlock(S), 'pending');
+  assert.equal(a.fileRelocation(S, siteIn(S, 'toronto', 'edge').id), 'pending');
+  assert.equal(a.withdrawRelocation(S), 'ok');
+  assert.equal(a.relocationBlock(S), null);
+  S.stadium.coolingUntil = a.cur(S).number + 1;
+  assert.equal(a.relocationBlock(S), 'cooling');
+  S.stadium.coolingUntil = 0;
+  a.cur(S).tick = 49;
+  assert.equal(a.relocationBlock(S), 'late');
+});
+
+test('filing sets money aside, shows the city’s estimate but charges the true figure, and refuses what you cannot cover', () => {
+  const { api, S } = ready();
+  const site = siteIn(S, 'toronto');
+  assert(!site.infraKnown);
+  assert.equal(api.relocationCosts(S, site, true).infra, site.infraEstimate);
+  assert.equal(api.relocationCosts(S, site).infra, site.infraTrue);
+  const F = S.finance, cash = F.ownerCash, debt = F.debt;
+  assert.equal(api.fileRelocation(S, site.id, { funding: 'mix' }), 'ok');
+  const A = S.stadium.application, total = api.relocationCosts(S, site).total;
+  assert.equal(A.costs.total, total);
+  assert.equal(A.paid.owner + A.paid.debt, total);
+  assert(A.paid.debt > 0 && F.debt <= 450, 'borrows what the league allows first');
+  assert.equal(F.ownerCash, +(cash - A.paid.owner - api.RELOCATION_FILING).toFixed(2));
+  assert.equal(F.debt, +(debt + A.paid.debt).toFixed(2));
+  assert.equal(api.withdrawRelocation(S), 'ok');
+  assert.equal(F.ownerCash, +(cash - api.RELOCATION_FILING).toFixed(2), 'the filing cost is not refunded');
+  assert.equal(F.debt, debt);
+  F.ownerCash = 5;
+  assert.equal(api.fileRelocation(S, site.id), 'short');
+  assert.equal(S.stadium.application.status, 'withdrawn');
+  F.ownerCash = 5000;
+  assert.equal(api.fileRelocation(S, site.id, { funding: 'owner' }), 'ok');
+  assert.equal(S.stadium.application.paid.debt, 0);
+  assert.equal(api.fileRelocation(S, 'nowhere'), 'pending');
+});
+
+test('filing is public: the press and home city know, and the fans turn on you', () => {
+  const { api, S } = ready();
+  const mood = S.stadium.homeMood;
+  api.fileRelocation(S, siteIn(S, 'toronto').id);
+  const f = S.stadium.knowledge.at(-1);
+  assert.equal(f.kind, 'relocation');
+  assert(['press', 'home', 'league'].every(w => f.knownBy.includes(w)));
+  assert(S.stadium.homeAware);
+  assert.equal(S.stadium.homeMood, Math.max(0, mood - 25));
+  assert.equal(S.league.meeting.kind, 'relocation');
+  assert(S.events.some(e => e.type === 'relocationFiled') && S.league.news.at(-1).text.includes('Toronto'));
+  assert.equal(api.fileRelocation(S, siteIn(S, 'toronto').id), 'pending');
+});
+
+test('the vote: a big new market passes, a weak move fails, the deposit comes back, and the owners will not hear it again soon', () => {
+  const good = ready();
+  good.api.fileRelocation(good.S, siteIn(good.S, 'mexico-city').id);
+  const V = runVote(good.api, good.S);
+  assert(V.passed && V.yes >= 24);
+  assert.equal(good.S.stadium.application.status, 'approved');
+  assert.equal(good.S.stadium.application.moveSeason, good.api.cur(good.S).number + 1);
+  assert(good.S.events.some(e => e.type === 'relocationVote'));
+
+  const { api, S } = ready();
+  const cash = S.finance.ownerCash, debt = S.finance.debt;
+  api.fileRelocation(S, siteIn(S, 'oklahoma-city').id);
+  const W = runVote(api, S);
+  assert(!W.passed && W.yes < 24);
+  assert.equal(S.stadium.application.status, 'denied');
+  assert.equal(S.finance.ownerCash, +(cash - api.RELOCATION_FILING).toFixed(2));
+  assert.equal(S.finance.debt, debt);
+  assert.equal(S.stadium.coolingUntil, api.cur(S).number + 2);
+  assert.equal(api.relocationBlock(S), 'cooling');
+  assert(S.stadium.homeMood >= 50, 'the home city is relieved');
+  assert.equal(S.relocations.length, 0);
+});
+
+test('calls move owners toward a move, and a bigger market raises their lean', () => {
+  const { api, S } = ready();
+  api.fileRelocation(S, siteIn(S, 'san-antonio').id);
+  const t = api.clubs.find(c => c.id !== S.club && api.relocationLean(S, c.id) < 0);
+  const before = api.relocationLean(S, t.id);
+  assert.equal(api.callOwner(S, t.id, false), 'ok');
+  assert(api.relocationLean(S, t.id) > before);
+  assert.equal(S.league.meeting.revealed[t.id], api.relocationLean(S, t.id));
+  const big = ready(); big.api.fileRelocation(big.S, siteIn(big.S, 'mexico-city').id);
+  const mean = (a, S) => a.clubs.filter(c => c.id !== S.club).reduce((x, c) => x + a.relocationLean(S, c.id), 0) / 31;
+  assert(mean(big.api, big.S) > mean(api, S) + .2);
+});
+
+test('the move happens as the new season opens: market, nickname, stadium, markets, books and schedule all follow', () => {
+  const { api, S } = ready();
+  S.finance.projects.find(p => p.id === 'upgrade').status = 'active';
+  S.finance.naming = { status: 'signed', deal: { annual: 9, years: 5, newName: 'X Field', company: 'X', week: 3 } };
+  const site = siteIn(S, 'toronto');
+  assert.equal(api.fileRelocation(S, site.id, { nickname: 'Voyagers' }), 'ok');
+  assert(runVote(api, S).passed);
+  api.jumpTo(S, 36);
+  assert.equal(api.clubs.find(c => c.id === 'club-06').market, 'Cincinnati', 'still in Cincinnati until the season opens');
+  openSeason(api, S);
+  const me = api.clubs.find(c => c.id === 'club-06');
+  assert.deepEqual([me.market, me.marketId, me.nickname, me.abbr], ['Toronto', 'toronto', 'Voyagers', 'TOR']);
+  assert(!api.clubs.some(c => c.market === 'Cincinnati'));
+  assert.equal(new Set(api.clubs.map(c => c.abbr)).size, 32);
+  assert.deepEqual(api.validateSave(S), []);
+  assert(!api.OPEN_MARKETS.some(m => m.id === 'toronto') && api.OPEN_MARKETS.some(m => m.id === 'cincinnati' && m.relocation));
+  assert.deepEqual(Object.keys(S.league.markets).sort(), api.OPEN_MARKETS.map(m => m.id).sort());
+  assert(S.league.markets.cincinnati.fans['club-06'] > 0 && S.league.markets.cincinnati.holder === null);
+  assert(S.world.sites.filter(x => x.marketId === 'toronto').every(x => x.status === 'taken'));
+  assert.equal(S.world.sites.filter(x => x.marketId === 'cincinnati' && x.status === 'open').length, 2);
+  assert(S.world.markets.find(m => m.id === 'cincinnati').officials.length === 2);
+  const L = S.world.leases['club-06'];
+  assert.deepEqual([L.stadium.startsWith('Toronto '), L.capacity, L.yearsLeft, L.condition, L.parking], [true, site.maxSeats, 30, 'Modern', site.parking]);
+  assert.equal(S.finance.naming.status, 'none');
+  assert.equal(S.finance.projects.find(p => p.id === 'upgrade').status, 'proposed', 'video boards stay behind');
+  assert.equal(S.stadium.homeMood, 75 + 8);
+  assert(!S.stadium.homeAware);
+  assert.equal(S.stadium.application.status, 'done');
+  assert(S.events.some(e => e.type === 'relocated'));
+  // The new season is drawn with the club's new identity, and the books use the new city.
+  const counts = {};
+  for (const week of api.cur(S).weeks) for (const g of week) for (const id of [g.home, g.away]) counts[id] = (counts[id] || 0) + 1;
+  assert(Object.values(counts).every(n => n === 17));
+  assert(api.groups.every(g => g.length === 4));
+  for (let i = 0; i < 4; i++) api.advance(S);
+  assert.deepEqual(api.validateSave(S), []);
+  const home = S.finance.ledger.filter(x => x.season === 4 && x.lines.tickets > 0);
+  assert(home.length && home.every(x => x.lines.concessions > 0) && S.finance.ledger.at(-1).lines.stadiumRent < 0);
+  // A move can be undone by a later move: the old city is still a market, and the club can go back.
+  assert.equal(api.relocationBlock(S), 'tenure');
+});
+
+test('realignment: a club that moves next to a new division swaps places with one of its clubs, and the schedule still works', () => {
+  const { api, S } = ready('club-01'); // Buffalo
+  const site = siteIn(S, 'columbus');
+  const dest = S.world.markets.find(m => m.id === 'columbus');
+  const plan = api.realignmentPlan(S, dest);
+  assert(plan && plan.newMean < plan.ownMean * .85);
+  api.fileRelocation(S, site.id);
+  for (const t of api.clubs) S.league.meeting.lobby[t.id] = 3;
+  assert(runVote(api, S).passed);
+  assert.equal(api.relocationLean(S, plan.swap) > 0, true);
+  const old = api.clubs.find(c => c.id === 'club-01'), from = { conference: old.conference, division: old.division };
+  openSeason(api, S);
+  const me = api.clubs.find(c => c.id === 'club-01'), other = api.clubs.find(c => c.id === plan.swap);
+  assert.deepEqual([me.conference, me.division], [plan.to.conference, plan.to.division]);
+  assert.deepEqual([other.conference, other.division], [from.conference, from.division]);
+  assert(api.groups.length === 8 && api.groups.every(g => g.length === 4));
+  const division = {};
+  for (const week of api.cur(S).weeks) for (const g of week) {
+    const [h, a] = [g.home, g.away].map(id => api.clubs.find(t => t.id === id));
+    if (h.conference === a.conference && h.division === a.division) division[g.home + '>' + g.away] = true;
+  }
+  assert.equal(Object.keys(division).length, 8 * 12);
+  assert(S.league.owners[plan.swap].memory.some(m => /out of their division/.test(m.text)));
+  assert.deepEqual(api.validateSave(S), []);
+});
+
+test('a moved club is replayed from the save: reload, JSON round trip, and a new league starts from the original map', () => {
+  const { api, S } = ready();
+  api.fileRelocation(S, siteIn(S, 'toronto').id, { nickname: 'Voyagers' });
+  runVote(api, S); openSeason(api, S);
+  const again = load().api, T = again.upgrade(JSON.parse(JSON.stringify(S))).save;
+  again.applyIdentity(T);
+  assert.deepEqual(again.clubs, api.clubs);
+  assert.deepEqual(again.OPEN_MARKETS, api.OPEN_MARKETS);
+  assert.deepEqual(again.groups.map(g => g.map(t => t.id)), api.groups.map(g => g.map(t => t.id)));
+  const fresh = again.newSave(3);
+  assert.deepEqual(fresh.relocations, []);
+  assert(again.clubs.some(c => c.market === 'Cincinnati' && c.nickname === 'Rivermen'));
+  assert(again.OPEN_MARKETS.some(m => m.id === 'toronto') && !again.OPEN_MARKETS.some(m => m.id === 'cincinnati'));
+  assert.deepEqual(again.validateSave(fresh), []);
+});
+
+test('relocation pages render in every state, and names are escaped', () => {
+  const { api, S } = readyLive();
+  S.world.sites.find(x => x.marketId === 'toronto').name = '<img src=x onerror=1>';
+  let html = api.stadiumView();
+  assert(html.includes('Relocation') && html.includes('File the application') && html.includes('Public money'));
+  assert(!html.includes('<img src=x'));
+  api.fileRelocation(S, siteIn(S, 'toronto').id);
+  html = api.stadiumView();
+  assert(html.includes('Withdraw the application') && html.includes('set aside'));
+  assert(!html.includes('<img src=x'));
+  const league = api.leagueView();
+  assert(league.includes('You have asked the owners') && league.includes('Promise support') && !league.includes('Your vote'));
+  runVote(api, S);
+  assert(api.stadiumView().includes('approved the move'));
+  assert(api.leagueView().includes('Result'));
+  openSeason(api, S);
+  html = api.stadiumView();
+  assert(html.includes('Moves so far') && html.includes('Toronto'));
+  assert(api.leagueView().includes('Cincinnati') && api.ownershipDesk().length > 0);
+  assert(api.mapPoints(S).some(p => p.id === 'toronto' && !p.open) && api.mapPoints(S).some(p => p.id === 'cincinnati' && p.open));
+});
+
 let failed = 0;
 (async () => {
+const only = process.env.ONLY; // ONLY=relocation npm test runs the tests whose names contain it
 for (const [name, fn] of tests) {
+  if (only && !name.includes(only)) continue;
   try { await fn(); console.log('  ok   ' + name); }
-  catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + String(e.stack || e).split('\n').slice(0, 3).join('\n       ')); }
+  catch (e) { failed++; console.log('  FAIL ' + name + '\n       ' + String(e.stack || e).split('\n').slice(0, +process.env.LINES || 3).join('\n       ')); }
 }
 console.log(failed ? `\n${failed} of ${tests.length} failed` : `\nall ${tests.length} passed`);
 process.exit(failed ? 1 : 0);

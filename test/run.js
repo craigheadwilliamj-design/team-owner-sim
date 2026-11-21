@@ -22,7 +22,8 @@ const v11Save = fs.readFileSync(path.join(FIX, 'v11-save.json'), 'utf8');
 const v12Save = fs.readFileSync(path.join(FIX, 'v12-save.json'), 'utf8');
 const v13Save = fs.readFileSync(path.join(FIX, 'v13-save.json'), 'utf8');
 const v14Save = fs.readFileSync(path.join(FIX, 'v14-save.json'), 'utf8');
-const NAMES = ['COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
+const NAMES = ['LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -1790,19 +1791,50 @@ test('draft page shows the wire, the board and a prospect profile', () => {
   assert(!/<script|onerror/i.test(html));
 });
 
-test('v14 save upgrades to v15: the class in progress keeps its schools and picks up the slate', () => {
+const FICTIONAL = /Allegheny State|Bayou Tech|Cascade|Central Prairie|Delta A&M|Eastern Ridge|Great Lakes Tech|Gulf State|High Plains|Iron Range|Keystone Valley|Lakeshore|Magnolia|North Woods|Ozark State|Palmetto(?! Bowl)|Piedmont|Red River(?! Rivalry)|Sierra Tech|Tidewater|Twin Rivers|Western Plateau/;
+test('v14 save upgrades: the class in progress moves to real schools by talent, and its stories follow', () => {
   const { api } = load();
   const old = JSON.parse(v14Save);
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
-  assert.deepEqual(S.draft.prospects, old.draft.prospects, 'prospects untouched');
-  assert.deepEqual(S.draft.wire, old.draft.wire);
+  assert.deepEqual(S.draft.prospects.map(p => p.id).sort(), old.draft.prospects.map(p => p.id).sort(), 'same prospects');
+  const real = new Set(api.COLLEGE_TIERS.flat());
+  assert(S.draft.prospects.every(p => real.has(p.college)), 'every prospect at a real school');
+  assert(!FICTIONAL.test(JSON.stringify(S.draft)), 'no fictional school left in the class, its wire or its notes');
+  const was = new Map(old.draft.prospects.map(p => [p.id, p]));
+  const featured = S.draft.wire.flatMap(w => w.items).filter(it => it.pid && /\(/.test(it.text));
+  assert(featured.length > 5 && featured.every(it => it.text.includes('(' + S.draft.prospects.find(p => p.id === it.pid).college + ')')), 'wire items name his new school');
+  const elite = [...S.draft.prospects].sort((a, b) => (.55 * b.potential + .45 * b.rating) - (.55 * a.potential + .45 * a.rating)).slice(0, 48);
+  assert(elite.filter(p => api.collegeTier(p.college) === 0).length > elite.filter(p => api.collegeTier(p.college) === 3).length * 3, 'schools follow talent');
+  const p = S.draft.prospects.find(x => api.collegeTier(x.college) === 3);
+  assert.equal(p.grade - was.get(p.id).grade, -4, 'a small-school kid picks up the sleeper discount');
   assert(S.draft.slate.length >= 14 && S.draft.slate.every(g => !g.winner));
-  assert(S.draft.prospects.every(p => [1, 2].includes(api.collegeTier(p.college))), 'old schools get a steady middle tier');
-  assert.equal(api.collegeTier('Iron Range'), api.collegeTier('Iron Range'));
   for (let i = 0; i < 7; i++) api.playWeek(S);
   assert(S.draft.slate.filter(g => g.week <= 7).every(g => !g.winner), 'games already past are skipped');
   assert(S.draft.slate.some(g => g.week > 7 && g.week <= api.now(S) && g.winner), 'later big games are played');
+});
+
+test('v15 save upgrades to v16: real schools stay put, fictional ones in history get real names', () => {
+  const { api } = load();
+  const old = JSON.parse(v15Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.draft.prospects, [...old.draft.prospects].sort((a, b) => b.grade - a.grade), 'a real-school class is untouched');
+  const T = JSON.parse(v15Save);
+  T.draftHistory = [{ season: 0, picks: [{ overall: 1, round: 1, club: 'club-01', name: 'Ty Old', pos: 'QB', college: 'Bayou Tech' }] }];
+  const vet = Object.values(T.rosters)[0][0];
+  vet.drafted = { season: 0, round: 1, overall: 1, college: 'Palmetto' };
+  vet.collegeNotes = [{ season: 0, week: 13, text: 'Had 3 sacks against Red River.' }];
+  T.draft.wire[0].items.push({ kind: 'score', text: 'Elsewhere: Iron Range 24, Twin Rivers 10.' }, { kind: 'game', text: 'The Palmetto Bowl: South Carolina 20, Clemson 17.' });
+  const U = api.upgrade(T).save;
+  assert.equal(U.draftHistory[0].picks[0].college, 'LSU');
+  const v = Object.values(U.rosters).flat().find(p => p.id === vet.id);
+  assert.equal(v.drafted.college, 'South Carolina');
+  assert.equal(v.collegeNotes[0].text, 'Had 3 sacks against Oklahoma.');
+  const items = U.draft.wire[0].items.map(x => x.text);
+  assert(items.includes('Elsewhere: Minnesota 24, Iowa 10.'));
+  assert(items.includes('The Palmetto Bowl: South Carolina 20, Clemson 17.'), 'the real Palmetto Bowl is left alone');
+  assert.equal(new Set(Object.values(api.LEGACY_COLLEGES)).size, 22);
 });
 
 test('schools follow the talent: blue bloods get the elite and the hype, small schools hide sleepers', () => {

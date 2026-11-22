@@ -8,6 +8,10 @@ buy a franchise, hire the people who run it, and choose when to interfere.
 
 ## What's in it
 
+- An owner of your own: a name, a hometown, and where you made your
+  fortune. Seven backgrounds (tech, oil and gas, real estate, private
+  equity, old family money, media, a hometown business) set your starting
+  cash and give you one edge and one weakness.
 - An 18-week season, playoffs, and a full offseason calendar (February Week 1
   to August Week 4) with a jump-ahead control.
 - Every game is simulated play by play from player ratings; your own games

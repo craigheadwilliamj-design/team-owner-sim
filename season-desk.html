@@ -150,6 +150,10 @@ span.chip.logo{border:0;background:none;display:inline-flex}.chip.logo img,.chip
 .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;margin:8px 0 18px}.team-grid h3{grid-column:1/-1;padding:12px 0 0}
 .team-grid button{display:flex;align-items:center;gap:10px;text-align:left;min-height:44px}.team-grid button[aria-pressed=true]{outline:3px solid var(--team);outline-offset:1px}
 .team-edit{border-top:1px solid var(--rule-strong);padding-top:12px}
+.fortunes{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:6px 0 18px}
+.fortunes button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:12px 14px;white-space:normal}
+.fortunes button b{font:900 1.5rem/1 var(--display)}.fortunes button span{font-size:.85rem;color:var(--muted)}
+.fortunes [aria-checked=true]{outline:3px solid var(--accent);outline-offset:1px;background:var(--rule-soft)}
 .brand-history{list-style:none;padding:0}.brand-history li{display:flex;align-items:center;gap:10px;margin:6px 0}
 .chip.big{width:56px;height:56px;border:8px solid var(--c2);background:var(--board)}
 .club-facts{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
@@ -734,7 +738,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=20;     // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=21;     // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -1397,7 +1401,7 @@ function newSave(seed=newSeed()){
   applyIdentity({relocations:[]}); // a new league starts from the original map
   const rng={seed,state:seed},r=rngFor(rng);
   const season=makeSeason(r,1);
-  const S={schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,relocations:[],brands:[],logos:{},seasonIndex:0,seasons:[season],
+  const S={schemaVersion:SCHEMA_VERSION,saveId:randomId(r),rng,club:null,owner:null,relocations:[],brands:[],logos:{},seasonIndex:0,seasons:[season],
     rosters:generateRosters(r,season.ratings),picks:defaultPicks(),offer:null,events:[],nextEventId:1,revision:0,
     world:makeWorld(r,0),staff:makeStaff(r),stadium:newStadiumState(),finance:makeFinance(r),league:makeLeague(r),
     draft:makeDraft(r,1),history:[],draftHistory:[]};
@@ -2497,6 +2501,69 @@ function brandInput(id,value){
 }
 
 // ---------------------------------------------------------------------------
+// The owner
+//
+// Set up once, on the same screen as choosing the club: a name, where the money
+// came from, and optionally a hometown. The fortune decides the cash the owner
+// starts with and gives one edge and one weakness, each through a system the
+// game already has. One-time effects land when the owner takes the club;
+// ongoing ones are read through fortuneOf(S). First-guess numbers, not from the
+// design bible. Saves from before owner profiles have S.owner null: no effects.
+// ---------------------------------------------------------------------------
+const FORTUNES={
+  tech:{label:'Tech founder',cash:700,edge:'Analytics: one more scouting point a week.',catch:'The old guard finds you brash: every owner starts 6 points cooler.',
+    scouting:1,relation:-6},
+  energy:{label:'Oil and gas',cash:800,edge:'The deepest pockets in the league.',catch:'Fans see a checkbook, not a fan: home mood starts at 52.',
+    mood:52},
+  realestate:{label:'Real estate developer',cash:550,edge:'Stadium and facility projects cost 10% less, and city halls listen: better odds of public money.',catch:'Less cash than most.',
+    projects:.9,city:.04},
+  finance:{label:'Private equity',cash:600,edge:'Your bankers lend to the club at 4.5% instead of 6%.',catch:'"Money guy": home mood starts at 55.',
+    rate:.045,mood:55},
+  family:{label:'Old family money',cash:500,edge:'Your family has known these owners for decades: every owner starts 10 points warmer.',catch:'A modest fortune by league standards.',
+    relation:10},
+  media:{label:'Media mogul',cash:600,edge:'You know how to sell a broadcast: local media money up 15%.',catch:'Rival owners do not trust a reporter at the table: every owner starts 4 points cooler.',
+    localMedia:.15,relation:-4},
+  local:{label:'Hometown business',cash:320,edge:'The city loves one of its own: home mood starts at 72, and local sponsors pay 8% more.',catch:'The smallest fortune in the league by far.',
+    mood:72,sponsorship:.08}
+};
+const HOMETOWN_MOOD=8; // owning your hometown club
+const fortuneOf=S=>FORTUNES[S?.owner?.fortune]??null;
+const ownerName=S=>S?.owner?.name||'The owner';
+const cleanOwnerName=v=>String(v??'').replace(/\s+/g,' ').trim().slice(0,40);
+const hometownOptions=()=>[...new Map(clubs.map(t=>[t.marketId,t.market])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+const ownerUi={name:'',fortune:'family',hometown:''};
+// Takes the club with an owner profile. Returns a status code.
+function claimClub(S,clubId,profile={}){
+  if(S.club)return 'taken';
+  if(!byId.has(clubId))return 'invalid';
+  const name=cleanOwnerName(profile.name),fortune=Object.hasOwn(FORTUNES,profile.fortune)?profile.fortune:null;
+  if(!name)return 'name';
+  if(!fortune)return 'fortune';
+  const hometown=hometownOptions().some(([id])=>id===profile.hometown)?profile.hometown:null;
+  const f=FORTUNES[fortune],F=S.finance,L=S.league;
+  S.club=clubId;
+  S.owner={name,fortune,hometown};
+  F.ownerCash=f.cash;
+  if(f.rate)F.rate=f.rate;
+  if(f.mood)S.stadium.homeMood=f.mood;
+  if(hometown&&byId.get(clubId).marketId===hometown)S.stadium.homeMood=Math.min(100,S.stadium.homeMood+HOMETOWN_MOOD);
+  if(f.relation&&L?.owners)for(const [id,o] of Object.entries(L.owners))if(id!==clubId)o.relation=Math.max(-100,Math.min(100,o.relation+f.relation));
+  news(S,name+' buys the '+teamName(clubId));
+  return 'ok';
+}
+const claimText=code=>({name:'Give your owner a name.',fortune:'Pick where your money came from.',invalid:'Pick a club.',taken:'You already own a club.'}[code]??'');
+function ownerSetupHtml(){
+  const u=ownerUi;
+  return '<div class="owner-setup"><h2>Who are you?</h2><div class="controls brand-form">'+
+    '<label>Your name <input id="ownerName" type="text" maxlength="40" autocomplete="off" placeholder="Pat Morgan" value="'+esc(u.name)+'"></label>'+
+    '<label>Hometown <select id="ownerHometown">'+option('','Somewhere else',!u.hometown)+hometownOptions().map(([id,name])=>option(id,name,u.hometown===id)).join('')+'</select></label></div>'+
+    '<p><small>'+esc('Buy your hometown club and the fans start warmer (mood +'+HOMETOWN_MOOD+').')+'</small></p>'+
+    '<h3 class="group">Where you made your fortune</h3><div class="fortunes" role="radiogroup" aria-label="Where you made your fortune">'+
+    Object.entries(FORTUNES).map(([k,f])=>'<button role="radio" data-fortune="'+esc(k)+'" aria-checked="'+(u.fortune===k)+'"><strong>'+esc(f.label)+'</strong><b>'+esc(money(f.cash))+'</b>'+
+      '<span>+ '+esc(f.edge)+'</span><span>− '+esc(f.catch)+'</span></button>').join('')+'</div></div>';
+}
+
+// ---------------------------------------------------------------------------
 // Customize teams (Settings menu)
 //
 // Free edits to the other clubs: nickname, abbreviation and colors. They go in
@@ -2722,7 +2789,7 @@ const PROJECTS=[
     effect:'Cuts injuries about 10%. Nothing to build: it costs $8M a season from the day you approve it.'},
 ];
 const projectDef=id=>PROJECTS.find(p=>p.id===id);
-const projectCost=(S,def)=>typeof def.cost==='function'?def.cost(S,S.world.leases[S.club]):def.cost;
+const projectCost=(S,def)=>{const c=typeof def.cost==='function'?def.cost(S,S.world.leases[S.club]):def.cost,k=fortuneOf(S)?.projects;return k?Math.round(c*k):c;};
 const projectBlock=(S,def)=>def.block?.(S,S.world.leases[S.club])??null;
 const NAMING_SPONSORS={
   bank:['Riverline Bank','Keystone Federal','First Meridian Bank'],insurance:['Summit Mutual','Harborview Insurance','Granite Life'],
@@ -2780,7 +2847,7 @@ function payroll(S,id){
 }
 function weekLines(S,g){
   const id=S.club,team=byId.get(id),lease=S.world.leases[id],F=S.finance,metro=localMetro(team);
-  const L={nationalTV:perWeek(300),localMedia:perWeek(40+18*Math.sqrt(metro)),sponsorship:perWeek((25+10*Math.sqrt(metro))*(1+brandLift(S))),
+  const L={nationalTV:perWeek(300),localMedia:perWeek((40+18*Math.sqrt(metro))*(1+(fortuneOf(S)?.localMedia??0))),sponsorship:perWeek((25+10*Math.sqrt(metro))*(1+brandLift(S)+(fortuneOf(S)?.sponsorship??0))),
     namingRights:F.naming.status==='signed'?perWeek(F.naming.deal.annual):0,
     marketRights:S.league?Object.entries(S.league.markets).filter(([,M])=>M.holder===id).reduce((sum,[mk,M])=>sum+perWeek(adValue(mk,M.fans[id]??0)-M.fee),0):0,tickets:0,premium:0,concessions:0,visitorShare:0,
     payroll:-perWeek(payroll(S,id)),footballOps:-perWeek(54+(S.staff?.clubs?(hcOf(S,id).contract.salary+gmOf(S,id).contract.salary):16)),businessOps:-perWeek(45),travel:-perWeek(effectActive(S,'plane')?3:8),
@@ -2870,7 +2937,7 @@ function cityWillingness(S,approach,r,credible=cityLeverage(S).credible){
   const L=cityLeverage(S),a=CITY_APPROACH[approach];
   // Comparing cities without having looked at any is weak; a threat nobody believes backfires.
   const push=credible?a.push:approach==='threat'?-.05:a.push*.35;
-  return Math.max(0,Math.min(CITY_MAX_SHARE,.12+L.lease+L.worn+L.mood+L.small+push+between(r,[-.06,.06])));
+  return Math.max(0,Math.min(CITY_MAX_SHARE,.12+L.lease+L.worn+L.mood+L.small+push+(fortuneOf(S)?.city??0)+between(r,[-.06,.06])));
 }
 function cityBlock(S){
   if(!S.club)return 'closed';
@@ -5951,7 +6018,7 @@ function processCollege(S,r){
 }
 
 // ---- Scouting -------------------------------------------------------------------------
-const pointsPerWeek=S=>S.club?Math.min(4,2+Math.floor(gmOf(S,S.club).ratings.scouting/30)):3;
+const pointsPerWeek=S=>S.club?Math.min(4,2+Math.floor(gmOf(S,S.club).ratings.scouting/30))+(fortuneOf(S)?.scouting??0):3;
 function projectedSlot(S){
   const table=standings(S).flat().map(r=>({id:r.id,pct:(r.w+.5*r.t)/(r.w+r.l+r.t||1)})).sort((a,b)=>a.pct-b.pct);
   return Math.max(1,table.findIndex(x=>x.id===S.club)+1);
@@ -6078,7 +6145,15 @@ const migrations={
   17:migrateV17,
   18:migrateV18,
   19:migrateV19,
+  20:migrateV20,
 };
+// v20 -> v21: owner profiles. A club owned before them keeps its cash and gets no fortune effects.
+function migrateV20(old){
+  old.owner=null;
+  old.schemaVersion=21;
+  (old.migrations??=[]).push({from:20,to:21,at:new Date().toISOString()});
+  return old;
+}
 // v19 -> v20: free edits to AI clubs (kind 'custom' in S.brands) and club logos. No logos yet.
 function migrateV19(old){
   old.logos={};
@@ -6416,6 +6491,7 @@ function validateSave(S){
   const brandOk=b=>b&&byId.has(b.club)&&isInt(b.season,1)&&isInt(b.week,0,SEASON_TICKS)&&['nickname','look','custom'].includes(b.kind)&&Number.isFinite(b.cost)&&b.to&&
     typeof b.to.nickname==='string'&&/^[A-Z]{2,3}$/.test(b.to.abbr)&&/^#[0-9a-f]{6}$/i.test(b.to.primary)&&/^#[0-9a-f]{6}$/i.test(b.to.secondary);
   if(!Array.isArray(S.brands)||!S.brands.every(brandOk))fail('The brand record is invalid.');
+  if(S.owner!==null&&(typeof S.owner!=='object'||typeof S.owner?.name!=='string'||!S.owner.name||S.owner.name.length>40||!Object.hasOwn(FORTUNES,S.owner.fortune)||(S.owner.hometown!==null&&typeof S.owner.hometown!=='string')))fail('The owner profile is invalid.');
   if(!S.logos||typeof S.logos!=='object'||Array.isArray(S.logos)||Object.entries(S.logos).some(([id,v])=>!byId.has(id)||!logoOk(v)))fail('The club logos are invalid.');
   if(typeof S.staff?.president?.name!=='string')fail('The team president is missing.');
   const F=S.finance;
@@ -6803,7 +6879,8 @@ function tradeSummary(S,P){
 }
 function ownershipDesk(){
   const S=save,s=cur(),id=S.club;
-  if(!id)return heading('FRANCHISE OWNERSHIP','Choose your club')+'<p>Take over a franchise in this season. Your staff runs the depth chart and brings personnel decisions here.</p><div class="controls"><label>Franchise '+clubSelect('claimTeam',null)+'</label><button id="claim">Take ownership</button></div>';
+  if(!id)return heading('FRANCHISE OWNERSHIP','Choose your club')+'<p>Take over a franchise in this season. Your staff runs the depth chart and brings personnel decisions here.</p>'+ownerSetupHtml()+
+    '<h2>Your club</h2><div class="controls"><label>Franchise '+clubSelect('claimTeam',ownerUi.club??null)+'</label><button id="claim" class="primary">Take ownership</button></div>'+(ownerUi.notice?'<p><b>'+esc(ownerUi.notice)+'</b></p>':'');
   const ranking=standings(S).find(group=>group.some(r=>r.id===id)),place=ranking.findIndex(r=>r.id===id),r=ranking[place];
   const games=s.weeks.flatMap((week,i)=>week.filter(g=>g.home===id||g.away===id).map(g=>({g,w:i+1})));
   const fixture=entry=>{
@@ -6820,7 +6897,7 @@ function ownershipDesk(){
     gameDayCard(S)+headCoachCard(S)+comingDue(S)+'</div>';
   const items=pendingItems(S),n=items.length,waiting=waitingItems(S),decided=justDecided(S);
   const reports=[...S.events].reverse().slice(0,30).map(e=>'<li><strong>'+esc(eventWhen(S,e))+'</strong> '+describeEvent(e)+'</li>').join('')||'<li>Your staff has no reports yet.</li>';
-  return heading('OWNER’S DESK',n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
+  return heading('OWNER’S DESK'+(S.owner?' · '+S.owner.name+' · '+FORTUNES[S.owner.fortune].label:''),n?n+(n===1?' thing needs':' things need')+' your call':'All clear this week')+schedule+
     (ownerSetupOpen(S)?'<p class="setup-note">'+esc('Make the club yours: until you play Week 1 you can rename it, recolor it and give it a logo, free, once.')+' <button id="teamsMine">Set up your club</button></p>':'')+
     '<div class="desk"><section>'+(decided.length?'<h2>Just decided</h2>'+decidedHtml(S,decided):'')+
     '<h2>Needs your decision</h2>'+(n?inboxHtml(S,items):'<p>Nothing is waiting on you. Advance when you’re ready.</p>')+
@@ -7331,7 +7408,12 @@ document.addEventListener('click',e=>{
   if(b.dataset.id&&byId.has(b.dataset.id)){selected=b.dataset.id;clubTab='schedule';navigate('club');window.scrollTo(0,0);}
   if(b.dataset.ctab){clubTab=b.dataset.ctab;draw();}
   if(b.dataset.conf){clubsConf=b.dataset.conf;draw();}
-  if(b.id==='claim'&&!save.club){const id=$('#claimTeam').value;if(byId.has(id)){save.club=id;selected=id;commit();}}
+  if(b.id==='claim'&&!save.club){
+    const id=$('#claimTeam').value;ownerUi.name=$('#ownerName')?.value??ownerUi.name;
+    const res=claimClub(save,id,ownerUi);ownerUi.notice=res==='ok'?'':claimText(res);
+    if(res==='ok'){selected=id;commit();}else{ownerUi.club=id;draw();}
+  }
+  if(b.dataset.fortune&&Object.hasOwn(FORTUNES,b.dataset.fortune)&&!save.club){ownerUi.name=$('#ownerName')?.value??ownerUi.name;ownerUi.club=$('#claimTeam')?.value;ownerUi.fortune=b.dataset.fortune;ownerUi.notice='';draw();}
   if(b.dataset.scout){scoutPos=b.dataset.scout;navigate('trades');$('#scout')?.focus?.();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
@@ -7513,7 +7595,10 @@ app.onchange=e=>{
   if(e.target.id==='relocNickname'){stadiumUi.reloc.nickname=e.target.value;stadiumUi.reloc.notice='';}
   if(e.target.id==='compareA')stadiumUi.a=e.target.value;
   if(e.target.id==='compareB')stadiumUi.b=e.target.value;
-  if(e.target.id==='claimTeam'||e.target.id==='target')return;
+  if(e.target.id==='ownerHometown'){ownerUi.hometown=e.target.value;return;}
+  if(e.target.id==='ownerName'){ownerUi.name=e.target.value;return;}
+  if(e.target.id==='claimTeam'){ownerUi.club=e.target.value;return;}
+  if(e.target.id==='target')return;
   if(e.target.id==='scout')scoutPos=e.target.value;
   if(e.target.id==='week')viewed=Number(e.target.value);
   if(e.target.id==='team'&&byId.has(e.target.value)){selected=e.target.value;if(tab==='club'){navigate('club');return;}}

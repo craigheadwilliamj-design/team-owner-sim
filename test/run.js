@@ -27,7 +27,8 @@ const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
 const v17Save = fs.readFileSync(path.join(FIX, 'v17-save.json'), 'utf8');
 const v18Save = fs.readFileSync(path.join(FIX, 'v18-save.json'), 'utf8');
 const v19Save = fs.readFileSync(path.join(FIX, 'v19-save.json'), 'utf8');
-const NAMES = ['ownerSetupOpen', 'customizeClub', 'undoCustom', 'setLogo', 'clearLogo', 'logoOk', 'teamsView', 'chipHtml', 'badge', 'teamsUi:()=>teamsUi', 'rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v20Save = fs.readFileSync(path.join(FIX, 'v20-save.json'), 'utf8');
+const NAMES = ['claimClub', 'FORTUNES', 'fortuneOf', 'ownerUi:()=>ownerUi', 'ownerSetupOpen', 'customizeClub', 'undoCustom', 'setLogo', 'clearLogo', 'logoOk', 'teamsView', 'chipHtml', 'badge', 'teamsUi:()=>teamsUi', 'rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -2848,7 +2849,7 @@ test('v18 save upgrades to v19: no club has a new look yet, nothing else changes
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.brands, []);
-  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.logos; delete y.schemaVersion; delete y.migrations; return y; };
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.logos; delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
   assert.deepEqual(strip(S), strip(JSON.parse(v18Save)));
   assert.deepEqual(api.validateSave(S), []);
   api.playWeek(S);
@@ -2968,7 +2969,7 @@ test('v19 save upgrades to v20: no logos yet, nothing else changes', () => {
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.logos, {});
-  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.logos; delete y.schemaVersion; delete y.migrations; return y; };
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.logos; delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
   assert.deepEqual(strip(S), strip(JSON.parse(v19Save)));
   assert.deepEqual(api.validateSave(S), []);
   api.playWeek(S);
@@ -3082,6 +3083,76 @@ test('own club: free to set up once, until Week 1 is played, then locked to the 
   assert.equal(api.brandLift(L), 0);
   assert.equal(api.setLogo(L, 'club-06', PNG), 'ok');
   assert.deepEqual(api.validateSave(L), []);
+});
+
+// ---- Owner profile ------------------------------------------------------------
+const fresh = (seed = 51) => { const { api } = load(); const S = api.newSave(seed); return { api, S }; };
+
+test('v20 save upgrades to v21: an owner from before profiles has none, and keeps their cash', () => {
+  const { api } = load();
+  const old = JSON.parse(v20Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(S.owner, null);
+  assert.equal(S.finance.ownerCash, old.finance.ownerCash);
+  assert.equal(api.fortuneOf(S), null);
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v20Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('owner profile: a name and a fortune are needed, and the fortune sets the cash', () => {
+  const { api, S } = fresh();
+  assert.equal(api.claimClub(S, 'club-06', { name: '  ', fortune: 'tech' }), 'name');
+  assert.equal(api.claimClub(S, 'club-06', { name: 'Pat Morgan', fortune: 'lottery' }), 'fortune');
+  assert.equal(api.claimClub(S, 'club-99', { name: 'Pat Morgan', fortune: 'tech' }), 'invalid');
+  assert.equal(S.club, null);
+  assert.equal(api.claimClub(S, 'club-06', { name: '  Pat   Morgan ', fortune: 'finance', hometown: 'nowhere' }), 'ok');
+  assert.deepEqual(S.owner, { name: 'Pat Morgan', fortune: 'finance', hometown: null });
+  assert.equal(S.finance.ownerCash, api.FORTUNES.finance.cash);
+  assert.equal(S.finance.rate, .045);
+  assert.equal(S.stadium.homeMood, 55);
+  assert(S.league.news.at(-1).text.includes('Pat Morgan buys the Cincinnati Rivermen'));
+  assert.equal(api.claimClub(S, 'club-01', { name: 'Again', fortune: 'tech' }), 'taken');
+  assert.deepEqual(api.validateSave(S), []);
+  for (const bad of [{ name: '', fortune: 'tech', hometown: null }, { name: 'X', fortune: 'nope', hometown: null }, 'Pat'])
+    assert(api.validateSave({ ...S, owner: bad }).some(e => e.includes('owner')));
+});
+
+test('owner profile: each fortune works through the game, and a hometown club starts warmer', () => {
+  const claim = (fortune, o = {}) => { const { api, S } = fresh(52); const base = JSON.parse(JSON.stringify(S)); assert.equal(api.claimClub(S, 'club-06', { name: 'Owner', fortune, ...o }), 'ok'); return { api, S, base }; };
+  const rel = (S, id) => S.league.owners[id].relation;
+  { const { api, S, base } = claim('tech');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert.equal(api.pointsPerWeek(S), plain.api.pointsPerWeek(plain.S) + 1);
+    assert.equal(rel(S, 'club-01'), base.league.owners['club-01'].relation - 6); }
+  { const { api, S, base } = claim('family');
+    assert.equal(rel(S, 'club-01'), base.league.owners['club-01'].relation + 10); }
+  { const { api, S } = claim('realestate');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    for (const d of api.PROJECTS) assert.equal(api.projectCost(S, d), Math.round(plain.api.projectCost(plain.S, d) * .9)); }
+  { const { api, S } = claim('media');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert(Math.abs(api.weekLines(S, null).localMedia / plain.api.weekLines(plain.S, null).localMedia - 1.15) < .01); }
+  { const { api, S } = claim('local');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert.equal(S.stadium.homeMood, 72);
+    assert(Math.abs(api.weekLines(S, null).sponsorship / plain.api.weekLines(plain.S, null).sponsorship - 1.08) < .01); }
+  { const { S } = claim('energy', { hometown: 'cincinnati' }); assert.equal(S.stadium.homeMood, 52 + 8, 'hometown club'); }
+  { const { S } = claim('energy', { hometown: 'buffalo' }); assert.equal(S.stadium.homeMood, 52); }
+  assert(Object.values(fresh().api.FORTUNES).every(f => f.cash >= 300 && f.cash <= 800 && f.edge && f.catch));
+});
+
+test('owner profile: the start screen asks who you are, and the desk shows it', () => {
+  const { api } = load();
+  api.ownerUi().name = '<Pat>';
+  const html = api.ownershipDesk();
+  assert(html.includes('Who are you?') && html.includes('&lt;Pat&gt;') && !html.includes('<Pat>'));
+  assert.equal((html.match(/data-fortune=/g) || []).length, Object.keys(api.FORTUNES).length);
+  assert(html.includes('id="ownerHometown"') && html.includes('id="claimTeam"'));
+  assert.equal(api.claimClub(api.save, 'club-06', { name: 'Pat Morgan', fortune: 'tech' }), 'ok');
+  assert(api.ownershipDesk().includes('Pat Morgan · Tech founder'));
 });
 
 (async () => {

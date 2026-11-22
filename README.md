@@ -8,6 +8,18 @@ buy a franchise, hire the people who run it, and choose when to interfere.
 
 ## What's in it
 
+- An owner of your own: a name, a hometown, and where you made your
+  fortune. Seven backgrounds (tech, oil and gas, real estate, private
+  equity, old family money, media, a hometown business) set your starting
+  cash and give you one edge and one weakness.
+  You also pick an age, a reputation (unknown, rags to riches, philanthropist,
+  or the shadow of a scandal) and how you play it in public: a public face's
+  home mood rides on results, while a silent owner shakes the coach more when
+  they meddle. One owner in your division starts as your rival, voting
+  against you and going after your TV markets until you win them over. From
+  70, a health scare can force you to name an heir, who takes over at the
+  next season with the estate taxed (less if you planned it from 60). Your
+  hometown matters: buy its club, bring a club to it, or pay for leaving it.
 - An 18-week season, playoffs, and a full offseason calendar (February Week 1
   to August Week 4) with a jump-ahead control.
 - Every game is simulated play by play from player ratings; your own games
@@ -42,6 +54,11 @@ buy a franchise, hire the people who run it, and choose when to interfere.
   once a season in the offseason. A new name costs more and stings the home
   faithful; either kind of rebrand lifts sponsorship for the first season in
   the new look, and the colors carry through a move.
+- Customize teams (in the settings menu): rename, re-abbreviate and recolor
+  any other club for free, set up your own club for free once before Week 1
+  of your first season (after that it goes through Brand), and upload a logo for any club, yours included.
+  Logos are shrunk to 128×128 and kept in the save, so they travel with
+  Save a copy.
 - Club finances, naming rights, and league votes.
 - Broadcast markets on a map: rights deals renew, and fan bases shift with
   coverage.

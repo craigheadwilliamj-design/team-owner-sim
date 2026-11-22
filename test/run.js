@@ -26,7 +26,10 @@ const v15Save = fs.readFileSync(path.join(FIX, 'v15-save.json'), 'utf8');
 const v16Save = fs.readFileSync(path.join(FIX, 'v16-save.json'), 'utf8');
 const v17Save = fs.readFileSync(path.join(FIX, 'v17-save.json'), 'utf8');
 const v18Save = fs.readFileSync(path.join(FIX, 'v18-save.json'), 'utf8');
-const NAMES = ['rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
+const v19Save = fs.readFileSync(path.join(FIX, 'v19-save.json'), 'utf8');
+const v20Save = fs.readFileSync(path.join(FIX, 'v20-save.json'), 'utf8');
+const v21Save = fs.readFileSync(path.join(FIX, 'v21-save.json'), 'utf8');
+const NAMES = ['aiBids', 'ownerLean', 'ownerView', 'ownerAge', 'reachOutRival', 'nameHeir', 'cancelSuccession', 'healthCheck', 'moveDepth', 'currentOrder', 'coachOrder', 'claimClub', 'FORTUNES', 'fortuneOf', 'ownerUi:()=>ownerUi', 'ownerSetupOpen', 'customizeClub', 'undoCustom', 'setLogo', 'clearLogo', 'logoOk', 'teamsView', 'chipHtml', 'badge', 'teamsUi:()=>teamsUi', 'rebrandClub', 'brandBlock', 'brandPlan', 'brandLift', 'brandView', 'brandOf', 'BRAND_NICKNAME_COST', 'BRAND_LOOK_COST', 'BRAND_MOOD_HIT', 'waitingItems', 'justDecided', 'rightsContext', 'leagueUi:()=>leagueUi', 'aiRelocations', 'aiMoveCandidates', 'fileRelocation', 'withdrawRelocation', 'relocationBlock', 'relocationCosts', 'realignmentPlan', 'applyIdentity', 'relocationLean', 'freeNicknames', 'groups', 'KNOWN_MARKETS', 'RELOCATION_FILING', 'LEGACY_COLLEGES', 'COLLEGE_TIERS', 'collegeTier', 'makeSlate', 'openRenewals', 'contestFor', 'stationRange', 'bidCap', 'shiftFans', 'OPEN_MARKETS', 'RELOCATION_MARKETS', 'mapLabels', 'save', 'saveMessage', 'storageKey', 'newSave', 'playWeek', 'upgrade', 'validateSave', 'readSaveFile',
   'embeddableJson', 'tradeQuote', 'counterTrade', 'resolveOffer', 'ownedPicks', 'pickKey', 'describeEvent',
   'rosterView', 'ownershipDesk', 'cur', 'clubs', 'SCHEMA_VERSION',
   'authorizeVisit', 'cancelVisit', 'commissionStudy', 'stadiumView', 'ownershipDesk', 'siteById', 'officialById',
@@ -1928,6 +1931,8 @@ test('drafted players keep their college story, and work ethic shapes their ceil
 
 test('draft page shows the wire, the board and a prospect profile', () => {
   const { api } = load();
+  // Seeded: an unseeded save sometimes drew a note with an escaped character or a prospect with nothing left to scout.
+  const seeded = api.newSave(1); for (const k of Object.keys(api.save)) delete api.save[k]; Object.assign(api.save, seeded);
   const S = api.save; S.club = 'club-06';
   for (let i = 0; i < 3; i++) api.advance(S);
   const p = S.draft.prospects.find(x => x.notes.length);
@@ -2622,7 +2627,7 @@ test('navigation: every page belongs to one section, routes round-trip through t
   const nav = api.navHtml('contracts');
   assert.match(nav.top, /data-section="football" aria-current="page"/);
   assert.match(nav.sub, /data-tab="contracts" aria-current="page"/);
-  assert.equal(api.navHtml('desk').sub, '', 'a one-page section has no sub-tabs');
+  assert.match(api.navHtml('owner').sub, /data-tab="owner" aria-current="page"/, 'the desk has two pages: the desk and You');
 });
 
 test('league office pages split the old League tab without losing anything', () => {
@@ -2847,7 +2852,7 @@ test('v18 save upgrades to v19: no club has a new look yet, nothing else changes
   const S = api.upgrade(old).save;
   assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
   assert.deepEqual(S.brands, []);
-  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.schemaVersion; delete y.migrations; return y; };
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.brands; delete y.logos; delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
   assert.deepEqual(strip(S), strip(JSON.parse(v18Save)));
   assert.deepEqual(api.validateSave(S), []);
   api.playWeek(S);
@@ -2855,7 +2860,7 @@ test('v18 save upgrades to v19: no club has a new look yet, nothing else changes
 
 test('rebrand: an offseason job, once a season, and not while a move is before the owners', () => {
   const { api, S } = owned(21);
-  assert.equal(api.brandBlock(S), null, 'the preseason is open');
+  assert.equal(api.brandBlock(S), 'setup', 'the first preseason is the free setup, on Customize teams');
   api.advance(S);
   assert.equal(api.brandBlock(S), 'season');
   assert.equal(api.rebrandClub(S, look(api, S, { nickname: 'Steamboats' })), 'season');
@@ -2956,6 +2961,353 @@ test('the Brand page renders under Business, escapes what the owner typed, and s
   html = api.brandView();
   assert(html.includes('O&#39;Malleys') && !html.includes("O'Malleys"));
   assert(html.includes('Past looks') && !html.includes('Unveil the new look'));
+});
+
+// ---- Customize teams --------------------------------------------------------
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('v19 save upgrades to v20: no logos yet, nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v19Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual(S.logos, {});
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.logos; delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v19Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('customize teams: AI clubs change for free, any time, and the owner club is left to the Brand page', () => {
+  const { api, S } = owned(31);
+  api.advance(S); // mid-season is fine for free edits
+  const cash = S.finance.ownerCash, mood = S.stadium.homeMood, news = S.league.news.length;
+  const bills = api.clubs.find(c => c.id === 'club-01');
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Snow Geese', abbr: 'BSG', primary: '#2a2a72', secondary: '#c9c9d1' }), 'ok');
+  assert.deepEqual([bills.market, bills.nickname, bills.abbr, bills.primary], ['Buffalo', 'Snow Geese', 'BSG', '#2a2a72']);
+  assert.equal(S.finance.ownerCash, cash); assert.equal(S.stadium.homeMood, mood); assert.equal(S.league.news.length, news);
+  assert.equal(api.customizeClub(S, 'club-06', { ...api.brandOf('club-06'), nickname: 'Freebies' }), 'owner');
+  assert.equal(api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), nickname: 'Snow Geese' }), 'nicknameTaken');
+  assert.equal(api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), abbr: 'CIN' }), 'abbrTaken');
+  // A second edit the same week replaces the first instead of piling up.
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Lake Effect' }), 'ok');
+  assert.equal(S.brands.filter(b => b.club === 'club-01').length, 1);
+  assert.equal(S.brands[0].from.nickname, 'Bulls');
+  // Free edits never use up the owner's paid rebrand, even on a club claimed later.
+  const pre = owned(32); pre.S.club = null;
+  assert.equal(pre.api.customizeClub(pre.S, 'club-06', { ...pre.api.brandOf('club-06'), nickname: 'Paddlewheels' }), 'ok');
+  pre.S.club = 'club-06';
+  assert.equal(pre.api.brandBlock(pre.S), 'setup', 'still gets the free setup');
+  assert.equal(pre.api.brandLift(pre.S), 0);
+  // Saved, reloaded, replayed.
+  const again = api.upgrade(JSON.parse(JSON.stringify(S))).save;
+  assert.deepEqual(api.validateSave(again), []);
+  api.applyIdentity({ relocations: [] }); assert.equal(bills.nickname, 'Bulls');
+  api.applyIdentity(again); assert.equal(bills.nickname, 'Lake Effect');
+  api.playWeek(again);
+});
+
+test('customize teams: back to the original, unless another club took the old name', () => {
+  const { api, S } = owned(33);
+  assert.equal(api.undoCustom(S, 'club-01'), 'unchanged');
+  api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: 'Snow Geese' });
+  api.customizeClub(S, 'club-02', { ...api.brandOf('club-02'), nickname: 'Bulls' });
+  assert.equal(api.undoCustom(S, 'club-01'), 'clash');
+  assert.equal(api.clubs.find(c => c.id === 'club-01').nickname, 'Snow Geese', 'nothing changed');
+  assert.equal(api.undoCustom(S, 'club-02'), 'ok');
+  assert.equal(api.undoCustom(S, 'club-01'), 'ok');
+  assert.deepEqual(['club-01', 'club-02'].map(id => api.clubs.find(c => c.id === id).nickname), ['Bulls', 'Barracuda']);
+  assert.deepEqual(S.brands, []);
+});
+
+test('logos: raster data URLs only, shown in chips and badges, kept in the save', () => {
+  const { api, S } = readyLive();
+  for (const bad of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:image/png;base64,"><script>', 'data:image/png;base64,' + 'A'.repeat(300000)])
+    assert.equal(api.setLogo(S, 'club-01', bad), 'badLogo');
+  assert.equal(api.setLogo(S, 'club-99', PNG), 'invalid');
+  assert.equal(api.setLogo(S, 'club-01', PNG), 'ok');
+  assert.equal(api.setLogo(S, 'club-06', PNG), 'ok', 'the owner may give their own club a logo');
+  assert(api.badge('club-01').includes('<img class="badge-logo" src="' + PNG));
+  assert(api.chipHtml('club-01', '').includes('chip logo'));
+  assert(!api.chipHtml('club-02', '').includes('<img'));
+  assert.deepEqual(api.validateSave(S), []);
+  S.logos['club-03'] = 'data:text/html;base64,AAAA';
+  assert(api.validateSave(S).some(e => e.includes('logos')));
+  delete S.logos['club-03'];
+  assert.equal(api.clearLogo(S, 'club-01'), 'ok');
+  assert(!api.badge('club-01').includes('<img'));
+});
+
+test('the Customize teams page opens from Settings and escapes what the player typed', () => {
+  const { api, S } = readyLive();
+  assert.equal(api.routeFromHash('#teams'), 'teams');
+  assert.equal(api.hashOf('teams'), '#teams');
+  const html0 = api.teamsView();
+  assert(html0.includes('Customize teams') && html0.includes('data-teamedit="club-06"') && html0.includes('id="teamNickname"'));
+  assert.equal(api.customizeClub(S, 'club-01', { ...api.brandOf('club-01'), nickname: "O'Bulls" }), 'ok');
+  api.teamsUi().club = 'club-01'; api.teamsUi().key = '';
+  const html = api.teamsView();
+  assert(html.includes('O&#39;Bulls') && !html.includes("O'Bulls"));
+  assert(html.includes('Back to the original'));
+  api.teamsUi().club = 'club-06'; api.teamsUi().key = '';
+  const mine = api.teamsView();
+  assert(mine.includes('Open Brand') && !mine.includes('id="teamNickname"') && mine.includes('Upload a logo'));
+  const page = fs.readFileSync(GAME, 'utf8');
+  assert(/<div id="settingsMenu"[^]*?id="teamsOpen"/.test(page));
+});
+
+test('own club: free to set up once, until Week 1 is played, then locked to the Brand page', () => {
+  const { api, S } = owned(41);
+  for (const k of Object.keys(api.save)) delete api.save[k];
+  Object.assign(api.save, S);
+  const L = api.save;
+  assert(api.ownerSetupOpen(L));
+  assert(api.ownershipDesk().includes('id="teamsMine"'));
+  api.teamsUi().club = null; api.teamsUi().key = '';
+  assert(api.teamsView().includes('id="teamNickname"') && api.teamsView().includes('free setup'), 'opens on your own club, editable');
+  const cash = L.finance.ownerCash, mood = L.stadium.homeMood;
+  assert.equal(api.customizeClub(L, 'club-06', { ...api.brandOf('club-06'), nickname: 'Paddlewheels', abbr: 'CPW' }), 'ok');
+  assert.equal(api.customizeClub(L, 'club-06', { ...api.brandOf('club-06'), primary: '#7a1f2b', secondary: '#d9b25f' }), 'ok');
+  assert.equal(L.brands.length, 1, 'all one setup');
+  assert.deepEqual([L.finance.ownerCash, L.stadium.homeMood], [cash, mood], 'free, and the fans do not mind');
+  assert.equal(api.undoCustom(L, 'club-06'), 'ok');
+  assert.equal(api.clubs.find(c => c.id === 'club-06').nickname, 'Rivermen');
+  assert.equal(api.customizeClub(L, 'club-06', { ...api.brandOf('club-06'), nickname: 'Paddlewheels' }), 'ok');
+  api.advance(L);
+  assert(!api.ownerSetupOpen(L));
+  assert(!api.ownershipDesk().includes('id="teamsMine"'));
+  assert.equal(api.customizeClub(L, 'club-06', { ...api.brandOf('club-06'), nickname: 'Showboats' }), 'owner');
+  assert.equal(api.undoCustom(L, 'club-06'), 'owner');
+  assert.equal(api.clubs.find(c => c.id === 'club-06').nickname, 'Paddlewheels');
+  assert(api.teamsView().includes('Open Brand'));
+  // The setup does not use up the first paid rebrand, and the logo stays free.
+  api.jumpTo(L, 28);
+  assert.equal(api.brandBlock(L), null);
+  assert.equal(api.brandLift(L), 0);
+  assert.equal(api.setLogo(L, 'club-06', PNG), 'ok');
+  assert.deepEqual(api.validateSave(L), []);
+});
+
+// ---- Owner profile ------------------------------------------------------------
+const fresh = (seed = 51) => { const { api } = load(); const S = api.newSave(seed); return { api, S }; };
+
+test('v20 save upgrades to v21: an owner from before profiles has none, and keeps their cash', () => {
+  const { api } = load();
+  const old = JSON.parse(v20Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.equal(S.owner, null);
+  assert.equal(S.finance.ownerCash, old.finance.ownerCash);
+  assert.equal(api.fortuneOf(S), null);
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v20Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('owner profile: a name and a fortune are needed, and the fortune sets the cash', () => {
+  const { api, S } = fresh();
+  assert.equal(api.claimClub(S, 'club-06', { name: '  ', fortune: 'tech' }), 'name');
+  assert.equal(api.claimClub(S, 'club-06', { name: 'Pat Morgan', fortune: 'lottery' }), 'fortune');
+  assert.equal(api.claimClub(S, 'club-99', { name: 'Pat Morgan', fortune: 'tech' }), 'invalid');
+  assert.equal(S.club, null);
+  assert.equal(api.claimClub(S, 'club-06', { name: '  Pat   Morgan ', fortune: 'finance', hometown: 'nowhere' }), 'ok');
+  assert.deepEqual([S.owner.name, S.owner.fortune, S.owner.hometown, S.owner.age, S.owner.reputation, S.owner.stance], ['Pat Morgan', 'finance', null, 52, 'clean', 'public']);
+  assert.equal(S.finance.ownerCash, api.FORTUNES.finance.cash);
+  assert.equal(S.finance.rate, .045);
+  assert.equal(S.stadium.homeMood, 55);
+  assert(S.league.news.at(-1).text.includes('Pat Morgan buys the Cincinnati Rivermen'));
+  assert.equal(api.claimClub(S, 'club-01', { name: 'Again', fortune: 'tech' }), 'taken');
+  assert.deepEqual(api.validateSave(S), []);
+  for (const bad of [{ name: '', fortune: 'tech', hometown: null }, { name: 'X', fortune: 'nope', hometown: null }, 'Pat'])
+    assert(api.validateSave({ ...S, owner: bad }).some(e => e.includes('owner')));
+});
+
+test('owner profile: each fortune works through the game, and a hometown club starts warmer', () => {
+  const claim = (fortune, o = {}) => { const { api, S } = fresh(52); const base = JSON.parse(JSON.stringify(S)); assert.equal(api.claimClub(S, 'club-06', { name: 'Owner', fortune, ...o }), 'ok'); return { api, S, base }; };
+  const rel = (S, id) => S.league.owners[id].relation;
+  { const { api, S, base } = claim('tech');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert.equal(api.pointsPerWeek(S), plain.api.pointsPerWeek(plain.S) + 1);
+    assert.equal(rel(S, 'club-01'), base.league.owners['club-01'].relation - 6); }
+  { const { api, S, base } = claim('family');
+    assert.equal(rel(S, 'club-01'), base.league.owners['club-01'].relation + 10); }
+  { const { api, S } = claim('realestate');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    for (const d of api.PROJECTS) assert.equal(api.projectCost(S, d), Math.round(plain.api.projectCost(plain.S, d) * .9)); }
+  { const { api, S } = claim('media');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert(Math.abs(api.weekLines(S, null).localMedia / plain.api.weekLines(plain.S, null).localMedia - 1.15) < .01); }
+  { const { api, S } = claim('local');
+    const plain = fresh(52); plain.S.club = 'club-06';
+    assert.equal(S.stadium.homeMood, 72);
+    assert(Math.abs(api.weekLines(S, null).sponsorship / plain.api.weekLines(plain.S, null).sponsorship - 1.08) < .01); }
+  { const { S } = claim('energy', { hometown: 'cincinnati' }); assert.equal(S.stadium.homeMood, 52 + 8, 'hometown club'); }
+  { const { S } = claim('energy', { hometown: 'buffalo' }); assert.equal(S.stadium.homeMood, 52); }
+  assert(Object.values(fresh().api.FORTUNES).every(f => f.cash >= 300 && f.cash <= 800 && f.edge && f.catch));
+});
+
+test('owner profile: the start screen asks who you are, and the desk shows it', () => {
+  const { api } = load();
+  api.ownerUi().name = '<Pat>';
+  const html = api.ownershipDesk();
+  assert(html.includes('Who are you?') && html.includes('&lt;Pat&gt;') && !html.includes('<Pat>'));
+  assert.equal((html.match(/data-fortune=/g) || []).length, Object.keys(api.FORTUNES).length);
+  assert(html.includes('id="ownerHometown"') && html.includes('id="claimTeam"'));
+  assert.equal(api.claimClub(api.save, 'club-06', { name: 'Pat Morgan', fortune: 'tech' }), 'ok');
+  assert(api.ownershipDesk().includes('Pat Morgan · Tech founder'));
+});
+
+// ---- Owner: stance, reputation, rival, succession, hometown ------------------------------
+const claimed = (o = {}, seed = 61) => { const { api } = load(); const S = api.newSave(seed); assert.equal(api.claimClub(S, 'club-06', { name: 'Pat Morgan', fortune: 'family', ...o }), 'ok'); return { api, S }; };
+
+test('v21 save upgrades to v22: the owner gets an age, a stance and no rival; nothing else changes', () => {
+  const { api } = load();
+  const old = JSON.parse(v21Save);
+  const S = api.upgrade(old).save;
+  assert.equal(S.schemaVersion, api.SCHEMA_VERSION);
+  assert.deepEqual([S.owner.name, S.owner.fortune, S.owner.hometown], ['Pat Morgan', 'finance', 'cincinnati']);
+  assert.deepEqual([S.owner.age, S.owner.reputation, S.owner.stance, S.owner.rival, S.owner.succession], [52, 'clean', 'public', null, null]);
+  const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.owner; delete y.schemaVersion; delete y.migrations; return y; };
+  assert.deepEqual(strip(S), strip(JSON.parse(v21Save)));
+  assert.deepEqual(api.validateSave(S), []);
+  api.playWeek(S);
+});
+
+test('owner: age, reputation and stance are set at the start, and reputations pay off as described', () => {
+  const { api } = load();
+  const base = api.newSave(62); const before = JSON.parse(JSON.stringify(base));
+  assert.equal(api.claimClub(base, 'club-06', { name: 'X', fortune: 'family', age: 12 }), 'age');
+  assert.equal(api.claimClub(base, 'club-06', { name: 'X', fortune: 'family', reputation: 'famous' }), 'reputation');
+  assert.equal(api.claimClub(base, 'club-06', { name: 'X', fortune: 'family', stance: 'loud' }), 'stance');
+  const a = claimed({ reputation: 'scandal', age: 44 }, 62);
+  assert.equal(a.S.finance.ownerCash, 500 + 100);
+  assert.equal(a.S.stadium.homeMood, before.stadium.homeMood - 8);
+  assert.equal(a.api.ownerAge(a.S), 44);
+  const notRival = Object.keys(a.S.league.owners).find(id => id !== 'club-06' && id !== a.S.owner.rival);
+  assert.equal(a.S.league.owners[notRival].relation, before.league.owners[notRival].relation + 10 - 6);
+  const g = claimed({ reputation: 'giver' }, 62);
+  assert.deepEqual([g.S.finance.ownerCash, g.S.stadium.homeMood], [460, before.stadium.homeMood + 4]);
+  assert.deepEqual(g.api.validateSave(g.S), []);
+});
+
+test('owner: a public face wears the results, a silent owner costs the coach more trust when meddling', () => {
+  const run = stance => {
+    const { api, S } = claimed({ stance }, 63);
+    const moods = []; for (let w = 0; w < 6; w++) { api.playWeek(S); moods.push(S.stadium.homeMood); }
+    return { api, S, moods };
+  };
+  const pub = run('public'), sil = run('silent');
+  assert(new Set(sil.moods).size === 1, 'results do not move a silent owner’s standing');
+  assert(new Set(pub.moods).size > 1, 'they do move a public one');
+  const s = pub.api.cur(pub.S), step = w => { const g = s.weeks[w].find(x => x.home === 'club-06' || x.away === 'club-06'); const [x, y] = g.home === 'club-06' ? g.score : [g.score[1], g.score[0]]; return x === y ? 0 : (x > y ? 1 : -1) * (Math.abs(x - y) >= 17 ? 2 : 1); };
+  for (let w = 1; w < 6; w++) assert.equal(pub.moods[w] - pub.moods[w - 1], step(w), 'week ' + (w + 1));
+  // Meddling: swap the top two at a position where that changes the starter.
+  const trustHit = stance => {
+    const { api, S } = claimed({ stance }, 64);
+    const hc = S.staff.clubs['club-06'].hc, before = hc.trust ?? 70;
+    const order = api.coachOrder(S, 'club-06', 'QB');
+    assert.equal(api.moveDepth(S, order[1], -1), 'ok');
+    return before - hc.trust;
+  };
+  assert.equal(trustHit('public'), 4);
+  assert.equal(trustHit('silent'), 6);
+});
+
+test('owner: a division rival votes against you, goes after your markets, and can be won over', () => {
+  const { api, S } = claimed({}, 65);
+  const rival = S.owner.rival, me = api.clubs.find(c => c.id === 'club-06'), them = api.clubs.find(c => c.id === rival);
+  assert(rival && them.division === me.division && them.conference === me.conference);
+  assert(S.league.owners[rival].relation <= -30);
+  assert(api.ownerView(S).includes('has it in for you'));
+  // Votes: on your relocation the rival leans 0.3 further against than the same owner would without the feud.
+  const r = ready(); assert.equal(r.api.fileRelocation(r.S, siteIn(r.S, 'toronto').id), 'ok');
+  const someone = Object.keys(r.S.league.owners).find(id => id !== 'club-06');
+  const calm = r.api.relocationLean(r.S, someone);
+  r.S.owner = { name: 'P', fortune: 'family', hometown: null, age: 50, ageSeason: 1, since: 1, reputation: 'clean', stance: 'public', rival: someone, outreach: 0, succession: null, past: [] };
+  assert.equal(Math.round((calm - r.api.relocationLean(r.S, someone)) * 100) / 100, .3);
+  // Outreach: once a season; success raises relations by 10; the feud ends at even.
+  S.league.owners[rival].relation = -5;
+  let res = api.reachOutRival(S);
+  assert(['ok', 'rebuffed'].includes(res));
+  assert.equal(api.reachOutRival(S), 'season');
+  if (res === 'ok') { assert.equal(S.owner.rival, null); assert.equal(S.owner.formerRival, rival); assert(S.events.some(e => e.type === 'rivalryEnded')); }
+  else assert.equal(S.league.owners[rival].relation, -5);
+  assert.deepEqual(api.validateSave(S), []);
+});
+
+test('owner: the rival bids on markets you hold, and harder', () => {
+  const { api, S } = claimed({}, 66);
+  const rival = S.owner.rival, mk = Object.keys(S.league.markets)[0], M = S.league.markets[mk];
+  Object.assign(M, { holder: 'club-06' }); M.fans['club-06'] = 40; M.fans[rival] = 0;
+  const tally = () => { let n = 0, sum = 0; const st = { state: 99 }, r = api.rngFor(st);
+    for (let i = 0; i < 200; i++) { const b = api.aiBids(S, { marketId: mk }, r)[rival]; if (b) { n++; sum += b.annual; } } return { n, avg: sum / Math.max(1, n) }; };
+  const feud = tally();
+  S.owner.rival = null;
+  const calm = tally();
+  assert.equal(feud.n, 200, 'the rival goes after every market you hold');
+  assert.equal(calm.n, 0, 'with no following there, they would not bother');
+  M.fans[rival] = 40; const calmer = tally(); S.owner.rival = rival; const fiercer = tally();
+  assert(fiercer.avg > calmer.avg * 1.05, 'and bids harder');
+});
+
+test('owner: from 70 a health scare can force a handover; the heir takes over as the next season opens', () => {
+  const { api, S } = claimed({ age: 80 }, 67);
+  // At 80 the odds are 77% a season; force it so the test does not hang on luck.
+  api.healthCheck(S, () => 0);
+  assert.equal(S.owner.succession.status, 'due');
+  assert(api.pendingItems(S).some(i => i.id === 'succession'));
+  assert.equal(api.nameHeir(S, '   '), 'name');
+  assert.equal(api.nameHeir(S, 'Pat Morgan'), 'same');
+  assert.equal(api.nameHeir(S, 'Casey Morgan'), 'ok');
+  assert(!api.pendingItems(S).some(i => i.id === 'succession'));
+  const cash = S.finance.ownerCash, rel = Object.fromEntries(Object.entries(S.league.owners).map(([id, o]) => [id, o.relation]));
+  api.jumpTo(S, api.SEASON_TICKS + 1);
+  const O = S.owner;
+  assert.equal(O.name, 'Casey Morgan');
+  assert.equal(api.ownerAge(S), 81 - 28);
+  assert.equal(O.since, 2);
+  assert.deepEqual(O.past, [{ name: 'Pat Morgan', from: 1, to: 1 }]);
+  assert(S.events.some(e => e.type === 'succession'));
+  assert(S.league.news.some(n => n.text.includes('Pat Morgan hands the Cincinnati Rivermen to Casey Morgan')));
+  assert.deepEqual(api.validateSave(S), []);
+  assert(api.ownerView(S).includes('The family') && api.ownerView(S).includes('Pat Morgan: seasons 1–1'));
+});
+
+test('owner: from 60 you can plan the handover yourself, for a smaller estate tax; younger, no', () => {
+  const young = claimed({ age: 45 }, 68);
+  assert.equal(young.api.nameHeir(young.S, 'Kid Morgan'), 'young');
+  const { api, S } = claimed({ age: 62 }, 68);
+  assert.equal(api.nameHeir(S, 'Robin Morgan'), 'ok');
+  assert.equal(S.owner.succession.status, 'planned');
+  assert.equal(api.cancelSuccession(S), 'ok');
+  assert.equal(S.owner.succession, null);
+  api.nameHeir(S, 'Robin Morgan');
+  api.jumpTo(S, api.SEASON_TICKS);
+  const cash = S.finance.ownerCash;
+  api.advance(S); // the rollover
+  assert.equal(S.owner.name, 'Robin Morgan');
+  const e = S.events.find(x => x.type === 'succession');
+  assert(e.planned && Math.abs(e.tax - Math.round(cash * .1 * 100) / 100) < .01);
+});
+
+test('owner: a hometown club starts warmer; moving it away hurts more; an open-market hometown is an option', () => {
+  const { api } = load();
+  assert(api.claimClub && true);
+  // Open markets are hometowns too.
+  const u = claimed({ hometown: 'toronto' }, 69);
+  assert.equal(u.S.owner.hometown, 'toronto');
+  assert(u.api.ownerView(u.S).includes('It has no club'));
+  // Filing to leave your hometown costs 10 more mood than filing from elsewhere.
+  const leave = h => { const r = ready(); r.S.owner = { name: 'P', fortune: 'family', hometown: h, age: 50, ageSeason: 1, since: 1, reputation: 'clean', stance: 'silent', rival: null, outreach: 0, succession: null, past: [] };
+    const m = r.S.stadium.homeMood; assert.equal(r.api.fileRelocation(r.S, siteIn(r.S, 'toronto').id), 'ok'); return { r, drop: m - r.S.stadium.homeMood }; };
+  const home = leave('cincinnati'), away = leave('buffalo');
+  assert.equal(home.drop - away.drop, 10);
+  // Moving to your hometown: the new city starts 8 warmer.
+  const back = leave('toronto');
+  assert(runVote(back.r.api, back.r.S).passed);
+  openSeason(back.r.api, back.r.S);
+  assert.equal(back.r.S.stadium.homeMood, 75 + 8);
 });
 
 (async () => {

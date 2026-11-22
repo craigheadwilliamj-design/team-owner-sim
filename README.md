@@ -12,6 +12,14 @@ buy a franchise, hire the people who run it, and choose when to interfere.
   fortune. Seven backgrounds (tech, oil and gas, real estate, private
   equity, old family money, media, a hometown business) set your starting
   cash and give you one edge and one weakness.
+  You also pick an age, a reputation (unknown, rags to riches, philanthropist,
+  or the shadow of a scandal) and how you play it in public: a public face's
+  home mood rides on results, while a silent owner shakes the coach more when
+  they meddle. One owner in your division starts as your rival, voting
+  against you and going after your TV markets until you win them over. From
+  70, a health scare can force you to name an heir, who takes over at the
+  next season with the estate taxed (less if you planned it from 60). Your
+  hometown matters: buy its club, bring a club to it, or pay for leaving it.
 - An 18-week season, playoffs, and a full offseason calendar (February Week 1
   to August Week 4) with a jump-ahead control.
 - Every game is simulated play by play from player ratings; your own games

@@ -159,6 +159,7 @@ span.chip.logo{border:0;background:none;display:inline-flex}.chip.logo img,.chip
 .fortunes{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:6px 0 18px}
 .fortunes button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:12px 14px;white-space:normal}
 .fortunes button b{font:900 1.5rem/1 var(--display)}.fortunes button span{font-size:.85rem;color:var(--muted)}
+.fortunes.small{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .fortunes [aria-checked=true]{outline:3px solid var(--accent);outline-offset:1px;background:var(--rule-soft)}
 .brand-history{list-style:none;padding:0}.brand-history li{display:flex;align-items:center;gap:10px;margin:6px 0}
 .chip.big{width:56px;height:56px;border:8px solid var(--c2);background:var(--board)}
@@ -746,7 +747,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--focus);outline
 // ---------------------------------------------------------------------------
 // Constants and league data
 // ---------------------------------------------------------------------------
-const SCHEMA_VERSION=21;     // Bump when the save shape changes, and add a migration below.
+const SCHEMA_VERSION=22;     // Bump when the save shape changes, and add a migration below.
 const REGULAR_WEEKS=18;
 const EMERGENCY_RATING=45;   // Rating used for an uncovered starting spot.
 
@@ -2245,7 +2246,7 @@ function fileRelocation(S,siteId,opts={}){
     callsLeft:MEETING_CALLS,lobby:{},revealed:{},playerVote:'yes',reversal:false};
   learn(S,{kind:'relocation',siteId},['owner','president','league','press','home']);
   S.stadium.homeAware=true;
-  S.stadium.homeMood=Math.max(0,S.stadium.homeMood-FILED_MOOD_HIT);
+  S.stadium.homeMood=Math.max(0,S.stadium.homeMood-FILED_MOOD_HIT-(S.owner?.hometown&&S.owner.hometown===home.marketId?HOMETOWN_LEAVE:0));
   record(S,'relocationFiled',{siteName:site.name,marketName:dest.name,homeMarket:home.market,week:s.tick+RELOCATION_WAIT});
   news(S,home.market+' owner files to move the club to '+dest.name+'; owners vote after '+weekLabel(s.tick+RELOCATION_WAIT));
   return 'ok';
@@ -2277,6 +2278,7 @@ function relocationLean(S,clubId,A=S.stadium.application){
   if(L.markets[dest.id]?.holder===clubId)x-=.5;
   if(A.realign?.swap===clubId)x-=.6;
   if(milesBetween(A.fromCoords,marketCoords(t.marketId))<250)x+=A.vacates?.25:.3;
+  if(mine&&clubId===S.owner?.rival)x-=RIVAL_VOTE;
   return round2(x+(mine?S.league.meeting?.lobby?.[clubId]??0:0));
 }
 function resolveRelocationVote(S){
@@ -2346,7 +2348,7 @@ function executeRelocation(S,r){
   F.naming={status:'none'};
   for(const p of F.projects)if(projectDef(p.id).group==='stadium'&&p.status!=='proposed'&&p.status!=='declined'){p.status='proposed';delete p.weeksLeft;delete p.funding;}
   cancelVisit(S);
-  S.stadium.homeMood=NEW_CITY_MOOD+(A.nickname?REBRAND_MOOD:0);
+  S.stadium.homeMood=NEW_CITY_MOOD+(A.nickname?REBRAND_MOOD:0)+(S.owner?.hometown===dest.id?HOMETOWN_MOOD:0);
   S.stadium.homeAware=false;
   S.stadium.city={status:'none'};
   A.status='done';A.effectiveSeason=season;
@@ -2534,12 +2536,36 @@ const FORTUNES={
   local:{label:'Hometown business',cash:320,edge:'The city loves one of its own: home mood starts at 72, and local sponsors pay 8% more.',catch:'The smallest fortune in the league by far.',
     mood:72,sponsorship:.08}
 };
-const HOMETOWN_MOOD=8; // owning your hometown club
+const HOMETOWN_MOOD=8;   // owning your hometown club, or moving it home
+const HOMETOWN_LEAVE=10; // extra mood hit for filing to move out of your hometown
+// Where the owner's name stood the day they bought in. One-time effects at the claim, plus city goodwill for a philanthropist.
+const REPUTATIONS={
+  clean:{label:'Unknown quantity',text:'Nobody outside your industry knows your name. No edge, no baggage.'},
+  rags:{label:'Rags to riches',text:'The fans love the story: home mood +6. The old-guard owners see new money: 5 points cooler.',mood:6,oldGuard:-5},
+  giver:{label:'Philanthropist',text:'Your foundation is known around town: home mood +4 and city halls listen. The pledge costs $40M.',cash:-40,mood:4,city:.04},
+  scandal:{label:'Shadow of a scandal',text:'You came through it richer ($100M more) but marked: home mood −8, every owner 6 points cooler.',cash:100,mood:-8,relation:-6}
+};
+// How the owner plays it in public.
+const STANCES={
+  public:{label:'Public face',text:'You stand at the podium. Wins lift home mood and losses sink it.'},
+  silent:{label:'Silent owner',text:'You stay out of the papers, and results do not touch your standing at home. But a coach is shaken when a silent owner meddles: lineup changes cost more of the coach’s trust.'}
+};
+const OWNER_AGE={min:30,max:80,start:52};
+const SUCCESSION_AGE=70;     // health scares are possible from this age, at each new season
+const SUCCESSION_STEP=.07;   // chance per year past 69
+const STEP_DOWN_AGE=60;      // the owner may plan a handover from this age
+const ESTATE_TAX={due:.2,planned:.1}; // share of the owner's cash lost in the handover
+const HEIR_GAP=28;           // the heir's age: the owner's age less this, at least OWNER_AGE.min
+const RIVAL_START=-30,RIVAL_VOTE=.3,RIVAL_OUTREACH=10,RIVAL_OUTREACH_ODDS=.55;
+const repOf=S=>REPUTATIONS[S?.owner?.reputation]??null;
+const ownerAge=S=>S.owner.age+cur(S).number-S.owner.ageSeason;
+const surname=name=>String(name).trim().split(' ').at(-1);
 const fortuneOf=S=>FORTUNES[S?.owner?.fortune]??null;
 const ownerName=S=>S?.owner?.name||'The owner';
 const cleanOwnerName=v=>String(v??'').replace(/\s+/g,' ').trim().slice(0,40);
-const hometownOptions=()=>[...new Map(clubs.map(t=>[t.marketId,t.market])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
-const ownerUi={name:'',fortune:'family',hometown:''};
+const hometownOptions=()=>[...new Map([...clubs.map(t=>[t.marketId,t.market]),...BASE_OPEN.map(m=>[m.id,m.name])]).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+const hometownName=id=>hometownOptions().find(([k])=>k===id)?.[1]??null;
+const ownerUi={name:'',fortune:'family',hometown:'',age:OWNER_AGE.start,reputation:'clean',stance:'public'};
 // Takes the club with an owner profile. Returns a status code.
 function claimClub(S,clubId,profile={}){
   if(S.club)return 'taken';
@@ -2548,27 +2574,156 @@ function claimClub(S,clubId,profile={}){
   if(!name)return 'name';
   if(!fortune)return 'fortune';
   const hometown=hometownOptions().some(([id])=>id===profile.hometown)?profile.hometown:null;
-  const f=FORTUNES[fortune],F=S.finance,L=S.league;
+  const age=profile.age===undefined||profile.age===''?OWNER_AGE.start:Number(profile.age);
+  if(!isInt(age,OWNER_AGE.min,OWNER_AGE.max))return 'age';
+  const reputation=profile.reputation??'clean',stance=profile.stance??'public';
+  if(!Object.hasOwn(REPUTATIONS,reputation))return 'reputation';
+  if(!Object.hasOwn(STANCES,stance))return 'stance';
+  const f=FORTUNES[fortune],R=REPUTATIONS[reputation],F=S.finance,L=S.league,s=cur(S);
   S.club=clubId;
-  S.owner={name,fortune,hometown};
-  F.ownerCash=f.cash;
+  S.owner={name,fortune,hometown,age,ageSeason:s.number,since:s.number,reputation,stance,rival:null,outreach:0,succession:null,past:[]};
+  F.ownerCash=f.cash+(R.cash??0);
   if(f.rate)F.rate=f.rate;
-  if(f.mood)S.stadium.homeMood=f.mood;
-  if(hometown&&byId.get(clubId).marketId===hometown)S.stadium.homeMood=Math.min(100,S.stadium.homeMood+HOMETOWN_MOOD);
-  if(f.relation&&L?.owners)for(const [id,o] of Object.entries(L.owners))if(id!==clubId)o.relation=Math.max(-100,Math.min(100,o.relation+f.relation));
+  const st=S.stadium,clamp=v=>Math.max(0,Math.min(100,v));
+  if(f.mood)st.homeMood=f.mood;
+  st.homeMood=clamp(st.homeMood+(R.mood??0));
+  if(hometown&&byId.get(clubId).marketId===hometown)st.homeMood=clamp(st.homeMood+HOMETOWN_MOOD);
+  const owners=Object.entries(L?.owners??{}).filter(([id])=>id!==clubId),shift=(o,d)=>{o.relation=Math.max(-100,Math.min(100,o.relation+d));};
+  for(const [,o] of owners){shift(o,(f.relation??0)+(R.relation??0));if(R.oldGuard&&o.tradition>.2)shift(o,R.oldGuard);}
+  // A rival from the division: someone who wanted the club, or just wants to beat you.
+  const division=clubs.filter(t=>t.id!==clubId&&t.conference===byId.get(clubId).conference&&t.division===byId.get(clubId).division);
+  if(L?.owners&&division.length){
+    const r=rngFor(S.rng),rival=division[randInt(r,division.length)].id;
+    L.owners[rival].relation=Math.min(L.owners[rival].relation,RIVAL_START);
+    S.owner.rival=rival;
+  }
   news(S,name+' buys the '+teamName(clubId));
   return 'ok';
 }
-const claimText=code=>({name:'Give your owner a name.',fortune:'Pick where your money came from.',invalid:'Pick a club.',taken:'You already own a club.'}[code]??'');
+const claimText=code=>({age:'Your age must be between '+OWNER_AGE.min+' and '+OWNER_AGE.max+'.',reputation:'Pick a reputation.',stance:'Pick how you play it in public.',name:'Give your owner a name.',fortune:'Pick where your money came from.',invalid:'Pick a club.',taken:'You already own a club.'}[code]??'');
 function ownerSetupHtml(){
   const u=ownerUi;
   return '<div class="owner-setup"><h2>Who are you?</h2><div class="controls brand-form">'+
     '<label>Your name <input id="ownerName" type="text" maxlength="40" autocomplete="off" placeholder="Pat Morgan" value="'+esc(u.name)+'"></label>'+
+    '<label>Age <input id="ownerAge" type="number" min="'+OWNER_AGE.min+'" max="'+OWNER_AGE.max+'" value="'+esc(u.age)+'"></label>'+
     '<label>Hometown <select id="ownerHometown">'+option('','Somewhere else',!u.hometown)+hometownOptions().map(([id,name])=>option(id,name,u.hometown===id)).join('')+'</select></label></div>'+
-    '<p><small>'+esc('Buy your hometown club and the fans start warmer (mood +'+HOMETOWN_MOOD+').')+'</small></p>'+
+    '<p><small>'+esc('Buy your hometown club and the fans start warmer (mood +'+HOMETOWN_MOOD+'). If your hometown has no club, you could bring one there someday. From '+SUCCESSION_AGE+', age brings the question of who takes over.')+'</small></p>'+
     '<h3 class="group">Where you made your fortune</h3><div class="fortunes" role="radiogroup" aria-label="Where you made your fortune">'+
     Object.entries(FORTUNES).map(([k,f])=>'<button role="radio" data-fortune="'+esc(k)+'" aria-checked="'+(u.fortune===k)+'"><strong>'+esc(f.label)+'</strong><b>'+esc(money(f.cash))+'</b>'+
-      '<span>+ '+esc(f.edge)+'</span><span>− '+esc(f.catch)+'</span></button>').join('')+'</div></div>';
+      '<span>+ '+esc(f.edge)+'</span><span>− '+esc(f.catch)+'</span></button>').join('')+'</div>'+
+    '<h3 class="group">Your reputation</h3><div class="fortunes small" role="radiogroup" aria-label="Your reputation">'+
+    Object.entries(REPUTATIONS).map(([k,x])=>'<button role="radio" data-reputation="'+esc(k)+'" aria-checked="'+(u.reputation===k)+'"><strong>'+esc(x.label)+'</strong><span>'+esc(x.text)+'</span></button>').join('')+'</div>'+
+    '<h3 class="group">In public</h3><div class="fortunes small" role="radiogroup" aria-label="How you play it in public">'+
+    Object.entries(STANCES).map(([k,x])=>'<button role="radio" data-stance="'+esc(k)+'" aria-checked="'+(u.stance===k)+'"><strong>'+esc(x.label)+'</strong><span>'+esc(x.text)+'</span></button>').join('')+'</div>'+
+    '<p><small>'+esc('One owner in your division will see you as a rival from day one.')+'</small></p></div>';
+}
+
+// A public owner wears the result: a win lifts home mood a point, a loss costs one, by 17 or more it is two.
+function ownerCredit(S){
+  if(S.owner?.stance!=='public')return;
+  const s=cur(S),g=s.weeks[s.completed-1]?.find(x=>x.home===S.club||x.away===S.club);
+  if(!g?.score)return;
+  const [a,b]=g.home===S.club?g.score:[g.score[1],g.score[0]],step=a===b?0:(a>b?1:-1)*(Math.abs(a-b)>=17?2:1);
+  S.stadium.homeMood=Math.max(0,Math.min(100,S.stadium.homeMood+step));
+}
+// The rivalry ends once relations are back to even.
+function checkRival(S){
+  const id=S.owner?.rival,o=id&&S.league?.owners?.[id];
+  if(!o||o.relation<0)return;
+  S.owner.rival=null;S.owner.formerRival=id;
+  record(S,'rivalryEnded',{club:id});
+  news(S,possessive(teamName(id))+' owner and '+S.owner.name+' bury the hatchet');
+}
+// Once a season the owner can reach out. It works a little over half the time.
+function reachOutRival(S){
+  const id=S.owner?.rival,s=cur(S);
+  if(!id)return 'none';
+  if(S.owner.outreach===s.number)return 'season';
+  S.owner.outreach=s.number;
+  const ok=rngFor(S.rng)()<RIVAL_OUTREACH_ODDS;
+  remember(S,id,ok?'Took a call from '+S.owner.name+' and found some common ground.':'Let a call from '+S.owner.name+' go to voicemail.',ok?RIVAL_OUTREACH:0);
+  record(S,'rivalOutreach',{club:id,ok});
+  checkRival(S);
+  return ok?'ok':'rebuffed';
+}
+// From SUCCESSION_AGE, each new season can bring a health scare: name an heir before the next season opens.
+function healthCheck(S,r){
+  if(!S.owner||S.owner.succession)return;
+  const age=ownerAge(S);
+  if(age<SUCCESSION_AGE||r()>=(age-SUCCESSION_AGE+1)*SUCCESSION_STEP)return;
+  S.owner.succession={status:'due',heir:null};
+  record(S,'healthScare',{age});
+}
+const cleanHeir=v=>cleanOwnerName(v);
+// The owner names an heir (after a scare), or from STEP_DOWN_AGE plans a handover of their own accord.
+function nameHeir(S,name){
+  if(!S.owner)return 'none';
+  const heir=cleanHeir(name);
+  if(!heir)return 'name';
+  if(heir===S.owner.name)return 'same';
+  if(!S.owner.succession){
+    if(ownerAge(S)<STEP_DOWN_AGE)return 'young';
+    S.owner.succession={status:'planned',heir};
+  }else S.owner.succession.heir=heir;
+  return 'ok';
+}
+function cancelSuccession(S){
+  if(S.owner?.succession?.status!=='planned')return 'none';
+  S.owner.succession=null;
+  return 'ok';
+}
+// At the rollover: the heir takes the club, the estate pays its tax, and the other owners take the heir's measure.
+function handOver(S){
+  const O=S.owner,X=O?.succession;
+  if(!X)return;
+  const s=cur(S),heir=X.heir||'Jordan '+surname(O.name),tax=round2(S.finance.ownerCash*ESTATE_TAX[X.status]),age=Math.max(OWNER_AGE.min,ownerAge(S)+1-HEIR_GAP);
+  S.finance.ownerCash=round2(S.finance.ownerCash-tax);
+  O.past.push({name:O.name,from:O.since,to:s.number});
+  for(const [id,o] of Object.entries(S.league.owners))if(id!==S.club)o.relation=Math.round(o.relation*2/3);
+  const was=O.name;
+  Object.assign(O,{name:heir,age,ageSeason:s.number+1,since:s.number+1,reputation:'clean',outreach:0,succession:null});
+  record(S,'succession',{from:was,to:heir,tax,planned:X.status==='planned'});
+  news(S,was+' hands the '+teamName(S.club)+' to '+heir);
+}
+function ownerEventText(S,e){
+  switch(e.type){
+    case 'rivalryEnded':return 'The feud with the owner of the '+teamName(e.club)+' is over. Relations are back to even, and the rivalry is done.';
+    case 'rivalOutreach':return e.ok?'You reached out to your rival, the owner of the '+teamName(e.club)+'. It went better than expected.':'You reached out to your rival, the owner of the '+teamName(e.club)+'. The call went to voicemail.';
+    case 'healthScare':return 'A health scare at '+e.age+'. Your doctors say it is time to name an heir. The handover comes when the next season opens.';
+    case 'succession':return e.from+' has handed the club to '+e.to+'. The estate paid '+money(e.tax)+' in taxes'+(e.planned?', less than it would have without a plan':'')+'. The other owners are taking the new owner’s measure.';
+  }
+  return '';
+}
+const ownerText=code=>({name:'Give the heir a name.',same:'The heir needs a name of their own.',young:'Too young to think about that: you can plan a handover from '+STEP_DOWN_AGE+'.',
+  none:'',season:'You have already reached out this season.',rebuffed:'They did not take the call. Try again next season.'}[code]??'');
+function ownerView(S=save){
+  const O=S.owner;
+  if(!S.club)return heading('OWNER','Choose your club first')+'<p>Set up your owner on the Owner desk when you take a club.</p>';
+  if(!O)return heading('OWNER','No profile')+'<p>'+esc('This club was bought before owners had profiles, so there is no name, fortune or rival on file. Start a new league to make one.')+'</p>';
+  const f=FORTUNES[O.fortune],R=REPUTATIONS[O.reputation],St=STANCES[O.stance],age=ownerAge(S),L=S.league,X=O.succession;
+  const town=O.hometown?hometownName(O.hometown):null,atHome=O.hometown===byId.get(S.club).marketId;
+  let html=heading('OWNER',O.name)+'<div class="units">'+
+    '<div><small>Age</small><b>'+age+'</b>'+esc('Owner since season '+O.since)+'</div>'+
+    '<div><small>Fortune</small><b>'+esc(f.label)+'</b>'+esc(f.edge)+'</div>'+
+    '<div><small>Reputation</small><b>'+esc(R.label)+'</b></div>'+
+    '<div><small>In public</small><b>'+esc(St.label)+'</b></div></div>'+
+    '<p>'+esc(St.text)+'</p>'+
+    '<p>'+esc(!town?'You did not grow up in a league city.':atHome?'Hometown: '+town+'. You own the club you grew up with, and the city knows it. Moving it away would cost you more at home.':
+      clubs.some(t=>t.marketId===O.hometown)?'Hometown: '+town+'. Somebody else owns the club there.':'Hometown: '+town+'. It has no club. Bring one home and the city will be glad.')+'</p>';
+  html+='<h2>Your rival</h2>';
+  if(O.rival){const o=L.owners[O.rival];
+    html+='<p>'+esc('The owner of the '+teamName(O.rival)+' has it in for you (relations '+o.relation+'). They vote against you and go after your TV markets. Get relations back to even and the rivalry is over.')+'</p>'+
+      '<div class="controls"><button id="reachOut"'+(O.outreach===cur(S).number?' disabled':'')+'>Reach out · once a season</button></div>';}
+  else html+='<p>'+esc(O.formerRival?'You made peace with the owner of the '+teamName(O.formerRival)+'. No rival now.':'No rival.')+'</p>';
+  html+='<h2>Succession</h2>';
+  if(X)html+='<p>'+esc((X.status==='due'?'After your health scare, ':'You have decided to step down. ')+(X.heir?X.heir+' takes over when season '+(cur(S).number+1)+' opens.':'Name an heir before season '+(cur(S).number+1)+' opens, or your family will choose.')+
+      ' The estate pays '+Math.round(ESTATE_TAX[X.status]*100)+'% of your cash in taxes.')+'</p>';
+  else html+='<p>'+esc(age<STEP_DOWN_AGE?'At '+age+', nobody is asking. From '+SUCCESSION_AGE+', each new season can bring a health scare that forces the question.':'You can plan the handover yourself: a planned estate pays '+Math.round(ESTATE_TAX.planned*100)+'% in taxes, against '+Math.round(ESTATE_TAX.due*100)+'% if your health decides it.')+'</p>';
+  if(X||age>=STEP_DOWN_AGE)html+='<div class="controls brand-form"><label>Heir <input id="heirName" type="text" maxlength="40" autocomplete="off" value="'+esc(X?.heir??ownerUi.heir??'')+'" placeholder="'+esc('Jordan '+surname(O.name))+'"></label>'+
+    '<button id="nameHeir" class="primary">'+(X?'Name the heir':'Plan the handover')+'</button>'+(X?.status==='planned'?'<button id="cancelSuccession">Stay on</button>':'')+'</div>';
+  if(O.past.length)html+='<h2>The family</h2><ul>'+O.past.map(x=>'<li>'+esc(x.name+': seasons '+x.from+'–'+x.to)+'</li>').join('')+'<li>'+esc(O.name+': season '+O.since+' to now')+'</li></ul>';
+  if(ownerUi.ownerNotice)html+='<p><b>'+esc(ownerUi.ownerNotice)+'</b></p>';
+  return html;
 }
 
 // ---------------------------------------------------------------------------
@@ -2945,7 +3100,7 @@ function cityWillingness(S,approach,r,credible=cityLeverage(S).credible){
   const L=cityLeverage(S),a=CITY_APPROACH[approach];
   // Comparing cities without having looked at any is weak; a threat nobody believes backfires.
   const push=credible?a.push:approach==='threat'?-.05:a.push*.35;
-  return Math.max(0,Math.min(CITY_MAX_SHARE,.12+L.lease+L.worn+L.mood+L.small+push+(fortuneOf(S)?.city??0)+between(r,[-.06,.06])));
+  return Math.max(0,Math.min(CITY_MAX_SHARE,.12+L.lease+L.worn+L.mood+L.small+push+(fortuneOf(S)?.city??0)+(repOf(S)?.city??0)+between(r,[-.06,.06])));
 }
 function cityBlock(S){
   if(!S.club)return 'closed';
@@ -3354,12 +3509,12 @@ function aiBids(S,C,r){
   const M=S.league.markets[C.marketId],[lo,hi]=stationRange(S,C.marketId),bids={},holderFans=M.holder?M.fans[M.holder]??0:0;
   for(const id of Object.keys(M.fans)){
     if(id===S.club)continue;
-    const o=S.league.owners[id],holds=id===M.holder;
-    if(!holds){
+    const o=S.league.owners[id],holds=id===M.holder,feud=id===S.owner?.rival&&(M.holder===S.club||(M.fans[S.club]??0)>=10);
+    if(!holds&&!feud){
       const p=(M.holder?.35:.75)+(o.style==='maverick'?.25:o.style==='old guard'?-.15:0)+(M.holder&&M.fans[id]>=holderFans?.2:0);
       if(M.fans[id]<10||r()>=p)continue;
     }
-    const f=(holds?.2+r()*.6:.3+r()*.75)*(o.style==='maverick'?1.1:o.style==='old guard'?.95:1); // challengers have to want it
+    const f=(holds?.2+r()*.6:.3+r()*.75)*(o.style==='maverick'?1.1:o.style==='old guard'?.95:1)*(feud?1.15:1); // challengers have to want it; a rival wants it more
     bids[id]={annual:round1(Math.max(1,lo+(hi-lo)*f)),years:holds?5:[3,5,7][randInt(r,3)]};
   }
   return bids;
@@ -3420,6 +3575,7 @@ function ownerLean(S,clubId){
   if(clubId===V.sponsor)return 9;
   let x=.2+o.tradition*.6+o.sponsorAffinity+(holdsOpenMarket(S,clubId)?.5:0);
   x+=(playerOpposes(S)?-1:1)*o.relation/100*.9;
+  if(clubId===S.owner?.rival)x+=(playerOpposes(S)?1:-1)*RIVAL_VOTE;
   return round2(x+(V.lobby[clubId]??0));
 }
 const leanLabel=x=>x>.15?'Leaning yes':x<-.15?'Leaning no':'Undecided';
@@ -3991,6 +4147,8 @@ function afterTick(S,r,{games=null,units=null,regularIndex=null}={}){
   processLeague(S,r,regularIndex);
   processFreeAgency(S,r);
   if(regularIndex!==null)processFinance(S);
+  if(regularIndex!==null)ownerCredit(S);
+  checkRival(S);
   processProjects(S);
   distributeToOwner(S);
   processNaming(S);
@@ -4065,6 +4223,7 @@ function newLeagueYear(S,r){
 }
 function rollover(S,r){
   executeRelocation(S,r); // before the schedule is drawn, so the new divisions count
+  handOver(S);
   const s=cur(S),next=makeSeason(r,s.number+1);
   next.tick=0;
   next.ratings=Object.fromEntries(clubs.map(t=>{const u=personnel(S.rosters[t.id]);return [t.id,{offense:u.offense,defense:u.defense}];}));
@@ -4090,6 +4249,7 @@ function rollover(S,r){
     S.scouting.levels=Object.fromEntries(Object.entries(S.scouting.levels).filter(([id])=>ids.has(id)));S.scouting.watch=S.scouting.watch.filter(id=>ids.has(id));}
   openRenewals(S);
   news(S,'Season '+next.number+' kicks off');
+  healthCheck(S,r);
   afterTick(S,r);
 }
 // One step of the clock, whatever the phase.
@@ -4174,6 +4334,8 @@ function pendingItems(S){
   const C=S.staff?.clubs?.[S.club];
   for(const role of ['hc','gm'])if(C?.[role]?.interim)add({id:'job-'+role,title:(role==='hc'?'Head coach':'General manager')+' job open',
     detail:'An interim is filling in. Interview candidates and hire.',route:'staff',deadline:null,fate:'',actions:[['Search','tab','staff']]});
+  if(S.owner?.succession&&!S.owner.succession.heir)add({id:'succession',title:'Name your heir',detail:'Your doctors have spoken. You hand the club on when the next season opens.',
+    route:'owner',deadline:SEASON_TICKS,fate:'Your family names the heir.',actions:[['Your profile','tab','owner']]});
   const D=S.draft;
   if(D.status==='live'&&D.order[D.pick]?.owner===S.club)add({id:'draft',title:'You are on the clock',detail:'Pick '+D.order[D.pick].overall+', round '+D.order[D.pick].round+'.',
     route:'draft',deadline:null,fate:'',actions:[['Draft room','tab','draft']]});
@@ -5379,7 +5541,7 @@ function moveDepth(S,playerId,dir){
   if(before!==after){
     S.depth.overrides++;
     const hc=S.staff.clubs[S.club].hc;
-    hc.trust=Math.max(0,(hc.trust??70)-4);
+    hc.trust=Math.max(0,(hc.trust??70)-(S.owner?.stance==='silent'?6:4));
     if(hc.trust<40&&!S.depth.warned){S.depth.warned=true;record(S,'coachUnhappy',{name:hc.name,overrides:S.depth.overrides});}
   }
   return 'ok';
@@ -6103,6 +6265,7 @@ function describeEvent(e,S=save){
     case 'tradeAway':case 'autoHired':case 'tradeExpired':return esc(tradeEventText(S,e));
     case 'relocationFiled':case 'relocationVote':case 'relocated':case 'clubRelocated':return esc(relocationEventText(e));
     case 'rebranded':return esc(brandEventText(e));
+    case 'rivalryEnded':case 'rivalOutreach':case 'healthScare':case 'succession':return esc(ownerEventText(S,e));
     case 'cityOffer':case 'cityRefused':case 'cityAgreed':case 'cityDeclined':case 'cityLapsed':return esc(cityEventText(e));
     case 'siteExpired':return esc('The offer for the '+e.siteName+' in '+e.marketName+' has expired.');
     case 'legacy':return esc(e.text);
@@ -6154,7 +6317,19 @@ const migrations={
   18:migrateV18,
   19:migrateV19,
   20:migrateV20,
+  21:migrateV21,
 };
+// v21 -> v22: owners get an age, a reputation, a public stance, a rival and a line of succession.
+// An owner from v21 is taken as 52, an unknown quantity, a public face, with no rival.
+function migrateV21(old){
+  if(old.owner){
+    const n=old.seasons[old.seasonIndex].number;
+    Object.assign(old.owner,{age:52,ageSeason:n,since:1,reputation:'clean',stance:'public',rival:null,outreach:0,succession:null,past:[]});
+  }
+  old.schemaVersion=22;
+  (old.migrations??=[]).push({from:21,to:22,at:new Date().toISOString()});
+  return old;
+}
 // v20 -> v21: owner profiles. A club owned before them keeps its cash and gets no fortune effects.
 function migrateV20(old){
   old.owner=null;
@@ -6499,7 +6674,9 @@ function validateSave(S){
   const brandOk=b=>b&&byId.has(b.club)&&isInt(b.season,1)&&isInt(b.week,0,SEASON_TICKS)&&['nickname','look','custom'].includes(b.kind)&&Number.isFinite(b.cost)&&b.to&&
     typeof b.to.nickname==='string'&&/^[A-Z]{2,3}$/.test(b.to.abbr)&&/^#[0-9a-f]{6}$/i.test(b.to.primary)&&/^#[0-9a-f]{6}$/i.test(b.to.secondary);
   if(!Array.isArray(S.brands)||!S.brands.every(brandOk))fail('The brand record is invalid.');
-  if(S.owner!==null&&(typeof S.owner!=='object'||typeof S.owner?.name!=='string'||!S.owner.name||S.owner.name.length>40||!Object.hasOwn(FORTUNES,S.owner.fortune)||(S.owner.hometown!==null&&typeof S.owner.hometown!=='string')))fail('The owner profile is invalid.');
+  if(S.owner!==null&&(typeof S.owner!=='object'||typeof S.owner?.name!=='string'||!S.owner.name||S.owner.name.length>40||!Object.hasOwn(FORTUNES,S.owner.fortune)||(S.owner.hometown!==null&&typeof S.owner.hometown!=='string')||!isInt(S.owner.age,OWNER_AGE.min,OWNER_AGE.max)||!isInt(S.owner.ageSeason,1)||!isInt(S.owner.since,1)||
+    !Object.hasOwn(REPUTATIONS,S.owner.reputation)||!Object.hasOwn(STANCES,S.owner.stance)||(S.owner.rival!==null&&!byId.has(S.owner.rival))||!Array.isArray(S.owner.past)||
+    (S.owner.succession!==null&&!['due','planned'].includes(S.owner.succession?.status))))fail('The owner profile is invalid.');
   if(!S.logos||typeof S.logos!=='object'||Array.isArray(S.logos)||Object.entries(S.logos).some(([id,v])=>!byId.has(id)||!logoOk(v)))fail('The club logos are invalid.');
   if(typeof S.staff?.president?.name!=='string')fail('The team president is missing.');
   const F=S.finance;
@@ -7268,7 +7445,7 @@ function playerView(){
 // Navigation: five sections, each with its own pages. A page's route is its id; the address bar shows section/page
 // (#football/depth) so back, forward and refresh work. The game broadcast is a page with no tab of its own.
 const SECTIONS=[
-  {id:'desk',label:'Desk',views:[['desk','Owner desk']]},
+  {id:'desk',label:'Desk',views:[['desk','Owner desk'],['owner','You']]},
   {id:'football',label:'Football',views:[['depth','Depth chart'],['trades','Trades'],['contracts','Contracts'],['draft','Draft'],['staff','Staff']]},
   {id:'business',label:'Business',views:[['finances','Finances'],['stadium','Stadium'],['brand','Brand']]},
   {id:'office',label:'League office',short:'Office',views:[['owners','Owners & votes'],['markets','Broadcast rights'],['news','News']]},
@@ -7276,7 +7453,7 @@ const SECTIONS=[
 ];
 const SECTION_ICONS={desk:'M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z',football:'M5 18C3 14 7 5 15 4c3-.4 5 1 4.4 4C18 14 11 19 7 19c-1 0-1.6-.4-2-1zM9.5 14.5l5-5M10 11l3 3M12 9l3 3',
   business:'M3 6h18v12H3zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z',office:'M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18',around:'M4 20V10M10 20V4M16 20v-7M21 20H3'};
-const VIEWS={desk:()=>ownershipDesk(),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
+const VIEWS={desk:()=>ownershipDesk(),owner:()=>ownerView(save),depth:()=>depthView(),trades:()=>tradesView(),contracts:()=>contractsView(),draft:()=>draftView(),staff:()=>staffView(),
   finances:()=>financesView(),stadium:()=>stadiumView(),brand:()=>brandView(),teams:()=>teamsView(),owners:()=>ownersView(),markets:()=>marketsView(),news:()=>newsView(),
   scoreboard:()=>scoreboard(),standings:()=>standingsView(),clubs:()=>clubsView(),club:()=>clubView(),game:()=>broadcastView(),player:()=>playerView()};
 const sectionOf=route=>SECTIONS.find(x=>x.views.some(([id])=>id===route)||x.more?.includes(route))??null;
@@ -7417,11 +7594,17 @@ document.addEventListener('click',e=>{
   if(b.dataset.ctab){clubTab=b.dataset.ctab;draw();}
   if(b.dataset.conf){clubsConf=b.dataset.conf;draw();}
   if(b.id==='claim'&&!save.club){
-    const id=$('#claimTeam').value;ownerUi.name=$('#ownerName')?.value??ownerUi.name;
+    const id=$('#claimTeam').value;ownerUi.name=$('#ownerName')?.value??ownerUi.name;ownerUi.age=$('#ownerAge')?.value??ownerUi.age;
     const res=claimClub(save,id,ownerUi);ownerUi.notice=res==='ok'?'':claimText(res);
     if(res==='ok'){selected=id;commit();}else{ownerUi.club=id;draw();}
   }
-  if(b.dataset.fortune&&Object.hasOwn(FORTUNES,b.dataset.fortune)&&!save.club){ownerUi.name=$('#ownerName')?.value??ownerUi.name;ownerUi.club=$('#claimTeam')?.value;ownerUi.fortune=b.dataset.fortune;ownerUi.notice='';draw();}
+  if((b.dataset.fortune||b.dataset.reputation||b.dataset.stance)&&!save.club){
+    ownerUi.name=$('#ownerName')?.value??ownerUi.name;ownerUi.age=$('#ownerAge')?.value??ownerUi.age;ownerUi.club=$('#claimTeam')?.value;ownerUi.notice='';
+    if(Object.hasOwn(FORTUNES,b.dataset.fortune??''))ownerUi.fortune=b.dataset.fortune;
+    if(Object.hasOwn(REPUTATIONS,b.dataset.reputation??''))ownerUi.reputation=b.dataset.reputation;
+    if(Object.hasOwn(STANCES,b.dataset.stance??''))ownerUi.stance=b.dataset.stance;
+    draw();
+  }
   if(b.dataset.scout){scoutPos=b.dataset.scout;navigate('trades');$('#scout')?.focus?.();}
   if(b.id==='quote'){const [seller,target]=$('#target').value.split('/');tradeQuote(save,seller,target);commit();}
   if(b.id==='counter'){const q=save.offer;if(q){counterTrade(save,$('#tradePlayer').value,$('#tradePick').value);delete q.draftPick;delete q.draftOut;commit();}}
@@ -7443,6 +7626,9 @@ document.addEventListener('click',e=>{
   }
   if(b.id==='withdrawRelocation'){withdrawRelocation(save);commit();}
   if(b.dataset.palette&&save.club){const [p1,p2]=b.dataset.palette.split(',');Object.assign(brandDraft(save),{primary:p1,secondary:p2});brandUi.notice='';draw();}
+  if(b.id==='reachOut'){const res=reachOutRival(save);ownerUi.ownerNotice=res==='ok'?'':ownerText(res);commit();}
+  if(b.id==='nameHeir'){const res=nameHeir(save,$('#heirName')?.value??ownerUi.heir);ownerUi.ownerNotice=res==='ok'?'':ownerText(res);if(res==='ok'){ownerUi.heir='';commit();}else draw();}
+  if(b.id==='cancelSuccession'){cancelSuccession(save);ownerUi.ownerNotice='';commit();}
   if(b.id==='teamsOpen'){navigate('teams');window.scrollTo?.(0,0);}
   if(b.id==='teamsMine'&&save.club){teamsUi.club=save.club;teamsUi.key='';teamsUi.notice='';navigate('teams');window.scrollTo?.(0,0);}
   if(b.dataset.teamedit&&byId.has(b.dataset.teamedit)){teamsUi.club=b.dataset.teamedit;teamsUi.key='';teamsUi.notice='';draw();}
@@ -7605,6 +7791,8 @@ app.onchange=e=>{
   if(e.target.id==='compareB')stadiumUi.b=e.target.value;
   if(e.target.id==='ownerHometown'){ownerUi.hometown=e.target.value;return;}
   if(e.target.id==='ownerName'){ownerUi.name=e.target.value;return;}
+  if(e.target.id==='ownerAge'){ownerUi.age=e.target.value;return;}
+  if(e.target.id==='heirName'){ownerUi.heir=e.target.value;return;}
   if(e.target.id==='claimTeam'){ownerUi.club=e.target.value;return;}
   if(e.target.id==='target')return;
   if(e.target.id==='scout')scoutPos=e.target.value;
